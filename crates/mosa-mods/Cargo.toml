@@ -1,0 +1,10 @@
+[package]
+name = "mosa-mods"
+description = "Mods for Mosa Lina"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+mosa-bc = { path = "../mosa-bc" }
+anyhow.workspace = true
+toml.workspace = true

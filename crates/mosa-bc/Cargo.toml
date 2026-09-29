@@ -1,0 +1,10 @@
+[package]
+name = "mosa-bc"
+description = "HashLink bytecode helpers for modding Mosa Lina"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+hlbc.workspace = true
+anyhow.workspace = true
+toml.workspace = true
