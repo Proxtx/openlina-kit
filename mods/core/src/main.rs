@@ -133,7 +133,104 @@ fn apply(code: &mut Code) -> Result<()> {
     let dst = add_reg(f, void);
     insert_ops(f, 0, vec![call(dst, tick, &[Reg(0), Reg(1)])], Incoming::ToOriginal);
 
-    modifier_hooks(code)
+    modifier_hooks(code)?;
+    item_hooks(code)?;
+    loc_hook(code)
+}
+
+/// `loc(key) -> String`: at the start of `Localisation.loc(this, key, args)`,
+/// `r = loc(key); if (r != null) return r;` so mods can add texts (item labels, …).
+fn loc_hook(code: &mut Code) -> Result<()> {
+    let loc = code.method("Localisation", "loc")?;
+    let t = code.func_type(loc)?.clone();
+    ensure!(t.args.len() == 3, "Localisation.loc has an unexpected signature");
+    let (string_t, ret_t) = (t.args[1], t.ret);
+    ensure!(string_t == ret_t, "Localisation.loc does not return its key type");
+    let hook = hooks::define(code, "loc", &[string_t], ret_t)?;
+    let f = code.func_mut(loc)?;
+    let r = add_reg(f, ret_t);
+    insert_ops(
+        f,
+        0,
+        vec![call(r, hook, &[Reg(1)]), Opcode::JNull { reg: r, offset: 1 }, Opcode::Ret { ret: r }],
+        Incoming::ToOriginal,
+    );
+    Ok(())
+}
+
+/// `item_pool` and `item_use`, see `openlina_sdk::items`.
+fn item_hooks(code: &mut Code) -> Result<()> {
+    let void = code.ty_void();
+    let bool_t = code.ty_bool();
+
+    // ItemManager.initBaseItems(items) builds `itemPool` from the item objects: call
+    // item_pool(this) before every return, so mods can add their item types.
+    let init = code.method("fish.system.ItemManager", "initBaseItems")?;
+    let im_t = code.class("fish.system.ItemManager")?;
+    let pool_hook = hooks::define(code, "item_pool", &[im_t], void)?;
+    let rets = openlina_sdk::edit::find(code.func(init)?, |_, op| matches!(op, Opcode::Ret { .. }));
+    ensure!(!rets.is_empty(), "initBaseItems has no return");
+    let f = code.func_mut(init)?;
+    let r = add_reg(f, void);
+    for &at in rets.iter().rev() {
+        insert_ops(f, at, vec![call(r, pool_hook, &[Reg(0)])], Incoming::ToInserted);
+    }
+
+    // EvSheet_gameplay.shoot(playerId) runs a closure over the item slots (`foreach(b_item, …)`,
+    // source L1140-3720) that finds the player's selected slot, does `if (ammo > 0) ammo--` and
+    // then the item's behavior (`if (slot.item.type.name == "unbox") … else if …`). Right after the
+    // ammo line: `if (item_use(slot, sheet, player, crosshair)) return false;` (what the
+    // closure returns after vanilla behaviors too).
+    let shoot = code.method("fish.game.evsheet.EvSheet_gameplay", "shoot")?;
+    let foreach = code.method("fish.game.evsheet.EvSheet", "foreach")?;
+    let sfun = code.func(shoot)?.clone();
+    let fe = expect_one(find_calls(&sfun, foreach), "shoot calls foreach")?;
+    let Some((_, fargs)) = call_target(&sfun.ops[fe]) else { unreachable!() };
+    let clo_op = prev_match(&sfun, fe, |op| matches!(op, Opcode::InstanceClosure { dst, .. } if *dst == fargs[2]))
+        .context("the foreach closure")?;
+    let Opcode::InstanceClosure { fun: closure, .. } = sfun.ops[clo_op] else { unreachable!() };
+
+    let cfun = code.func(closure)?.clone();
+    let ammo_set = expect_one(find_field_access(code, &cfun, "ammo", true), "the item closure writes `.ammo` once")?;
+    let Opcode::SetField { obj: slot, .. } = cfun.ops[ammo_set] else { unreachable!() };
+    let n = cfun.ops.len();
+    ensure!(
+        matches!(cfun.ops[n - 1], Opcode::Ret { .. }) && matches!(cfun.ops[n - 2], Opcode::Bool { .. }),
+        "the item closure doesn't end with `return <bool>`"
+    );
+    let exit = n - 2;
+    // The closure's environment (reg0) is an enum: .0 the sheet, .1 the player picker, .2 the
+    // player's crosshair_point instances.
+    let env_t = cfun.regs[0];
+    let params = match &code.bc.types[env_t.0] {
+        openlina_sdk::hlbc::types::Type::Enum { constructs, .. } => constructs[0].params.clone(),
+        _ => bail!("the item closure's environment is not an enum"),
+    };
+    ensure!(params.len() >= 3, "unexpected item closure environment");
+    let slot_t = cfun.regs[slot.0 as usize];
+    let use_hook = hooks::define(code, "item_use", &[slot_t, params[0], params[1], params[2]], bool_t)?;
+    let f = code.func_mut(closure)?;
+    let (sheet, player, cross, ok) = (add_reg(f, params[0]), add_reg(f, params[1]), add_reg(f, params[2]), add_reg(f, bool_t));
+    let ef = |dst, field: usize| Opcode::EnumField {
+        dst,
+        value: Reg(0),
+        construct: openlina_sdk::hlbc::types::RefEnumConstruct(0),
+        field: openlina_sdk::hlbc::types::RefField(field),
+    };
+    insert_ops_with_exits(
+        f,
+        ammo_set + 1,
+        vec![
+            ef(sheet, 0),
+            ef(player, 1),
+            ef(cross, 2),
+            call(ok, use_hook, &[slot, sheet, player, cross]),
+            Opcode::JTrue { cond: ok, offset: 0 },
+        ],
+        &[Exit { op: 4, target: exit }],
+        Incoming::ToInserted,
+    );
+    Ok(())
 }
 
 /// `modifier_pool` and `modifier_icon`, see `openlina_sdk::modifiers`.

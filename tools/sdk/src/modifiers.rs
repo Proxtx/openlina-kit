@@ -74,13 +74,6 @@ pub fn register(code: &mut Code, m: &Modifier) -> Result<i32> {
 
     // modifier_icon(icon): if the level's modifier is ours, show our own animation.
     let set_anim = code.method("fish.system.Sprite", "set_anim")?;
-    let map_get = code.method("haxe.ds.StringMap", "get")?;
-    let map_set = code.method("haxe.ds.StringMap", "set")?;
-    let frame_ctor = code.method("fish.system.FrameData", "__constructor__")?;
-    let anim_ctor = code.method("fish.system.Anim", "__constructor__")?;
-    let frame_t = code.class("fish.system.FrameData")?;
-    // imagePoints is an ArrayObj of {name, point}; ours is empty, so its element type doesn't matter.
-    let ip_elem = code.ty_dyn();
     let bool_t = code.ty_bool();
     let mut f = hooks::handler(code, "modifier_icon", &format!("{}/icon", m.key))?;
     let icon = f.arg(0);
@@ -88,35 +81,7 @@ pub fn register(code: &mut Code, m: &Modifier) -> Result<i32> {
     let cur_mod = current_modifier(&mut f)?;
     let want = f.const_i32(id);
     f.jne(cur_mod, want, no);
-    let statics = f.static_obj("fish.game.oclass.OClass_optionthingos")?;
-    let map = f.get_new(statics, "_animData")?;
-    let name = f.string_obj(&format!("openlina_mod_{id}"))?;
-    let existing = f.call_new(map_get, &[map, name])?;
-    let have = f.label();
-    f.jnotnull(existing, have);
-    {
-        let fd = f.reg(frame_t);
-        f.op(hlbc::opcodes::Opcode::New { dst: fd });
-        let url = f.string_obj(m.icon)?;
-        let (x, y, w, h) = (f.const_f64(0.0), f.const_f64(0.0), f.const_f64(m.size.0), f.const_f64(m.size.1));
-        let rotated = f.reg(bool_t);
-        f.bool(rotated, false);
-        let (dur, ox, oy) = (f.const_f64(1.0), f.const_f64(0.5), f.const_f64(0.5));
-        let points = f.new_array_obj(ip_elem, &[])?;
-        let poly = f.empty_f64_array()?;
-        let multi_t = f.code().func_type(frame_ctor)?.args[12];
-        let multi = f.reg(multi_t);
-        f.op(hlbc::opcodes::Opcode::Null { dst: multi });
-        f.call_new(frame_ctor, &[fd, url, x, y, w, h, rotated, dur, ox, oy, points, poly, multi])?;
-        let frames = f.new_array_obj(frame_t, &[fd])?;
-        let anim = f.new_obj("fish.system.Anim")?;
-        let speed = f.const_f64(0.0);
-        let (zero, loops) = (f.const_i32(0), f.reg(bool_t));
-        f.bool(loops, false);
-        f.call_new(anim_ctor, &[anim, speed, loops, zero, zero, loops, frames])?;
-        f.call_new(map_set, &[map, name, anim])?;
-    }
-    f.place(have);
+    let name = crate::anims::ensure(&mut f, "fish.game.oclass.OClass_optionthingos", &format!("openlina_mod_{id}"), m.icon, m.size, no)?;
     let sprite = f.get_new(icon, "sprite")?;
     f.call_new(set_anim, &[sprite, name])?;
     let zero = f.const_i32(0);

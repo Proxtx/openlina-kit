@@ -1,0 +1,32 @@
+name = "portal-gun: a box falling into the blue portal comes out of the orange one, again and again"
+mods = ["portal-gun"]
+fixtures = ["debug-spawn"]
+timeout = 60
+
+[options.portal-gun]
+trace = true
+preset = "540,290,540,70"     # blue low on the right, orange above it
+
+[options.debug-spawn]
+object = "box"
+tick = 30
+x = 540.0
+y = 120.0
+
+[harness]
+level = "greendemo 1"
+seed = 1
+end_tick = 600
+
+[[expect]]
+contains = "[portal-gun] placed blue at (540, 290)"
+[[expect]]
+contains = "[portal-gun] placed orange at (540, 70)"
+# the box keeps looping: in through blue, out of orange above it
+[[expect]]
+contains = "box through blue -> orange"
+min = 3
+
+[gif]
+capture = "20-420/4"
+out = "media/loop.gif"

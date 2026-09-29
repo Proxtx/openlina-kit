@@ -104,6 +104,14 @@ coordinates.
   `ammo + 1`; taking an item block swaps ammo between the slot and the block (closure ~L17390).
   `OClass_test_item` objects copy their own ammo into slot 0 (title screen), and the `main` layout's preset slots
   get theirs from layout data. The HUD shows ammo as `ammoSprite.animFrame = ammo + 1`.
+- **Firing** (`EvSheet_gameplay.shoot(playerId)`) runs a closure over the item slots (`foreach(b_item, …)`, source
+  L1140-3720): it finds the player's selected slot, does `if (ammo > 0) ammo--`, then dispatches on the item name
+  (`if (slot.item.type.name == "unbox") … else if …`, comparing against the game's string constants). Its
+  environment enum holds the sheet, the player picker and the player's aim pickers (crosshair_point, gun, …,
+  max_aim_point, mid_aim_point, short_aim_point). The crosshair is the reticle just in front of Lina.
+- Item types come from `OClass_item` objects (`NAME`, `ammo`, `aim_type`) via `ItemManager.initBaseItems`; aim
+  types: shoot 0, short 1, short2 2, mid 3, mid2 4, long 5, long2 6, remote 7. The HUD icon is the `item_icon`
+  object's animation named after the item; the HUD label is the text `TOOL_<NAME>` (from `loc.dat`, an xlsx).
 - The roll draws 3 items and the 4th slot copies the 2nd (`rollItemsRaw` crashes if the pool has fewer than 2).
 - Randomness: the run's RNGs are `hxd.Rand` fields of the manager (`mainSeed`, `levelSeed`, `toolSeed`, …), seeded
   randomly at startup; the harness seeds them all from its `seed` option.

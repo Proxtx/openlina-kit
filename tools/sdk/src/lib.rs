@@ -22,12 +22,15 @@ use hlbc::types::{
 };
 use hlbc::{Bytecode, Resolve, Str};
 
+pub mod anims;
 pub mod asm;
 pub mod edit;
 pub mod hooks;
+pub mod items;
 pub mod manifest;
 pub mod modifiers;
 pub mod runner;
+pub mod text;
 pub mod validate;
 
 pub use runner::run_mod;

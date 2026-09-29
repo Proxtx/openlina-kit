@@ -133,6 +133,10 @@ Everything runs headless (SDL offscreen driver): no window, no human, faster tha
 - Setting `sprite.position` teleports physics objects (`Physics.syncPosWithSprite`).
 - The game parks objects off-screen and deletes objects placed off-screen in the first ticks of a layout.
   Anything that changes edge or destroy behavior needs to account for that.
+- `Layout.createObject(layout, type, …)` only creates types registered in `ObjectClasses.createInstance`
+  (not plain `Sprite`; `Sprite15`/`Sprite21` are plain decorative types that work).
+- An object class's animation map (`$OClass_x._animData`) is built when its first instance is created; adding to
+  it earlier makes the game skip its own animations. `anims::ensure` waits for it.
 - Mods run as separate processes on the whole bytecode: a mod cannot see another mod's Rust state, only what the
   previous mods left in the bytecode (hooks, debug file names).
 
@@ -145,6 +149,9 @@ Everything runs headless (SDL offscreen driver): no window, no human, faster tha
 | `edit` | `find*`, `expect_one`, `next_match`/`prev_match`, `replace_op`, `insert_ops`, `insert_ops_with_exits`, `guard_op`, `prepend_call`, `remove_ops`, `add_reg` |
 | `hooks` | `CORE_HOOKS`, `find`, `signature`, `handler`, `subscribe`, `define` |
 | `modifiers` | `register` a modifier (pool + HUD icon), `is_active`, `id_of`, `current_modifier` |
+| `items` | `register` an item (pool entry, HUD icon, label), `is_item`, `crosshair_pos`; behavior in an `item_use` handler |
+| `text` | `set(key, value)`: texts the game looks up (`Localisation.loc`), e.g. `TOOL_<NAME>` item labels |
+| `anims` | `ensure`: a one-frame animation from a mod image in an object class's animation map |
 | `runner` | `run_mod`: the `main` of every mod |
 | `manifest` | `ModManifest` (mod.toml), `ModPack` (modpack.toml), `resolve_order` |
 | `validate` | `check_function`, `check_touched`, `kind` |

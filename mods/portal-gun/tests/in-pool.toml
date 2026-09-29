@@ -1,0 +1,12 @@
+name = "portal-gun: the portal item is in the pool and can be rolled"
+mods = ["portal-gun"]
+timeout = 30
+
+[harness]
+level = "greendemo 1"
+seed = 3
+items = ["portal", "box"]
+end_tick = 3
+
+[[expect]]
+contains = ": portal ammo 4"

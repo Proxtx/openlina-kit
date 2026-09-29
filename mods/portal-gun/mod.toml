@@ -1,0 +1,40 @@
+[mod]
+id = "portal-gun"
+name = "Portal Gun"
+version = "0.1.0"
+section = "items"
+description = "A new item: fire a blue and an orange portal. Anything that enters one comes out of the other, keeping its momentum. Lina too."
+authors = ["openlina-kit"]
+game_builds = ["22056877"]
+requires = ["core"]
+
+[options.ammo]
+type = "int"
+default = 4
+description = "Portal shots per level."
+
+[options.radius]
+type = "float"
+default = 14.0
+description = "How close to a portal's center an object must get to go through."
+
+[options.range]
+type = "float"
+default = 160.0
+description = "How far from Lina, along the aim, a portal lands (kept inside the play field)."
+
+[options.preset]
+type = "string"
+default = ""
+description = "Place both portals when a level starts: \"ax,ay,bx,by\" (tests, showcases)."
+
+[options.trace]
+type = "bool"
+default = false
+description = "Print portal placements and teleports to stdout."
+
+[stats]
+ammo = 4
+aim = "long"
+portals = 2
+keeps_momentum = true

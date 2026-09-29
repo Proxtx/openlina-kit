@@ -25,11 +25,41 @@ on its own; with no subscribers every hook falls through to vanilla.
 | hook | signature | |
 |---|---|---|
 | `tick` | `(sheet, layout) -> Void` | start of every gameplay tick (`EvSheet_gameplay.update`) |
-| `edge_exit` | `(pos, edgewith, margin, sheet, kind) -> Bool` | an object left the screen and vanilla is about to delete it; kind 0 physics object, 1 coin/fruit, 2 secondary physics object; return true to keep it |
+| `edge_exit` | `(pos, edgewith, margin, sheet, kind, physics) -> Bool` | an object left the screen and vanilla is about to delete it; kind 0 physics object, 1 coin/fruit, 2 secondary physics object; return true to keep it |
 | `modifier_pool` | `(pool, dx) -> Void` | a modifier is about to be drawn from `pool` (`LevelManager.rollRaw`/`reroll`); used by `openlina_sdk::modifiers` |
 | `modifier_icon` | `(icon) -> Bool` | the HUD modifier icon is about to be set; used by `openlina_sdk::modifiers` |
+| `item_pool` | `(itemManager) -> Void` | the item pool was built; used by `openlina_sdk::items` |
+| `item_use` | `(slot, sheet, player, crosshair) -> Bool` | the player fires the item in `slot` (ammo already decremented); return true to replace the game's behavior |
+| `loc` | `(key) -> String` | a text is looked up; return a text or null; used by `openlina_sdk::text` |
+
+`edge_exit` also passes the object's `physics` behavior (last argument).
 
 Source: `mods/core/src/main.rs`.
+
+## portal-gun (items)
+
+A new item, **Portal Gun** (`portal`, 4 ammo, long aim): each shot places a blue, then an orange portal
+`range` (160) units from Lina along her aim, inside the play field. Any moving object that gets within `radius`
+(14) of one portal comes out of the other, pushed out along its direction of travel with its velocity kept;
+Lina too. Portals reset every level. Pool entry, HUD icon and label via `openlina_sdk::items`; portals are
+`Sprite15` objects with the mod's own animations (`assets/images/openlina/portal-*.png`, drawn from `art/*.toml`).
+
+Options: `ammo`, `radius`, `range`, `preset` (`"ax,ay,bx,by"`: place both portals at level start, for tests and
+showcases), `trace`. Tests: in the pool; firing places blue then orange along the aim; a box loops through
+the portals (showcase `media/loop.gif`).
+
+## solid-edges (modifiers, always on)
+
+The screen border is a wall: every tick, objects crossing the visible play field are pushed back inside and
+bounce (`bounce` 0.5 of the speed kept; slower than `rest_speed` 40 they stop; `friction` 0.9 of the speed along
+the border kept per tick of contact). Player, frogs and fruits (unless `coins`) stay vanilla; long levels keep x
+open; objects far off-screen stay vanilla. Conflicts with screen-wrap. Idea by a friend of the project.
+
+## mod-menu (general)
+
+Adds `OPENLINA MODS (n)` to the pause menu, after the game's MODDING MENU: a submenu listing every mod of the pack
+(except dev mods) with its version and, with `show_options`, its option values. It learns the pack from
+`openlina_sdk::runner::pack_info` (the host passes every mod the resolved pack).
 
 ## screen-wrap
 
@@ -121,6 +151,8 @@ Drives the game for tests and recordings without input (source: `mods/harness/sr
 | `end_tick` | 0 | exit the game (code 0) at this level tick |
 | `capture` / `capture_dir` | "" / "frames" | save 600×338 PNG frames `from-to/step` |
 | `list_levels` | false | print every level and item name, then exit |
+| `pause_tick` / `dump_menu` / `menu_open` | 0 / false / "" | open the pause menu at a level tick, print its items, press the item with this text |
+| `capture_ui` | false | also draw the UI layer (pause menu) into captured frames |
 
 It prints `[harness] …` lines (`title skipped`, `loading level …`, `level tick 1: <name> modifier <m> frameTime <dt>`,
 `end at tick N`, `ERROR …`), which `lina test` checks. Use it through scenarios (`lina test`, `lina gif`), see

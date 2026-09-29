@@ -1159,6 +1159,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "openlina-mod-portal-gun"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "openlina-sdk",
+]
+
+[[package]]
 name = "openlina-mod-screen-wrap"
 version = "0.1.0"
 dependencies = [
