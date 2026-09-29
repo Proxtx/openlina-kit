@@ -198,6 +198,24 @@ impl ModPack {
     }
 }
 
+/// What every mod gets to know about the pack it is built into (`OPENLINA_PACK`, TOML), e.g. for
+/// a mod menu: the mods in application order with their resolved options.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PackInfo {
+    #[serde(default, rename = "mod")]
+    pub mods: Vec<PackInfoEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PackInfoEntry {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub section: Section,
+    #[serde(default)]
+    pub options: toml::Table,
+}
+
 /// Order in which to apply mods: every `requires`/`after` dependency first, `core` section
 /// first among equals, then by id. Fails on missing requirements, conflicts and cycles.
 pub fn resolve_order(mods: &[ModManifest]) -> Result<Vec<usize>> {

@@ -17,18 +17,20 @@ pub enum Patch {
     Native(PathBuf),
 }
 
-pub fn run(patch: &Patch, input: &[u8], id: &str, options: &str) -> Result<Vec<u8>> {
+/// Run a patch. `options`: the mod's options (TOML); `pack`: `OPENLINA_PACK` (TOML).
+pub fn run(patch: &Patch, input: &[u8], id: &str, options: &str, pack: &str) -> Result<Vec<u8>> {
     match patch {
-        Patch::Wasm(p) => run_wasm(p, input, id, options),
-        Patch::Native(p) => run_native(p, input, id, options),
+        Patch::Wasm(p) => run_wasm(p, input, id, options, pack),
+        Patch::Native(p) => run_native(p, input, id, options, pack),
     }
 }
 
-fn run_native(exe: &Path, input: &[u8], id: &str, options: &str) -> Result<Vec<u8>> {
+fn run_native(exe: &Path, input: &[u8], id: &str, options: &str, pack: &str) -> Result<Vec<u8>> {
     use std::io::Write;
     let mut child = Command::new(exe)
         .env("OPENLINA_MOD", id)
         .env("OPENLINA_OPTIONS", options)
+        .env("OPENLINA_PACK", pack)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -45,7 +47,7 @@ fn run_native(exe: &Path, input: &[u8], id: &str, options: &str) -> Result<Vec<u
     Ok(out.stdout)
 }
 
-fn run_wasm(module_path: &Path, input: &[u8], id: &str, options: &str) -> Result<Vec<u8>> {
+fn run_wasm(module_path: &Path, input: &[u8], id: &str, options: &str, pack: &str) -> Result<Vec<u8>> {
     use wasmtime::{Config, Engine, Linker, Module, Store};
     use wasmtime_wasi::p1::{self, WasiP1Ctx};
     use wasmtime_wasi::p2::pipe::{MemoryInputPipe, MemoryOutputPipe};
@@ -66,6 +68,7 @@ fn run_wasm(module_path: &Path, input: &[u8], id: &str, options: &str) -> Result
         .stderr(stderr.clone())
         .env("OPENLINA_MOD", id)
         .env("OPENLINA_OPTIONS", options)
+        .env("OPENLINA_PACK", pack)
         .args(&[id])
         .build_p1();
     let mut store = Store::new(&engine, wasi);

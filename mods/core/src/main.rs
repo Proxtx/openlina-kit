@@ -4,7 +4,7 @@
 //! ## `tick(sheet, layout)`
 //! Called at the start of `EvSheet_gameplay.update`, every gameplay tick.
 //!
-//! ## `edge_exit(pos, edgewith, margin, sheet, kind) -> Bool`
+//! ## `edge_exit(pos, edgewith, margin, sheet, kind, physics) -> Bool`
 //! `EvSheet_gameplay.update` (source ~L16195-16268) deletes objects that leave the screen:
 //!
 //! ```haxe
@@ -48,6 +48,8 @@ struct Site {
     ew: Option<Reg>,
     margin: Reg,
     sheet: Reg,
+    /// The object whose `physics` behavior is passed to the hook.
+    obj: Reg,
 }
 
 fn apply(code: &mut Code) -> Result<()> {
@@ -70,7 +72,10 @@ fn apply(code: &mut Code) -> Result<()> {
     // ---- anchors: secondary_physics loop
     let sp = expect_one(find_field_access(code, &fun, "secondary_physics", false), "update reads `.secondary_physics`")?;
     let pos_op = next_match(&fun, sp, |op| is_field(code, &fun, op, "position")).context("secondary `.position`")?;
-    let Opcode::Field { dst: pos2, .. } = fun.ops[pos_op] else { unreachable!() };
+    let Opcode::Field { dst: pos2, obj: sprite2, .. } = fun.ops[pos_op] else { unreachable!() };
+    let sprite_load = prev_match(&fun, pos_op, |op| matches!(op, Opcode::Field { dst, .. } if *dst == sprite2))
+        .context("secondary `.sprite` load")?;
+    let Opcode::Field { obj: item2, .. } = fun.ops[sprite_load] else { unreachable!() };
     let margin2 = margin_after(&fun, pos_op)?;
     let sheet2 = boss_mode_owner_after(code, &fun, pos_op)?;
     let destroy_secondary = next_match(&fun, pos_op, |op| calls(op, destroy)).context("secondary destroy()")?;
@@ -84,13 +89,18 @@ fn apply(code: &mut Code) -> Result<()> {
     let layout_t = code.class("fish.system.Layout")?;
     let (void, bool_t, f64_t, i32_t) = (code.ty_void(), code.ty_bool(), code.ty_f64(), code.ty_i32());
     let tick = hooks::define(code, "tick", &[sheet_t, layout_t], void)?;
-    let edge = hooks::define(code, "edge_exit", &[pos_t, f64_t, f64_t, sheet_t, i32_t], bool_t)?;
+    let physics_t = code.class("fish.system.beh.Physics")?;
+    let edge = hooks::define(code, "edge_exit", &[pos_t, f64_t, f64_t, sheet_t, i32_t, physics_t], bool_t)?;
+    let item_t = fun.regs[item.0 as usize];
+    let item2_t = fun.regs[item2.0 as usize];
+    let physics_field = code.field(item_t, "physics")?;
+    let physics_field2 = code.field(item2_t, "physics")?;
 
     // ---- guard the three calls, last site first so earlier indices stay valid
     let mut sites = vec![
-        Site { site: destroy_default, kind: 0, pos, ew: Some(ew), margin, sheet },
-        Site { site: coin_call, kind: 1, pos, ew: Some(ew), margin, sheet },
-        Site { site: destroy_secondary, kind: 2, pos: pos2, ew: None, margin: margin2, sheet: sheet2 },
+        Site { site: destroy_default, kind: 0, pos, ew: Some(ew), margin, sheet, obj: item },
+        Site { site: coin_call, kind: 1, pos, ew: Some(ew), margin, sheet, obj: item },
+        Site { site: destroy_secondary, kind: 2, pos: pos2, ew: None, margin: margin2, sheet: sheet2, obj: item2 },
     ];
     sites.sort_by_key(|s| std::cmp::Reverse(s.site));
     let zero_c = code.float(0.0);
@@ -99,8 +109,13 @@ fn apply(code: &mut Code) -> Result<()> {
     let ok = add_reg(f, bool_t);
     let kind_r = add_reg(f, i32_t);
     let zero = add_reg(f, f64_t);
+    let phys = add_reg(f, physics_t);
     for s in &sites {
-        let mut ops = vec![Opcode::Int { dst: kind_r, ptr: kind_c[s.kind as usize] }];
+        let field = if s.obj == item { physics_field } else { physics_field2 };
+        let mut ops = vec![
+            Opcode::Int { dst: kind_r, ptr: kind_c[s.kind as usize] },
+            Opcode::Field { dst: phys, obj: s.obj, field },
+        ];
         let ew = match s.ew {
             Some(r) => r,
             None => {
@@ -108,7 +123,7 @@ fn apply(code: &mut Code) -> Result<()> {
                 zero
             }
         };
-        ops.push(call(ok, edge, &[s.pos, ew, s.margin, s.sheet, kind_r]));
+        ops.push(call(ok, edge, &[s.pos, ew, s.margin, s.sheet, kind_r, phys]));
         ops.push(Opcode::JTrue { cond: ok, offset: 0 });
         let jump = ops.len() - 1;
         insert_ops_with_exits(f, s.site, ops, &[Exit { op: jump, target: s.site + 1 }], Incoming::ToInserted);

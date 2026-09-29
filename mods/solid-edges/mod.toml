@@ -1,0 +1,25 @@
+[mod]
+id = "solid-edges"
+name = "Solid Edges"
+version = "0.1.0"
+section = "modifiers"
+description = "The screen border is a wall: objects bounce off it instead of flying off and despawning. Always on. Long levels and boss arenas keep their left and right sides open."
+authors = ["openlina-kit"]
+game_builds = ["22056877"]
+requires = ["core"]
+conflicts = ["screen-wrap"]
+
+[options.bounce]
+type = "float"
+default = 0.5
+description = "Share of the speed kept when bouncing off the border (0 = stop dead, 1 = perfectly elastic)."
+
+[options.coins]
+type = "bool"
+default = false
+description = "Fruits bounce too. Pushing fruits out is how levels are won, so this makes levels unwinnable."
+
+[options.trace]
+type = "bool"
+default = false
+description = "Print every bounce to stdout."

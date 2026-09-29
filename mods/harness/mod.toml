@@ -67,6 +67,26 @@ type = "string"
 default = "frames"
 description = "Directory for captured frames (absolute, or relative to the overlay game dir)."
 
+[options.pause_tick]
+type = "int"
+default = 0
+description = "Open the pause menu at this level tick (0: never)."
+
+[options.dump_menu]
+type = "bool"
+default = false
+description = "With pause_tick: print every pause menu item (including hidden submenu items)."
+
+[options.menu_open]
+type = "string"
+default = ""
+description = "With pause_tick: two ticks later, select the pause menu item with exactly this text and press it (e.g. to open a submenu)."
+
+[options.capture_ui]
+type = "bool"
+default = false
+description = "Also draw the UI layer (pause menu, ...) into captured frames."
+
 [options.list_levels]
 type = "bool"
 default = false

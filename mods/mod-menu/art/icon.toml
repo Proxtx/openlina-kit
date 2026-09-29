@@ -1,0 +1,16 @@
+# Website icon: a pause-menu list.
+[[frame]]
+pixels = """
+............
+.kkkkkkkkkk.
+.kwwwwwwwwk.
+.kkkkkkkkkk.
+.kmm.mmmmmk.
+.kkkkkkkkkk.
+.kmm.mmmmk..
+.kkkkkkkkkk.
+.kmm.mmmmmk.
+.kkkkkkkkkk.
+............
+............
+"""

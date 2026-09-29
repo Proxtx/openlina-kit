@@ -42,11 +42,12 @@ pub const CORE_HOOKS: &[HookInfo] = &[
     },
     HookInfo {
         name: "edge_exit",
-        args: "(pos: Vector2Default, edgewith: F64, margin: F64, sheet: EvSheet_gameplay, kind: I32)",
+        args: "(pos: Vector2Default, edgewith: F64, margin: F64, sheet: EvSheet_gameplay, kind: I32, physics: beh.Physics)",
         returns: "Bool",
         doc: "An object is outside the screen and vanilla is about to delete it. kind 0 = physics object, \
               1 = coin (fruit; deleting it is how levels are won), 2 = secondary physics object. Return true \
-              to keep it (e.g. after moving it).",
+              to keep it (e.g. after moving it). `physics` is the object's physics behavior (velocity: \
+              getVelocityX/Y, setVelocity).",
     },
     HookInfo {
         name: "modifier_pool",

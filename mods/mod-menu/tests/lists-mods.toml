@@ -1,0 +1,39 @@
+name = "mod-menu: the pause menu gets an OPENLINA MODS entry listing the pack"
+mods = ["mod-menu", "screen-wrap", "ammo-boost"]
+timeout = 60
+
+[options.mod-menu]
+trace = true
+
+[harness]
+level = "greendemo 1"
+pause_tick = 30
+dump_menu = true
+menu_open = "OPENLINA MODS (4)"
+capture_ui = true
+end_tick = 60
+
+# built when the pause menu is created at startup
+[[expect]]
+contains = "[mod-menu] added `OPENLINA MODS (4)`"
+
+# really in the game's pause menu (the game's own entries are localized in wobbly mixed case,
+# e.g. "MODdING mENU"; ours follow it), with its submenu lines
+[[expect]]
+contains = "[harness] menu: OPENLINA MODS (4)"
+[[expect]]
+contains = "[harness] menu: SCREEN WRAP 0.3.0"
+[[expect]]
+contains = "[harness] menu: AMMO BOOST 0.1.0"
+[[expect]]
+contains = "[harness] menu:    FACTOR: 2"
+[[expect]]
+contains = "[harness] menu: BACK"
+
+# and it opens
+[[expect]]
+contains = "[harness] opened menu item `OPENLINA MODS (4)`"
+
+[gif]
+capture = "28-60/4"
+out = "media/pause-menu.gif"

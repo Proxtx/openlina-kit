@@ -16,6 +16,7 @@ use std::path::Path;
 
 use anyhow::{anyhow, bail, Context, Result};
 pub use hlbc;
+pub use toml;
 use hlbc::types::{
     FunPtr, Function, RefField, RefFloat, RefFun, RefGlobal, RefInt, RefString, RefType, Type, TypeFun, TypeObj,
 };

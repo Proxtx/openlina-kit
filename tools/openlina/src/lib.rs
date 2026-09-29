@@ -15,7 +15,7 @@ pub mod patch;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use openlina_sdk::manifest::{resolve_order, ModPack};
+use openlina_sdk::manifest::{resolve_order, ModPack, PackInfo, PackInfoEntry};
 
 pub use package::Package;
 pub use zip;
@@ -37,15 +37,26 @@ pub fn data_dir() -> Result<PathBuf> {
 pub fn build(input: Vec<u8>, packages: &[Package], pack: &ModPack) -> Result<Vec<u8>> {
     let manifests: Vec<_> = packages.iter().map(|p| p.manifest.clone()).collect();
     let order = resolve_order(&manifests)?;
+    let user_options = |id: &str| pack.mods.iter().find(|e| e.id == id).map(|e| e.options.clone()).unwrap_or_default();
+    let mut info = PackInfo::default();
+    for &i in &order {
+        let m = &packages[i].manifest;
+        info.mods.push(PackInfoEntry {
+            id: m.info.id.clone(),
+            name: m.info.name.clone(),
+            version: m.info.version.clone(),
+            section: m.info.section,
+            options: m.resolve_options(&user_options(&m.info.id))?,
+        });
+    }
+    let info_toml = toml::to_string(&info)?;
     let mut bytes = input;
-    for i in order {
+    for (k, &i) in order.iter().enumerate() {
         let p = &packages[i];
         let id = &p.manifest.info.id;
-        let user = pack.mods.iter().find(|e| &e.id == id).map(|e| e.options.clone()).unwrap_or_default();
-        let options = p.manifest.resolve_options(&user)?;
+        let options = toml::to_string(&info.mods[k].options)?;
         let t = std::time::Instant::now();
-        bytes = patch::run(&p.patch, &bytes, id, &toml::to_string(&options)?)
-            .with_context(|| format!("applying `{id}`"))?;
+        bytes = patch::run(&p.patch, &bytes, id, &options, &info_toml).with_context(|| format!("applying `{id}`"))?;
         println!("  applied {id} {} ({:.1}s)", p.manifest.info.version, t.elapsed().as_secs_f64());
     }
     // The result must still be valid bytecode.

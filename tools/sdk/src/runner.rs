@@ -5,7 +5,8 @@
 //!
 //! - stdin: the game bytecode (`hlboot.dat` after the previous mods)
 //! - `OPENLINA_OPTIONS`: the mod's options as TOML (defaults from `mod.toml`, overridden by the
-//!   user's modpack); `OPENLINA_MOD`: the mod id, for messages
+//!   user's modpack); `OPENLINA_MOD`: the mod id, for messages; `OPENLINA_PACK`: every mod in the
+//!   pack with its options ([`pack_info`])
 //! - stdout: the patched bytecode
 //! - stderr + exit code 1: errors (e.g. an anchor that no longer matches the game)
 //!
@@ -50,4 +51,13 @@ fn run(apply: impl FnOnce(&mut Code, &ModConfig) -> Result<()>) -> Result<()> {
     stdout.write_all(&out)?;
     stdout.flush()?;
     Ok(())
+}
+
+/// The pack this mod is built into (all mods in application order, with resolved options), if
+/// the host provided it.
+pub fn pack_info() -> Result<crate::manifest::PackInfo> {
+    match std::env::var("OPENLINA_PACK") {
+        Ok(s) => toml::from_str(&s).context("parsing OPENLINA_PACK"),
+        Err(_) => Ok(Default::default()),
+    }
 }

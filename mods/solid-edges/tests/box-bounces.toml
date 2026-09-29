@@ -1,0 +1,26 @@
+name = "solid-edges: a falling box bounces off the bottom border and is never despawned"
+mods = ["solid-edges"]
+fixtures = ["debug-spawn"]
+timeout = 60
+
+[options.solid-edges]
+trace = true
+
+[options.debug-spawn]
+object = "box"
+tick = 30
+x = 540.0
+y = 60.0
+
+[harness]
+level = "greendemo 1"
+seed = 1
+end_tick = 600
+
+# the box hit the bottom border (y = 313 - half its height) and was sent back up
+[[expect]]
+contains = "[solid-edges] tick 362 box at (540, 305)"
+
+[gif]
+capture = "20-420/4"
+out = "media/box-bounces.gif"

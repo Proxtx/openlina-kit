@@ -1,0 +1,19 @@
+[mod]
+id = "mod-menu"
+name = "Mod Menu"
+version = "0.1.0"
+section = "general"
+description = "Adds an OPENLINA MODS entry to the pause menu that lists the installed mods, their versions and option values."
+authors = ["openlina-kit"]
+game_builds = ["22056877"]
+requires = ["core"]
+
+[options.show_options]
+type = "bool"
+default = true
+description = "List each mod's option values under it."
+
+[options.trace]
+type = "bool"
+default = false
+description = "Print the entries it adds to stdout."

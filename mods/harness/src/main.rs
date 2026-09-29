@@ -41,6 +41,10 @@ struct Opts {
     capture_dir: String,
     list_levels: bool,
     roll_modifier: bool,
+    pause_tick: i32,
+    dump_menu: bool,
+    capture_ui: bool,
+    menu_open: String,
 }
 
 fn list(cfg: &ModConfig, key: &str) -> Result<Vec<String>> {
@@ -110,6 +114,10 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
         capture_dir: cfg.str("capture_dir", "frames")?.to_string(),
         list_levels: cfg.bool("list_levels", false)?,
         roll_modifier: cfg.bool("roll_modifier", false)?,
+        pause_tick: cfg.i64("pause_tick", 0)? as i32,
+        dump_menu: cfg.bool("dump_menu", false)?,
+        capture_ui: cfg.bool("capture_ui", false)?,
+        menu_open: cfg.str("menu_open", "")?.to_string(),
     };
 
     let i32_t = code.ty_i32();
@@ -118,7 +126,7 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     let state = code.add_global(i32_t);
 
     skip_title(code, o.start_tick, state)?;
-    let capture = if o.capture.is_some() { Some(build_capture(code, &o.capture_dir)?) } else { None };
+    let capture = if o.capture.is_some() { Some(build_capture(code, &o.capture_dir, o.capture_ui)?) } else { None };
     let tick = build_tick(code, &o, state, capture)?;
     hooks::subscribe(code, "tick", tick)?;
     if !o.inputs.is_empty() {
@@ -411,6 +419,57 @@ fn build_tick(code: &mut Code, o: &Opts, state: RefGlobal, capture: Option<RefFu
         f.call(r, cap, &[idx]);
         f.place(skip);
     }
+    if o.pause_tick > 0 {
+        // Open the pause menu (Main.render shows it while `localInputs.paused`).
+        let skip = f.label();
+        let p = f.const_i32(o.pause_tick);
+        f.jne(t, p, skip);
+        let main = main_instance(&mut f)?;
+        let inputs = f.get_new(main, "localInputs")?;
+        let bool_t = f.code().ty_bool();
+        let yes = f.reg(bool_t);
+        f.bool(yes, true);
+        f.set(inputs, "paused", yes)?;
+        f.print(&[Print::Str("[harness] paused")])?;
+        if o.dump_menu {
+            let menu = f.get_new(main, "menu")?;
+            let items = f.get_new(menu, "items")?;
+            let item_t = f.code().class("bib.MenuItem")?;
+            let n = f.array_len(items)?;
+            f.for_range(n, |f, i| {
+                let it = f.array_get(items, i, item_t)?;
+                let text = f.get_new(it, "text")?;
+                f.print(&[Print::Str("[harness] menu: "), Print::Val(text)])
+            })?;
+        }
+        f.place(skip);
+    }
+    if o.pause_tick > 0 && !o.menu_open.is_empty() {
+        // One tick after pausing: select the item with this text and press it (opens a submenu).
+        let skip = f.label();
+        let p = f.const_i32(o.pause_tick + 2);
+        f.jne(t, p, skip);
+        let main = main_instance(&mut f)?;
+        let menu = f.get_new(main, "menu")?;
+        let items = f.get_new(menu, "items")?;
+        let item_t = f.code().class("bib.MenuItem")?;
+        let select = f.code().method("bib.Menu", "selectItem")?;
+        let exec = f.code().method("fish.system.PauseMenu", "exec")?;
+        let n = f.array_len(items)?;
+        let target = o.menu_open.clone();
+        f.for_range(n, |f, i| {
+            let next = f.label();
+            let it = f.array_get(items, i, item_t)?;
+            let text = f.get_new(it, "text")?;
+            f.jstr_ne(text, &target, next)?;
+            f.call_new(select, &[menu, i])?;
+            f.call_new(exec, &[menu])?;
+            f.print(&[Print::Str(&format!("[harness] opened menu item `{target}`"))])?;
+            f.place(next);
+            Ok(())
+        })?;
+        f.place(skip);
+    }
     if o.end_tick > 0 {
         let e = f.const_i32(o.end_tick);
         f.jlt(t, e, end);
@@ -423,7 +482,8 @@ fn build_tick(code: &mut Code, o: &Opts, state: RefGlobal, capture: Option<RefFu
 }
 
 /// `capture(n)`: render the game at 600×338 into `Main.gifTarget` and save it as a PNG.
-fn build_capture(code: &mut Code, dir: &str) -> Result<RefFun> {
+fn build_capture(code: &mut Code, dir: &str, ui: bool) -> Result<RefFun> {
+    let scene_render = code.method("h2d.Scene", "render")?;
     let resize = code.method("h3d.Engine", "resize")?;
     let on_resize = code.method("fish.system.Game", "onResize")?;
     let push_target = code.method("h3d.Engine", "pushTarget")?;
@@ -462,6 +522,11 @@ fn build_capture(code: &mut Code, dir: &str) -> Result<RefFun> {
     let no = f.reg(bool_t);
     f.bool(no, false);
     f.call_new(render, &[game, engine, no])?;
+    if ui {
+        // The UI layer (pause menu, …) is Main's own 2D scene, drawn after the game.
+        let s2d = f.get_new(main, "s2d")?;
+        f.call_new(scene_render, &[s2d, engine])?;
+    }
     f.call_new(pop_target, &[engine])?;
     let cnulls: Vec<Reg> = cap_args[1..].iter().map(|t| {
         let r = f.reg(*t);
