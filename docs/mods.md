@@ -23,7 +23,7 @@ Source: `crates/mosa-mods/src/screen_wrap.rs`.
 |---|---|---|
 | `coins` | `false` | Also wrap coins (fruits). Pushing fruits out is how levels are won, so this makes levels unwinnable. |
 | `secondary` | `true` | Also wrap "secondary physics" objects. |
-| `max_overshoot` | `100` | Only wrap objects at most this far past the edge. |
+| `max_overshoot` | `200` | Only wrap objects at most this far past the edge. Physics objects move at most 100 units per tick (the Box2D speed cap, observed in game), so keep this above 100. Parked objects sit about 1000 out. |
 | `min_tick` | `5` | Don't wrap during the first ticks of a layout. |
 | `trace` | `false` | Print `[screen-wrap] tick T (x, y) -> (x', y')` for every wrap. |
 
@@ -41,7 +41,7 @@ that just crossed the bottom limit reappears just past the top limit and keeps f
 [game-internals.md](game-internals.md#screen-and-edges) for the vanilla edge test.
 
 Verified in game: a box spawned by `debug-spawn` in the first tutorial level falls, wraps from y≈346 to y≈−6
-and loops indefinitely. The title screen and the level start show no spurious wraps.
+and loops indefinitely (4,500+ wraps in one session, reaching the 100 units/tick speed cap). The title screen and the level start show no spurious wraps.
 
 ## trace-calls (debug)
 

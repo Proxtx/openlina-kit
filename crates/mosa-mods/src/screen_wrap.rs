@@ -72,9 +72,10 @@ impl Mod for ScreenWrap {
             ("trace", "false", "print a line to stdout every time something wraps"),
             (
                 "max_overshoot",
-                "100",
+                "200",
                 "only wrap objects at most this far past the edge; the game parks and discards \
-                 objects far off-screen, those keep the vanilla behavior",
+                 objects far off-screen (~1000 units), those keep the vanilla behavior. Physics \
+                 objects move at most 100 units per tick, so keep this above 100",
             ),
             (
                 "min_tick",
@@ -89,7 +90,7 @@ impl Mod for ScreenWrap {
         let wrap_coins = cfg.bool("coins", false)?;
         let wrap_secondary = cfg.bool("secondary", true)?;
         let trace = cfg.bool("trace", false)?;
-        let max_overshoot = cfg.f64("max_overshoot", 100.0)?;
+        let max_overshoot = cfg.f64("max_overshoot", 200.0)?;
         let min_tick = cfg.i64("min_tick", 5)? as i32;
 
         let update = code.method(SHEET, "update")?;
