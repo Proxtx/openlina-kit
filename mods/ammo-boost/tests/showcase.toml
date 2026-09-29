@@ -1,0 +1,31 @@
+# Showcase: the player fires the first item over and over. With factor 3 it keeps going long
+# after vanilla would be empty. Items are rolled at random, so each recording differs.
+name = "ammo-boost: showcase, firing the boosted first item"
+mods = ["ammo-boost"]
+fixtures = ["trace-calls"]
+timeout = 60
+
+[options.ammo-boost]
+trace = true
+factor = 3
+
+[options.trace-calls]
+functions = ["fish.game.evsheet.EvSheet_gameplay.shoot"]
+first = 20
+every = 0
+
+[harness]
+level = "greendemo 1"
+inputs = ["40:shoot", "80:shoot", "120:shoot", "160:shoot", "200:shoot", "240:shoot", "280:shoot", "320:shoot"]
+end_tick = 400
+
+[[expect]]
+contains = " x 3"
+min = 4
+
+[[expect]]
+contains = "[trace-calls] fish.game.evsheet.EvSheet_gameplay.shoot call #8"
+
+[gif]
+capture = "1-400/3"
+out = "media/showcase.gif"

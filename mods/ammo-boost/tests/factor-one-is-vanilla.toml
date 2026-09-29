@@ -1,0 +1,24 @@
+# The other direction: with factor = 1 the slots hold exactly the vanilla baseAmmo, which shows
+# that the report compares against the real vanilla values (a factor of 2 would fail here).
+name = "ammo-boost: factor = 1 keeps vanilla ammo"
+mods = ["ammo-boost"]
+timeout = 60
+
+[options.ammo-boost]
+trace = true
+factor = 1
+
+[harness]
+level = "greendemo 1"
+end_tick = 120
+
+[[expect]]
+contains = "[harness] level tick 1: greendemo 1"
+
+# title screen roll, the main layout's preset items, test level: 4 slots each
+[[expect]]
+contains = " x 1"
+min = 12
+
+[[expect]]
+not_contains = " x 2"

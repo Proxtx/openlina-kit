@@ -8,3 +8,6 @@ id = "core"
 [[mod]]
 id = "screen-wrap"
 options = { trace = false }
+
+[[mod]]
+id = "ammo-boost"

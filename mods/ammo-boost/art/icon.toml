@@ -1,0 +1,16 @@
+# Website icon for ammo-boost: two rows of cartridges, more ammo than usual.
+[[frame]]
+pixels = """
+............
+...o....o...
+..ooo..ooo..
+..yyy..yyy..
+..yyy..yyy..
+..nnn..nnn..
+............
+...o....o...
+..ooo..ooo..
+..yyy..yyy..
+..yyy..yyy..
+..nnn..nnn..
+"""

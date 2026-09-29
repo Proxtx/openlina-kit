@@ -1,0 +1,19 @@
+[mod]
+id = "ammo-boost"
+name = "Ammo Boost"
+version = "0.1.0"
+section = "general"
+description = "Every item you get starts with more ammo: the normal ammo times `factor` (2 by default). Works for item slots and item blocks in levels."
+authors = ["openlina-kit"]
+game_builds = ["22056877"]
+requires = ["core"]
+
+[options.factor]
+type = "int"
+default = 2
+description = "Multiply the starting ammo of every item by this (0 to 1000). Items without ammo stay empty."
+
+[options.trace]
+type = "bool"
+default = false
+description = "Print every boosted ammo value: `[ammo-boost] <item>: ammo <vanilla> -> <boosted>`."

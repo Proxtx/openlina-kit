@@ -1118,6 +1118,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "openlina-mod-ammo-boost"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "openlina-sdk",
+]
+
+[[package]]
 name = "openlina-mod-core"
 version = "0.1.0"
 dependencies = [

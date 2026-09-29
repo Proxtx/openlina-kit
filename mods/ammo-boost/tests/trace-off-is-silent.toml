@@ -1,0 +1,27 @@
+# With trace off (the default) the mod prints nothing, and the game still reaches the level
+# and hands out items.
+name = "ammo-boost: trace off prints nothing"
+mods = ["ammo-boost"]
+fixtures = ["trace-calls"]
+timeout = 60
+
+[options.trace-calls]
+functions = ["fish.game.evsheet.EvSheet_manager_ev.rollItemsRaw"]
+first = 5
+every = 0
+
+[harness]
+level = "greendemo 1"
+end_tick = 120
+
+[[expect]]
+contains = "[harness] level tick 1: greendemo 1"
+
+[[expect]]
+contains = "[trace-calls] fish.game.evsheet.EvSheet_manager_ev.rollItemsRaw call #1"
+
+[[expect]]
+not_contains = "[ammo-boost]"
+
+[[expect]]
+contains = "[harness] end at tick 120"

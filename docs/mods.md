@@ -67,6 +67,25 @@ Verified in game (all by `lina test`): the game's roll draws it (seed 11); with 
 wrapping; without it the box reaches the edge and is deleted; fruits stay vanilla unless `coins`; `always` works
 without the modifier. The HUD shows the icon.
 
+## ammo-boost
+
+Every item the player gets starts with `factor` times its vanilla ammo (`baseAmmo`): the item slots
+(`OClass_b_item`) and item blocks placed in levels (`OClass_item_block`), including state restores
+(`StateSerializer.fromBin`). Ammo use, refunds and the slot/item-block swap stay vanilla.
+
+Source: `mods/ammo-boost/src/main.rs`. Requires `core`.
+
+| option | default | |
+|---|---|---|
+| `factor` | `2` | Multiplier for the starting ammo (0 to 1000). Items without ammo stay empty. |
+| `trace` | `false` | Print every boosted value (`[ammo-boost] <item>: ammo 2 -> 4`) and, on tick 1 of every gameplay layout, the slots' real ammo compared with `baseAmmo` (`level start slot 0: frog ammo 6 = 2 x 3`). |
+
+How it works: the game always copies ammo as `Field r = type.baseAmmo; SetField holder.ammo = r`
+(11 places in build 22056877); the mod inserts `r = boost(r, type)` between the two ops.
+
+Not boosted: ammo that doesn't come from `baseAmmo` (level-authored `test_item` objects, the `main`
+layout's preset slots), and the harness `items` option, which writes slot ammo itself.
+
 ## trace-calls (debug)
 
 Prints `[trace-calls] <function> call #N` to stdout: the first `first` calls, then every `every`-th.

@@ -1,0 +1,27 @@
+# The `factor` option is honored: with factor = 5 every slot holds 5x its vanilla baseAmmo,
+# and no slot holds the default 2x.
+name = "ammo-boost: factor = 5 gives five times the ammo"
+mods = ["ammo-boost"]
+timeout = 60
+
+[options.ammo-boost]
+trace = true
+factor = 5
+
+[harness]
+level = "greendemo 1"
+end_tick = 120
+
+[[expect]]
+contains = "[harness] level tick 1: greendemo 1"
+
+# title screen roll + test level: 4 slots each
+[[expect]]
+contains = " x 5"
+min = 8
+
+[[expect]]
+not_contains = " x 2"
+
+[[expect]]
+not_contains = "(not a multiple)"
