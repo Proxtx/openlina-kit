@@ -36,12 +36,20 @@ fn main() {
 
 struct Opts {
     bounce: f64,
+    friction: f64,
+    rest_speed: f64,
     coins: bool,
     trace: bool,
 }
 
 fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
-    let o = Opts { bounce: cfg.f64("bounce", 0.5)?, coins: cfg.bool("coins", false)?, trace: cfg.bool("trace", false)? };
+    let o = Opts {
+        bounce: cfg.f64("bounce", 0.5)?,
+        friction: cfg.f64("friction", 0.9)?,
+        rest_speed: cfg.f64("rest_speed", 40.0)?,
+        coins: cfg.bool("coins", false)?,
+        trace: cfg.bool("trace", false)?,
+    };
 
     // Element types of the two pickers, as vanilla's update uses them.
     let update = code.method("fish.game.evsheet.EvSheet_gameplay", "update")?;
@@ -122,17 +130,25 @@ fn collide(f: &mut FnBuilder, o: &Opts, obj: Reg, boss: Reg, tick: Reg, next: La
     let vy = f.call_new(get_vy, &[physics])?;
     let moved = f.reg(bool_t);
     f.bool(moved, false);
+    // A real bounce (fast impact) vs. resting contact (gravity pressing into the wall each tick).
+    let bounced = f.reg(bool_t);
+    f.bool(bounced, false);
     let bounce = f.const_f64(-o.bounce);
+    let friction = f.const_f64(o.friction);
+    let rest = f.const_f64(o.rest_speed);
+    let neg_rest = f.const_f64(-o.rest_speed);
     let zero = f.const_f64(0.0);
     let far = f.const_f64(FAR);
 
-    // One axis: keep `v` (center) within [lo + half, hi - half], reflecting `vel`.
-    let axis = |f: &mut FnBuilder, v: Reg, half: Reg, vel: Reg, lo: f64, hi: f64| -> Result<()> {
+    // One axis: keep `v` (center) within [lo + half, hi - half]. Motion into the wall is
+    // reflected (scaled by `bounce`) or, if slow, stopped; motion along the wall (`along`) gets
+    // `friction`.
+    let axis = |f: &mut FnBuilder, v: Reg, half: Reg, vel: Reg, along: Reg, lo: f64, hi: f64| -> Result<()> {
         let (lo_r, hi_r) = (f.const_f64(lo), f.const_f64(hi));
         let (min, max, d) = (f.reg(f64_t), f.reg(f64_t), f.reg(f64_t));
         f.add(min, lo_r, half);
         f.sub(max, hi_r, half);
-        let (past_max, past_min, done) = (f.label(), f.label(), f.label());
+        let (past_max, past_min, contact, stop, done) = (f.label(), f.label(), f.label(), f.label(), f.label());
         f.jlt(max, v, past_max);
         f.jlt(v, min, past_min);
         f.jmp(done);
@@ -141,25 +157,34 @@ fn collide(f: &mut FnBuilder, o: &Opts, obj: Reg, boss: Reg, tick: Reg, next: La
         f.sub(d, v, max);
         f.jlt(far, d, next); // far outside: the game's own business
         f.mov(v, max);
-        f.bool(moved, true);
-        f.jle(vel, zero, done); // only reflect motion into the wall
+        f.jle(vel, zero, contact); // already moving away
+        f.jlt(vel, rest, stop); // slow: come to rest
         f.mul(vel, vel, bounce);
-        f.jmp(done);
+        f.bool(bounced, true);
+        f.jmp(contact);
 
         f.place(past_min);
         f.sub(d, min, v);
         f.jlt(far, d, next);
         f.mov(v, min);
-        f.bool(moved, true);
-        f.jge(vel, zero, done);
+        f.jge(vel, zero, contact);
+        f.jlt(neg_rest, vel, stop);
         f.mul(vel, vel, bounce);
+        f.bool(bounced, true);
+        f.jmp(contact);
+
+        f.place(stop);
+        f.mov(vel, zero);
+        f.place(contact);
+        f.bool(moved, true);
+        f.mul(along, along, friction);
         f.place(done);
         Ok(())
     };
-    axis(f, y, hh, vy, MARGIN, SCREEN_H - MARGIN)?;
+    axis(f, y, hh, vy, vx, MARGIN, SCREEN_H - MARGIN)?;
     let skip_x = f.label();
     f.jtrue(boss, skip_x);
-    axis(f, x, hw, vx, MARGIN, SCREEN_W - MARGIN)?;
+    axis(f, x, hw, vx, vy, MARGIN, SCREEN_W - MARGIN)?;
     f.place(skip_x);
 
     f.jfalse(moved, next);
@@ -167,6 +192,7 @@ fn collide(f: &mut FnBuilder, o: &Opts, obj: Reg, boss: Reg, tick: Reg, next: La
     f.set(pos, "y", y)?;
     f.call_new(set_v, &[physics, vx, vy])?;
     if o.trace {
+        f.jfalse(bounced, next);
         f.print(&[
             Print::Str("[solid-edges] tick "), Print::Val(tick), Print::Str(" "), Print::Val(ty), Print::Str(" at ("),
             Print::Val(x), Print::Str(", "), Print::Val(y), Print::Str(") v ("), Print::Val(vx), Print::Str(", "),

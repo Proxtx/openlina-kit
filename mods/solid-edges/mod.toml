@@ -14,6 +14,16 @@ type = "float"
 default = 0.5
 description = "Share of the speed kept when bouncing off the border (0 = stop dead, 1 = perfectly elastic)."
 
+[options.friction]
+type = "float"
+default = 0.9
+description = "Speed along the border kept per tick of contact (1 = frictionless sliding)."
+
+[options.rest_speed]
+type = "float"
+default = 40.0
+description = "Impacts slower than this stop instead of bouncing (avoids jitter while resting on the border)."
+
 [options.coins]
 type = "bool"
 default = false
@@ -22,4 +32,4 @@ description = "Fruits bounce too. Pushing fruits out is how levels are won, so t
 [options.trace]
 type = "bool"
 default = false
-description = "Print every bounce to stdout."
+description = "Print every real bounce (not resting contact) to stdout."
