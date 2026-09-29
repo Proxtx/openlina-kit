@@ -25,7 +25,7 @@ description = "Level number within `level`'s pack (-1: any)."
 [options.seed]
 type = "int"
 default = 1
-description = "Seed for rolling the level, modifier and items."
+description = "Seed for the level roll and every RNG of the run (items, modifiers, colors, ...), so runs are reproducible."
 
 [options.modifier]
 type = "int"
@@ -45,7 +45,7 @@ description = "Force the modifier registered with this key (e.g. \"screen-wrap\"
 [options.items]
 type = "list"
 default = []
-description = "Item names for the item slots, in order (see the item pool)."
+description = "Items to roll from (up to 3, repeated if fewer; names from list_levels). The game assigns them with its own code (ammo included, so ammo mods apply); slot order follows the seed. Items marked secondLayer only appear in second-layer runs."
 
 [options.inputs]
 type = "list"

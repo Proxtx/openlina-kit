@@ -183,7 +183,6 @@ fn build_tick(code: &mut Code, o: &Opts, state: RefGlobal, capture: Option<RefFu
     let level_t = nested_type(code, lm_t, "currentLevel", "type")?; // {bgColor, …, name, …}
     let b_item_t = code.class("fish.game.oclass.OClass_b_item")?;
     let pool_item_t = nested_type(code, b_item_t, "item", "type")?; // {aimType, baseAmmo, name, …}
-    let slot_t = code.field_type(b_item_t, code.field(b_item_t, "item")?)?; // {locked, type, wins}
     let rand_init = code.method("hxd.Rand", "init")?;
     let roll = code.method("fish.system.LevelManager", "rollRaw")?;
     let roll_items = code.method("fish.game.evsheet.EvSheet_manager_ev", "rollItemsRaw")?;
@@ -281,6 +280,19 @@ fn build_tick(code: &mut Code, o: &Opts, state: RefGlobal, capture: Option<RefFu
         let yes = f.reg(bool_t);
         f.bool(yes, true);
         f.set(manager, "tutorial_done", yes)?;
+        // Seed every RNG of the run (items come from `toolSeed`, which is random at startup).
+        for (k, field) in ["mainSeed", "levelSeed", "toolSeed", "toolBlockSeed", "modifierSeed", "colorSeed", "musicSeed",
+            "sfxSeed", "bossSeed", "endwormSeed"]
+        .iter()
+        .enumerate()
+        {
+            let skip = f.label();
+            let r = f.get_new(manager, field)?;
+            f.jnull(r, skip);
+            let s = f.const_i32(o.seed.wrapping_mul(31).wrapping_add(k as i32));
+            f.call_new(rand_init, &[r, s])?;
+            f.place(skip);
+        }
 
         let rand = f.new_obj("hxd.Rand")?;
         let seed = f.const_i32(o.seed);
@@ -298,15 +310,16 @@ fn build_tick(code: &mut Code, o: &Opts, state: RefGlobal, capture: Option<RefFu
             f.set(cur, "modifier", m)?;
         }
         let mgr = f.get_new(game, "ev_manager_ev")?;
-        f.call_new(roll_items, &[mgr])?;
-
-        if !o.items.is_empty() {
+        if o.items.is_empty() {
+            f.call_new(roll_items, &[mgr])?;
+        } else {
+            // Roll from a temporary pool holding just the requested items, so the game's own code
+            // assigns them (and their ammo, including changes made by other mods). The slot order
+            // follows the seeded roll.
             let im = f.get_new(game, "itemManager")?;
             let item_pool = f.get_new(im, "itemPool")?;
-            let current = f.get_new(im, "currentItems")?;
-            let picker = f.get_new(mgr, "b_item")?;
-            let slots = f.get_new(picker, "insts")?;
-            for (k, name) in o.items.iter().enumerate() {
+            let mut chosen = Vec::new();
+            for name in &o.items {
                 let found = f.reg(pool_item_t);
                 f.op(Opcode::Null { dst: found });
                 let pn = f.array_len(item_pool)?;
@@ -324,21 +337,15 @@ fn build_tick(code: &mut Code, o: &Opts, state: RefGlobal, capture: Option<RefFu
                 f.print(&[Print::Str(&format!("[harness] ERROR item `{name}` not in the item pool"))])?;
                 f.exit(3)?;
                 f.place(ok);
-                // currentItems[k].type = found (the record is shared with slot k's `item`)
-                let kr = f.const_i32(k as i32);
-                let done = f.label();
-                let cn = f.array_len(current)?;
-                f.jge(kr, cn, done);
-                let rec = f.array_get(current, kr, slot_t)?;
-                f.set(rec, "type", found)?;
-                // slot k's ammo, if the slot objects exist yet
-                let sn = f.array_len(slots)?;
-                f.jge(kr, sn, done);
-                let slot = f.array_get(slots, kr, b_item_t)?;
-                let ammo = f.get_new(found, "baseAmmo")?;
-                f.set(slot, "ammo", ammo)?;
-                f.place(done);
+                chosen.push(found);
             }
+            // The roll draws 3 items and the 4th slot copies the 2nd: repeat the requested items
+            // so the pool never runs short.
+            let padded: Vec<Reg> = chosen.iter().cycle().take(chosen.len().max(3)).copied().collect();
+            let temp = f.new_array_obj(pool_item_t, &padded)?;
+            f.set(im, "itemPool", temp)?;
+            f.call_new(roll_items, &[mgr])?;
+            f.set(im, "itemPool", item_pool)?;
         }
         f.call_new(load, &[lm, game])?;
         f.print(&[Print::Str(&format!(
@@ -367,6 +374,24 @@ fn build_tick(code: &mut Code, o: &Opts, state: RefGlobal, capture: Option<RefFu
             Print::Str("[harness] level tick 1: "), Print::Val(name), Print::Str(" modifier "), Print::Val(m),
             Print::Str(" frameTime "), Print::Val(dt),
         ])?;
+        // [harness] slot k: <item> ammo <n>
+        let mgr = f.get_new(game, "ev_manager_ev")?;
+        let picker = f.get_new(mgr, "b_item")?;
+        let slots = f.get_new(picker, "insts")?;
+        let n = f.array_len(slots)?;
+        f.for_range(n, |f, k| {
+            let slot = f.array_get(slots, k, b_item_t)?;
+            let skip = f.label();
+            let rec = f.get_new(slot, "item")?;
+            f.jnull(rec, skip);
+            let ty = f.get_new(rec, "type")?;
+            f.jnull(ty, skip);
+            let nm = f.get_new(ty, "name")?;
+            let ammo = f.get_new(slot, "ammo")?;
+            f.print(&[Print::Str("[harness] slot "), Print::Val(k), Print::Str(": "), Print::Val(nm), Print::Str(" ammo "), Print::Val(ammo)])?;
+            f.place(skip);
+            Ok(())
+        })?;
     }
     f.place(not_first);
     if let (Some((a, b, step)), Some(cap)) = (o.capture, capture) {

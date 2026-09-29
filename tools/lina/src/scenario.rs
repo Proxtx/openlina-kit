@@ -141,7 +141,8 @@ fn check(sc: &Scenario, code: Option<i32>, log: &str) -> Vec<String> {
         Some(124) => fails.push(format!("timed out after {}s (set harness.end_tick?)", sc.timeout)),
         c => fails.push(format!("game exited with {c:?}")),
     }
-    for bad in ["SIGNAL", "Uncaught exception", "[harness] ERROR"] {
+    // Haxe exceptions the game catches and logs still mean the mod broke something.
+    for bad in ["SIGNAL", "Uncaught exception", "[harness] ERROR", "Null access", "Called from "] {
         if let Some(line) = log.lines().find(|l| l.contains(bad)) {
             fails.push(format!("log: {line}"));
         }

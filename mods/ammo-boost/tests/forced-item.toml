@@ -1,0 +1,12 @@
+name = "ammo-boost: a forced box starts with 12 instead of 6"
+mods = ["ammo-boost"]
+timeout = 60
+
+[harness]
+level = "greendemo 1"
+seed = 4
+items = ["box"]      # the game assigns it with its own code, so the patch applies
+end_tick = 3
+
+[[expect]]
+contains = "[harness] slot 0: box ammo 12"

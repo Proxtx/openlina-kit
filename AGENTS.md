@@ -6,7 +6,8 @@ for what's known about the game, and [docs/PLAN.md](docs/PLAN.md) for where the 
 ## Setup (once per game version)
 
 ```bash
-nix develop                       # Rust + wasm32-wasip1, imagemagick, gifsicle
+nix develop                       # enter the dev shell once: Rust + wasm32-wasip1, imagemagick, gifsicle
+                                  # (`nix develop -c <cmd>` per command works too, but warns about the dirty git tree)
 cargo build --release
 lina() { target/nix/release/lina "$@"; }
 lina setup                        # work/hlboot.orig.dat (+ version check)
@@ -24,7 +25,9 @@ lina check                        # must report 0 validator problems
   header shows `fn@<findex>` and its source `file:line`, and every op its source line (`L1234`).
 - Game logic lives in `fish.game.evsheet.EvSheet_*` (event sheets, per-tick `update`), object types in
   `fish.game.oclass.OClass_*`, engine code in `fish.system.*`. See docs/game-internals.md.
-- Queries: `lina fn <Class.method|findex> [--hx] [--ops a..b]`, `lina callers <fn>`, `lina strings <text>`,
+- Queries: `lina fn <Class.method|findex> [--hx] [--ops a..b]` (`--hx` falls back to the disassembly when the
+  decompiler fails, which is common for closures and big functions), `lina callers <fn>`, `lina strings <text>`,
+  `lina hooks`,
   `grep -rn "\.fieldName$" work/dump/asm` (readers of a field), `classes.tsv` / `functions.tsv`.
 - Many callbacks are anonymous closures in `asm/_global.asm`, attributed by their source line.
 
@@ -53,7 +56,13 @@ lina new items portal-gun         # mods/portal-gun/: Cargo.toml, mod.toml, src/
 ```
 
 - `mod.toml`: id (= directory name), name, version, section (`items|modifiers|levels|general|dev`),
-  description, `requires = ["core"]`, options with type/default/description. Format: `openlina_sdk::manifest`.
+  description, `requires = ["core"]`, options with type (`bool|int|float|string|list`)/default/description.
+  Format: `openlina_sdk::manifest`.
+  - **Load order**: a mod runs after everything in its `requires` (must be present) and `after` (if present);
+    the `core` section goes first; otherwise mods run in id order. `conflicts = [...]` refuses to build with the
+    listed mods. The order matters when mods patch the same code; prefer hooks, where order doesn't matter much.
+  - Read options with `cfg.bool` / `cfg.i64` (for `int`) / `cfg.f64` / `cfg.str`; list options through
+    `cfg.table`.
 - `src/main.rs`: `openlina_sdk::run_mod(|code, cfg| { ... })`. Read options with `cfg.bool/i64/f64/str`; the host
   always passes every declared option (defaults filled in), and rejects unknown or mistyped ones.
 - `assets/` (optional): files overlaid onto `fish/game/res/` (e.g. `assets/images/my-sheet.png`).
@@ -89,17 +98,24 @@ Everything runs headless (SDL offscreen driver): no window, no human, faster tha
      makes behavior visible. A run also fails on a crash, a `[harness] ERROR`, a non-zero exit or the timeout.
    - **Make every test able to fail.** Assert that the situation happened (e.g. `trace-calls` shows vanilla's
      function ran), not just that nothing bad was printed; test options in both directions.
-   - The physics is deterministic: same build and scenario, same ticks and coordinates.
-   - Logs: `work/test/<n>/log.txt`.
-4. **Showcase gifs**: add a `[gif]` section (`capture = "from-to/step"` in level ticks, 120 ticks per second;
+   - Runs are deterministic: the harness seeds every RNG of the run from `seed`, so the same build and scenario give
+     the same items, ticks and coordinates. The harness prints `[harness] slot k: <item> ammo <n>` at level tick 1.
+   - `items` rolls from a temporary pool of just those items with the game's own code (so ammo mods apply); slot
+     order follows the seed.
+   - Scenario files can live anywhere (`lina test path/to/x.toml`), e.g. throwaway probes with `list_levels`.
+   - Logs: `work/test/<n>/log.txt`, numbered by position in the run. A run fails on a crash, a logged Haxe
+     exception (`Null access`, `Called from …`), a `[harness] ERROR`, a non-zero exit or the timeout.
+4. **Showcase gifs** (the scenario's expectations are checked too): add a `[gif]` section (`capture = "from-to/step"` in level ticks, 120 ticks per second;
    `out = "media/x.gif"`) and run `lina gif mods/<id>/tests/<scenario>.toml`. Frames come from the game's own
    renderer at 600×338. Look at them before publishing (`work/gif/frames/*.png`).
 5. **Graphics**: pixel art as text grids in `mods/<id>/art/*.toml`, rendered with
    `lina sprite art/x.toml --out assets/images/x.png` (game sprites) or `--out media/icon.png` (website icon).
    `lina sprite --palette` lists the game palette; `--scale 16` writes a preview you can look at.
 6. `cargo test --release` (relocation, validator and manifest tests) and `cargo clippy --release`.
-7. `lina pack <id>` produces the package; test the player flow with a throwaway data dir:
-   `OPENLINA_HOME=work/home dist/…/openlina install dist/<id>-<version>.zip`.
+7. `lina pack <id>` produces `dist/<id>-<version>.zip`. To test the player flow, bundle it (required mods such as
+   `core` are added automatically) and install into a throwaway data dir:
+   `lina pack <id> --bundle try && OPENLINA_HOME=$PWD/work/home target/nix/release/openlina install dist/try.zip`
+   (a single mod zip can only be installed on top of its requirements).
 
 ## HashLink pitfalls (learned the hard way)
 

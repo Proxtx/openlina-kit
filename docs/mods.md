@@ -84,11 +84,12 @@ How it works: the game always copies ammo as `Field r = type.baseAmmo; SetField 
 (11 places in build 22056877); the mod inserts `r = boost(r, type)` between the two ops.
 
 Not boosted: ammo that doesn't come from `baseAmmo` (level-authored `test_item` objects, the `main`
-layout's preset slots), and the harness `items` option, which writes slot ammo itself.
+layout's preset slots). Written from the docs alone by an agent with no other context (the docs test).
 
 ## trace-calls (debug)
 
-Prints `[trace-calls] <function> call #N` to stdout: the first `first` calls, then every `every`-th.
+Prints `[trace-calls] <function> call #N  (fn@<findex> <file:line>)` to stdout: the first `first` calls, then every
+`every`-th. Functions are `pkg.Class.method`, a findex, or `hook:<name>` for a core hook.
 
 ```toml
 [[mod]]
@@ -111,9 +112,11 @@ Drives the game for tests and recordings without input (source: `mods/harness/sr
 | `start_tick` | 5 | title-screen tick at which to skip to the game (like a key press) |
 | `level` | "" | level to load by name, e.g. `"greendemo 1"`; empty keeps the run's first level (the tutorial) |
 | `level_n` | -1 | level number within the pack (-1: any) |
-| `seed` | 1 | seed for rolling the level, modifier and items |
+| `seed` | 1 | seeds the level roll and every RNG of the run (items, modifier, colors, …) |
+| `roll_modifier` | false | let the game draw a modifier (as in runs) |
+| `modifier_key` | "" | force the modifier registered with this key, e.g. `"screen-wrap"` |
 | `modifier` | -1 | force a modifier id |
-| `items` | [] | item names for the item slots, e.g. `["box", "bomb"]` |
+| `items` | [] | items to roll from, e.g. `["box", "bomb"]` (up to 3, repeated if fewer): the game assigns them with its own code, slot order follows the seed |
 | `inputs` | [] | scripted inputs in level ticks: `"60-90:right+jump"`, `"120:shoot"` (up down left right jump shoot switch restart); the keyboard is ignored while set |
 | `end_tick` | 0 | exit the game (code 0) at this level tick |
 | `capture` / `capture_dir` | "" / "frames" | save 600×338 PNG frames `from-to/step` |

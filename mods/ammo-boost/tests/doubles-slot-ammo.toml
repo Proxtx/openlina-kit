@@ -1,7 +1,6 @@
-# The harness loads a level; rollItemsRaw hands out 4 items (random per run: the harness seed
-# does not seed the item roll). With the default factor 2, every slot must hold exactly twice
+# The harness loads a level; rollItemsRaw hands out 4 items (from the seeded roll). With the default
+# factor 2, every slot must hold exactly twice
 # its item's vanilla baseAmmo. The trace report reads the slots' real ammo in game.
-# (The harness `items` option is not used: it writes the slot ammo itself, bypassing the game code.)
 name = "ammo-boost: items start with twice their ammo (default factor)"
 mods = ["ammo-boost"]
 fixtures = ["trace-calls"]

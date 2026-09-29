@@ -11,7 +11,7 @@ debug info; findexes (`fn@N`) refer to this build.
 - `Mosa Lina_jit <file>` runs any bytecode file. It must run with the game directory as the working directory
   (`fish/game/res`, `userdata/`) and with the game directory on `LD_LIBRARY_PATH` (`libturbojpeg.so.0`).
 - The game's stdout carries `trace()` output and, on a crash, a HashLink stack trace with file:line. Injected
-  functions show up as `mosa/<name>:<op index + 1>`.
+  functions show up as `openlina/<name>:<op index + 1>`.
 - Saves and settings are in `<game>/userdata/`, shared between the native and the JIT builds.
 
 ## Engine architecture ("fish")
@@ -37,7 +37,7 @@ The game was made in Construct and ported to Haxe by a converter, so the code mi
 ## Gameplay
 
 - The main per-tick logic is `EvSheet_gameplay.update` (fn@3767, ~22k ops, source `EvSheet_gameplay.hx`
-  L9734–16300). hlbc's decompiler can't handle it. Read it with `mosa fn 3767 --ops a..b` or
+  L9734–16300). hlbc's decompiler can't handle it. Read it with `lina fn 3767 --ops a..b` or
   `work/dump/asm/fish/game/evsheet/EvSheet_gameplay.asm`.
 - On the title screen the gameplay sheet only runs for its first ticks (startup cleanup). It runs every
   tick in levels.
@@ -97,6 +97,16 @@ coordinates.
 - Items: `itemManager.itemPool` holds 48 item types `{aimType, baseAmmo, name, secondLayer}` (`box`, `bomb`,
   `phaser`, `rocket`, …); `itemManager.currentItems[k]` is `{locked, type, wins}` and is shared with the HUD slot
   `ev_manager_ev.b_item.insts[k].item` (`OClass_b_item`, which also has `ammo`).
+- **Ammo** (found by the ammo-boost docs test): the game copies ammo with the two ops
+  `Field r = type.baseAmmo; SetField holder.ammo = r` in 11 places: `EvSheet_manager_ev.manage` and `rollItemsRaw`
+  (HUD slots), 3 `EvSheet_instancing_ev` closures, item blocks (`EvSheet_gameplay` closure ~L6147,
+  `mld.objects.ItemBlock.createInstance`) and `StateSerializer.fromBin`. Shooting does `ammo - 1`, returning an item
+  `ammo + 1`; taking an item block swaps ammo between the slot and the block (closure ~L17390).
+  `OClass_test_item` objects copy their own ammo into slot 0 (title screen), and the `main` layout's preset slots
+  get theirs from layout data. The HUD shows ammo as `ammoSprite.animFrame = ammo + 1`.
+- The roll draws 3 items and the 4th slot copies the 2nd (`rollItemsRaw` crashes if the pool has fewer than 2).
+- Randomness: the run's RNGs are `hxd.Rand` fields of the manager (`mainSeed`, `levelSeed`, `toolSeed`, …), seeded
+  randomly at startup; the harness seeds them all from its `seed` option.
 - `Picker.insts` is typed `hl.types.ArrayDyn` but holds an `hl.types.ArrayObj`; cast before indexing (the SDK's
   `array_get`/`array_len` do).
 

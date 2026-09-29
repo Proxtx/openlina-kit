@@ -1,4 +1,4 @@
-//! `mosa fn`, `mosa callers`, `mosa strings`: quick queries without a full dump.
+//! `lina fn`, `lina callers`, `lina strings`: quick queries without a full dump.
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::Path;
@@ -67,7 +67,7 @@ pub fn callers(input: &Path, spec: &str) -> Result<()> {
     let target = resolve(&code, spec)?;
     println!("references to fn@{} {}:", target.0, code.func_name(target));
     let mut n = 0;
-    for fun in &code.bc.functions {
+    for fun in code.bc.functions.iter().filter(|f| f.findex != target) {
         for (i, op) in fun.ops.iter().enumerate() {
             if references(op, target) {
                 n += 1;

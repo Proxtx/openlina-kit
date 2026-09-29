@@ -988,6 +988,7 @@ dependencies = [
  "clap",
  "hlbc",
  "hlbc-decompiler",
+ "libc",
  "openlina",
  "openlina-sdk",
  "png",

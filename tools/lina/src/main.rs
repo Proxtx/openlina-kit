@@ -65,6 +65,8 @@ enum Cmd {
     },
     /// List the mods in mods/ and their options.
     Mods,
+    /// List the hooks the `core` mod provides (subscribe with `openlina_sdk::hooks`).
+    Hooks,
     /// Create a new mod crate from a template: `lina new items portal-gun`.
     New { section: String, id: String },
     /// Build mods and apply them to the pristine bytecode (+ overlay in work/game).
@@ -153,6 +155,12 @@ fn main() -> Result<()> {
         Cmd::Callers { func, input } => inspect::callers(&input, &func),
         Cmd::Strings { pattern, input } => inspect::strings(&input, &pattern),
         Cmd::Mods => build::list_mods(),
+        Cmd::Hooks => {
+            for h in openlina_sdk::hooks::CORE_HOOKS {
+                println!("{}{} -> {}\n    {}\n", h.name, h.args, h.returns, h.doc.split_whitespace().collect::<Vec<_>>().join(" "));
+            }
+            Ok(())
+        }
         Cmd::New { section, id } => scaffold::new_mod(&section, &id),
         Cmd::Build { pack, only, wasm, out } => build::build(&game_dir()?, &pack, &only, wasm, &out),
         Cmd::Run { build, pack, timeout, headless } => {

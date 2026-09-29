@@ -21,7 +21,7 @@ fn main() {
 fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     let trace = cfg.bool("trace", false)?;
 
-    // Example: run code at the start of every gameplay tick (see `lina hooks`, AGENTS.md).
+    // Example: run code at the start of every gameplay tick (`lina hooks` lists all hooks).
     let mut f = hooks::handler(code, "tick", "{id}/tick")?;
     let layout = f.arg(1);
     if trace {

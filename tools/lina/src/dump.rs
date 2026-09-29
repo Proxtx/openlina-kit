@@ -1,4 +1,4 @@
-//! `mosa dump`: decompile the whole bytecode into a greppable tree.
+//! `lina dump`: decompile the whole bytecode into a greppable tree.
 //!
 //! Layout of the output directory:
 //! - `hx/<package>/<Class>.hx`   decompiled pseudo-Haxe (lossy, but readable)
@@ -44,8 +44,10 @@ pub fn run(input: &Path, out: &Path) -> Result<()> {
     }
     fs::write(out.join("functions.tsv"), functions_tsv)?;
 
-    // The decompiler panics on some control flow; keep going and note it.
+    // The decompiler panics on some control flow (keep going and note it) and prints debug
+    // dumps to stderr (silence them).
     std::panic::set_hook(Box::new(|_| {}));
+    let _quiet = QuietStderr::new();
     let mut classes_tsv = String::from("type\tname\tsuper\tfields\n");
     let mut failed = 0usize;
     let mut count = 0usize;
@@ -196,15 +198,41 @@ pub fn disassemble_range(code: &Code, f: &Function, range: Option<std::ops::Rang
             .and_then(|d| d.get(i))
             .map(|(_, l)| format!("L{l}"))
             .unwrap_or_default();
+        // hlbc prints the whole target Function for closure ops; show its findex instead.
+        let text = match op {
+            hlbc::opcodes::Opcode::StaticClosure { dst, fun } => format!("{:<12} {dst} = closure fn@{} {}", "StaticClosure", fun.0, code.func_name(*fun)),
+            hlbc::opcodes::Opcode::InstanceClosure { dst, fun, obj } => {
+                format!("{:<12} {dst} = closure fn@{} {} bound to {obj}", "InstanceClosure", fun.0, code.func_name(*fun))
+            }
+            _ => name_anonymous(code, &op.display(bc, f, i as i32, 12).to_string()),
+        };
         let note = match op {
             hlbc::opcodes::Opcode::GetGlobal { global, .. } => {
                 code.global_string(*global).map(|s| format!("  // {s:?}")).unwrap_or_default()
             }
             _ => String::new(),
         };
-        let _ = writeln!(out, "  {i:>5} {line:>6}  {}{note}", op.display(bc, f, i as i32, 12));
+        let _ = writeln!(out, "  {i:>5} {line:>6}  {text}{note}");
     }
     out.push('\n');
+}
+
+/// hlbc prints calls to unnamed functions as `<none>@N`; use our names (e.g. injected
+/// `openlina/...` functions, `<anonymous>` closures).
+fn name_anonymous(code: &Code, text: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(p) = rest.find("<none>@") {
+        out.push_str(&rest[..p]);
+        let digits: String = rest[p + 7..].chars().take_while(|c| c.is_ascii_digit()).collect();
+        match digits.parse::<usize>() {
+            Ok(n) => out.push_str(&format!("{}@{n}", code.func_name(hlbc::types::RefFun(n)))),
+            Err(_) => out.push_str("<none>@"),
+        }
+        rest = &rest[p + 7 + digits.len()..];
+    }
+    out.push_str(rest);
+    out
 }
 
 fn class_path(out: &Path, kind: &str, name: &str, ext: &str) -> PathBuf {
@@ -225,4 +253,35 @@ fn write_file(path: &Path, content: &str) -> Result<()> {
     }
     fs::write(path, content)?;
     Ok(())
+}
+
+/// Redirects stderr to /dev/null while alive (the decompiler writes debug dumps to it).
+struct QuietStderr(Option<i32>);
+
+impl QuietStderr {
+    fn new() -> Self {
+        #[cfg(unix)]
+        unsafe {
+            let saved = libc::dup(2);
+            let null = libc::open(c"/dev/null".as_ptr(), libc::O_WRONLY);
+            if saved >= 0 && null >= 0 {
+                libc::dup2(null, 2);
+                libc::close(null);
+                return Self(Some(saved));
+            }
+        }
+        Self(None)
+    }
+}
+
+impl Drop for QuietStderr {
+    fn drop(&mut self) {
+        #[cfg(unix)]
+        if let Some(saved) = self.0 {
+            unsafe {
+                libc::dup2(saved, 2);
+                libc::close(saved);
+            }
+        }
+    }
 }

@@ -189,6 +189,27 @@ pub fn pack(ids: &[String], bundle: Option<&str>, out: &Path) -> Result<()> {
             .map(|id| all.iter().find(|(_, m)| &m.info.id == id).cloned().with_context(|| format!("no mod `{id}`")))
             .collect::<Result<_>>()?
     };
+    // A bundle must be installable on its own: add what the chosen mods require.
+    let mut chosen = chosen;
+    if bundle.is_some() {
+        loop {
+            let missing: Vec<String> = chosen
+                .iter()
+                .flat_map(|(_, m)| m.info.requires.clone())
+                .filter(|r| !chosen.iter().any(|(_, c)| &c.info.id == r))
+                .collect();
+            if missing.is_empty() {
+                break;
+            }
+            for r in missing {
+                let found = all.iter().find(|(_, m)| m.info.id == r).cloned().with_context(|| format!("no mod `{r}`"))?;
+                if !chosen.iter().any(|(_, c)| c.info.id == r) {
+                    println!("adding required mod `{r}` to the bundle");
+                    chosen.push(found);
+                }
+            }
+        }
+    }
     let id_list: Vec<String> = chosen.iter().map(|(_, m)| m.info.id.clone()).collect();
     cargo_build(&id_list, true)?;
     std::fs::create_dir_all(out)?;

@@ -182,7 +182,25 @@ fn install(data: &Path, path: &Path) -> Result<()> {
         bail!("{}: no mods found (expected mod.toml or mods/<id>/mod.toml)", path.display());
     }
 
-    let mut state = load_state(data)?;
+    // Refuse before changing anything if a requirement would be missing.
+    let state_before = load_state(data)?;
+    let incoming_ids: Vec<String> =
+        dirs.iter().map(|d| Package::load(d).map(|p| p.manifest.info.id)).collect::<Result<_>>()?;
+    for d in &dirs {
+        let p = Package::load(d)?;
+        for r in &p.manifest.info.requires {
+            if !incoming_ids.contains(r) && !state_before.mods.iter().any(|e| &e.id == r) {
+                bail!(
+                    "`{}` requires `{r}`, which is neither installed nor in {}. Install a pack that \
+                     contains it (e.g. `lina pack {r} {} --bundle my-pack`), or install `{r}` first.",
+                    p.manifest.info.id,
+                    path.display(),
+                    p.manifest.info.id
+                );
+            }
+        }
+    }
+    let mut state = state_before;
     for dir in dirs {
         let pkg = Package::load(&dir)?;
         let id = pkg.manifest.info.id.clone();

@@ -36,6 +36,11 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
             }
         } };
         let label = code.func_name(target);
+        // Anonymous closures all print as `<anonymous>`: the findex and source location tell them apart.
+        let place = match code.func(target).ok().and_then(|f| code.func_location(f)) {
+            Some(loc) => format!("  (fn@{} {loc})", target.0),
+            None => format!("  (fn@{})", target.0),
+        };
         let i32_t = code.ty_i32();
         let void = code.ty_void();
         let counter = code.add_global(i32_t);
@@ -54,7 +59,7 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
         }
         f.jmp(done);
         f.place(print);
-        f.print(&[Print::Str("[trace-calls] "), Print::Str(&label), Print::Str(" call #"), Print::Val(n)])?;
+        f.print(&[Print::Str("[trace-calls] "), Print::Str(&label), Print::Str(" call #"), Print::Val(n), Print::Str(&place)])?;
         f.place(done);
         f.ret_void();
         let hook = f.finish()?;
