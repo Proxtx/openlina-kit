@@ -45,7 +45,7 @@ mosa-mod/                 (plain folder)
 
 - [x] 0. Spikes: asset overlay + frame data, direct level loading, input injection, frame capture, item/`shoot`/
       modifier plumbing
-- [ ] 1. Website design prototype (Claude Design, Mosa Lina style, placeholder mods), approved by the user
+- [~] 1. Website design prototype (Claude Design, Mosa Lina style, placeholder mods), approved by the user
 - [ ] 2. Kit foundation: wasm package format, `openlina` helper, core hooks/registries, screen-wrap ported
 - [ ] 3. Harness + `lina test` / `lina gif` / `lina sprite`
 - [ ] 4. Showcase mods: modifier → general → item → level, each with icon, gifs, tests
@@ -55,6 +55,8 @@ mosa-mod/                 (plain folder)
 ## Findings
 
 (Filled in as stages complete. Details in game-internals.md.)
+
+- Design prototype: https://claude.ai/artifact/SeqU5XWxttwHCJwjgDh6Uy (copy in openlina-web/design/), awaiting approval.
 
 - Items are created in code (`EvSheet_instancing_ev`, ~L100–278) as `OClass_item` with `NAME`, `ammo`,
   `aim_type`, `unlocked`, `secondLayer`, then `ItemManager.initBaseItems`. Behavior is dispatched in
