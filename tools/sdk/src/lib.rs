@@ -25,6 +25,7 @@ pub mod asm;
 pub mod edit;
 pub mod hooks;
 pub mod manifest;
+pub mod modifiers;
 pub mod runner;
 pub mod validate;
 
@@ -169,6 +170,16 @@ impl Code {
     pub fn add_global(&mut self, t: RefType) -> RefGlobal {
         self.bc.globals.push(t);
         RefGlobal(self.bc.globals.len() - 1)
+    }
+
+    /// The text of a global initialized with a constant `String` (the game keeps most string
+    /// literals, e.g. animation and object type names, in such globals).
+    pub fn global_string(&self, g: RefGlobal) -> Option<&str> {
+        let c = self.bc.constants.as_ref()?.iter().find(|c| c.global == g)?;
+        match self.bc.types.get(self.bc.globals.get(g.0)?.0)? {
+            Type::Obj(o) if self.str(o.name) == "String" => Some(self.str(RefString(*c.fields.first()?))),
+            _ => None,
+        }
     }
 
     // ---------------------------------------------------------------------- types

@@ -349,6 +349,50 @@ impl<'a> FnBuilder<'a> {
         }
     }
 
+    /// New register holding a type value (`Type` opcode), e.g. for `alloc_array`.
+    pub fn type_value(&mut self, t: RefType) -> Reg {
+        let tt = self.code.intern_type(hlbc::types::Type::Type);
+        let r = self.reg(tt);
+        self.op(Opcode::Type { dst: r, ty: t });
+        r
+    }
+
+    /// New Haxe array (`hl.types.ArrayObj`) of `elem`-typed values holding `items`, built like the
+    /// compiler does: native `alloc_array(type, n)`, `SetArray`s, then `ArrayObj.alloc`.
+    pub fn new_array_obj(&mut self, elem: RefType, items: &[Reg]) -> Result<Reg> {
+        let alloc_array = self.code.native("alloc_array")?;
+        let array_obj_t = self.code.class("hl.types.ArrayObj")?;
+        let wrap = self
+            .code
+            .bc
+            .functions
+            .iter()
+            .find(|f| {
+                f.t.as_fun(&self.code.bc).is_some_and(|t| {
+                    t.ret == array_obj_t && t.args.len() == 1 && matches!(self.code.bc.types[t.args[0].0], hlbc::types::Type::Array)
+                })
+            })
+            .map(|f| f.findex)
+            .ok_or_else(|| anyhow!("ArrayObj.alloc not found"))?;
+        let ty = self.type_value(elem);
+        let n = self.const_i32(items.len() as i32);
+        let native = self.call_new(alloc_array, &[ty, n])?;
+        for (i, it) in items.iter().enumerate() {
+            let idx = self.const_i32(i as i32);
+            self.op(Opcode::SetArray { array: native, index: idx, src: *it });
+        }
+        self.call_new(wrap, &[native])
+    }
+
+    /// New empty `hl.types.ArrayBytes_Float` (`ArrayBase.allocF64(alloc_bytes(0), 0)`).
+    pub fn empty_f64_array(&mut self) -> Result<Reg> {
+        let alloc_bytes = self.code.native("alloc_bytes")?;
+        let alloc_f64 = self.code.method("hl.types.ArrayBase", "allocF64")?;
+        let zero = self.const_i32(0);
+        let bytes = self.call_new(alloc_bytes, &[zero])?;
+        self.call_new(alloc_f64, &[bytes, zero])
+    }
+
     /// `arr.length` of a Haxe object array (`ArrayObj`, or an `ArrayDyn` holding one).
     pub fn array_len(&mut self, arr: Reg) -> Result<Reg> {
         let arr = self.as_array_obj(arr)?;

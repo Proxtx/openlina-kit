@@ -117,7 +117,75 @@ fn apply(code: &mut Code) -> Result<()> {
     // ---- tick at the start of update(this, layout)
     let dst = add_reg(f, void);
     insert_ops(f, 0, vec![call(dst, tick, &[Reg(0), Reg(1)])], Incoming::ToOriginal);
+
+    modifier_hooks(code)
+}
+
+/// `modifier_pool` and `modifier_icon`, see `openlina_sdk::modifiers`.
+fn modifier_hooks(code: &mut Code) -> Result<()> {
+    let alloc_i32 = code.method("hl.types.ArrayBase", "allocI32")?;
+    let pool_t = code.func_type(alloc_i32)?.ret;
+    let (void, bool_t) = (code.ty_void(), code.ty_bool());
+    let pool_hook = hooks::define(code, "modifier_pool", &[pool_t, bool_t], void)?;
+
+    // LevelManager.rollRaw and .reroll build the pool in two branches:
+    //   if (dx) pool = allocI32(…, 3) else pool = allocI32(…, 7);   <- call the hook at the join
+    for name in ["rollRaw", "reroll"] {
+        let fun_ref = code.method("fish.system.LevelManager", name)?;
+        let fun = code.func(fun_ref)?.clone();
+        let allocs = find_calls(&fun, alloc_i32);
+        let first = *allocs.first().with_context(|| format!("{name}: no allocI32"))?;
+        let Opcode::JAlways { offset } = fun.ops[first + 1] else { bail!("{name}: no join after the first pool") };
+        let join = (first as i64 + 2 + offset as i64) as usize;
+        let second = join - 1;
+        ensure!(allocs.contains(&second), "{name}: the second pool doesn't end at the join");
+        let (Some((_, _)), Opcode::Call2 { dst: p1, .. }, Opcode::Call2 { dst: p2, .. }) =
+            (call_target(&fun.ops[first]), &fun.ops[first], &fun.ops[second])
+        else {
+            bail!("{name}: unexpected pool calls")
+        };
+        ensure!(p1 == p2, "{name}: the two pools go to different registers");
+        let jf = prev_match(&fun, first, |op| matches!(op, Opcode::JFalse { .. })).context("dx branch")?;
+        let Opcode::JFalse { cond: dx, offset } = fun.ops[jf] else { unreachable!() };
+        ensure!(
+            (jf as i64 + 1 + offset as i64) as usize == first + 2,
+            "{name}: the dx test doesn't branch to the second pool"
+        );
+        let pool = *p1;
+        let f = code.func_mut(fun_ref)?;
+        let r = add_reg(f, void);
+        insert_ops(f, join, vec![call(r, pool_hook, &[pool, dx])], Incoming::ToInserted);
+    }
+
+    // EvSheet_edge_ev.update sets the HUD modifier icon: `sprite.animFrame = modifier (9 -> 7)`.
+    let icon_t = code.class("fish.game.oclass.OClass_optionthingos")?;
+    let icon_hook = hooks::define(code, "modifier_icon", &[icon_t], bool_t)?;
+    let edge = code.method("fish.game.evsheet.EvSheet_edge_ev", "update")?;
+    let fun = code.func(edge)?.clone();
+    let m = expect_one(find_field_access(code, &fun, "modifier", false), "edge_ev.update reads `.modifier`")?;
+    let set = next_match(&fun, m, |op| is_set_field(code, &fun, op, "animFrame")).context("animFrame after `.modifier`")?;
+    ensure!(set - m <= 12, "animFrame is set {} ops after `.modifier`", set - m);
+    let Opcode::SetField { obj: sprite, .. } = fun.ops[set] else { unreachable!() };
+    let load = prev_match(&fun, set, |op| matches!(op, Opcode::Field { dst, .. } if *dst == sprite)).context("sprite load")?;
+    let Opcode::Field { obj: icon, .. } = fun.ops[load] else { unreachable!() };
+    ensure!(fun.regs[icon.0 as usize] == icon_t, "icon register is not an OClass_optionthingos");
+    let f = code.func_mut(edge)?;
+    let ok = add_reg(f, bool_t);
+    insert_ops_with_exits(
+        f,
+        set,
+        vec![call(ok, icon_hook, &[icon]), Opcode::JTrue { cond: ok, offset: 0 }],
+        &[Exit { op: 1, target: set + 1 }],
+        Incoming::ToInserted,
+    );
     Ok(())
+}
+
+fn is_set_field(code: &Code, fun: &Function, op: &Opcode, name: &str) -> bool {
+    match op {
+        Opcode::SetField { obj, field, .. } => code.field(fun.regs[obj.0 as usize], name).is_ok_and(|f| f.0 == field.0),
+        _ => false,
+    }
 }
 
 fn calls(op: &Opcode, target: RefFun) -> bool {

@@ -125,9 +125,10 @@ Everything runs headless (SDL offscreen driver): no window, no human, faster tha
 | module | purpose |
 |---|---|
 | `Code` (lib.rs) | load/save, `class`, `field`, `field_type`, `method`, `native`, `func(_mut)`, `func_type`, `func_name`, `op_location`, interning (`string`, `float`, `int`, `intern_type`, `ty_*`), `add_global` |
-| `asm::FnBuilder` | new functions: registers, labels, jumps, constants, `get`/`set` fields, `call`, `string_obj`, `print` |
+| `asm::FnBuilder` | new functions: registers, labels, jumps, constants, `get`/`set` fields, `call`, `static_obj`, `new_obj`, `cast`, `string_obj`, `string_of`, `print`, arrays (`array_len`, `array_get`, `new_array_obj`, `empty_f64_array`, `for_range`), `jstr_ne`, `exit` |
 | `edit` | `find*`, `expect_one`, `next_match`/`prev_match`, `replace_op`, `insert_ops`, `insert_ops_with_exits`, `guard_op`, `prepend_call`, `remove_ops`, `add_reg` |
 | `hooks` | `CORE_HOOKS`, `find`, `signature`, `handler`, `subscribe`, `define` |
+| `modifiers` | `register` a modifier (pool + HUD icon), `is_active`, `id_of`, `current_modifier` |
 | `runner` | `run_mod`: the `main` of every mod |
 | `manifest` | `ModManifest` (mod.toml), `ModPack` (modpack.toml), `resolve_order` |
 | `validate` | `check_function`, `check_touched`, `kind` |

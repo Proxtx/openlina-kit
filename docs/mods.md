@@ -26,19 +26,25 @@ on its own; with no subscribers every hook falls through to vanilla.
 |---|---|---|
 | `tick` | `(sheet, layout) -> Void` | start of every gameplay tick (`EvSheet_gameplay.update`) |
 | `edge_exit` | `(pos, edgewith, margin, sheet, kind) -> Bool` | an object left the screen and vanilla is about to delete it; kind 0 physics object, 1 coin/fruit, 2 secondary physics object; return true to keep it |
+| `modifier_pool` | `(pool, dx) -> Void` | a modifier is about to be drawn from `pool` (`LevelManager.rollRaw`/`reroll`); used by `openlina_sdk::modifiers` |
+| `modifier_icon` | `(icon) -> Bool` | the HUD modifier icon is about to be set; used by `openlina_sdk::modifiers` |
 
 Source: `mods/core/src/main.rs`.
 
 ## screen-wrap
 
-Objects that leave the screen reappear on the opposite side, keeping their velocity. Vanilla destroys them. In
-long levels and boss arenas (`bossMode`), which scroll horizontally, only the top and bottom wrap, the same way
-vanilla only tests those edges there.
+A **modifier**: in levels that roll it, objects that leave the screen reappear on the opposite side, keeping their
+velocity. It is registered with `openlina_sdk::modifiers` (key `screen-wrap`, id **8900**), drawn by the game's own
+modifier roll like the vanilla modifiers (also in "dx" runs), and shown in the HUD with its own icon
+(`assets/images/openlina/screen-wrap.png`, drawn from `art/modifier.toml`). With `always = true` it applies in every
+level instead. In long levels and boss arenas (`bossMode`), which scroll horizontally, only the top and bottom wrap,
+the same way vanilla only tests those edges there.
 
-Source: `mods/screen-wrap/src/main.rs`. Requires `core`.
+Source: `mods/screen-wrap/src/main.rs`. Requires `core`. Tests: `mods/screen-wrap/tests/` (6 scenarios).
 
 | option | default | |
 |---|---|---|
+| `always` | `false` | Apply in every level instead of as a rolled modifier. |
 | `coins` | `false` | Also wrap coins (fruits). Pushing fruits out is how levels are won, so this makes levels unwinnable. |
 | `secondary` | `true` | Also wrap "secondary physics" objects. |
 | `max_overshoot` | `200` | Only wrap objects at most this far past the edge. Physics objects move at most 100 units per tick (the Box2D speed cap, observed in game), so keep this above 100. Parked objects sit about 1000 out. |
@@ -57,8 +63,9 @@ play-field size and returns true, so an object that just crossed the bottom limi
 limit and keeps falling into view. See [game-internals.md](game-internals.md#screen-and-edges) for the vanilla
 edge test.
 
-Verified in game: a box spawned by `debug-spawn` in the first tutorial level falls, wraps from y≈346 to y≈−6
-and loops indefinitely (4,500+ wraps in one session, reaching the 100 units/tick speed cap). The title screen and the level start show no spurious wraps.
+Verified in game (all by `lina test`): the game's roll draws it (seed 11); with the modifier a spawned box keeps
+wrapping; without it the box reaches the edge and is deleted; fruits stay vanilla unless `coins`; `always` works
+without the modifier. The HUD shows the icon.
 
 ## trace-calls (debug)
 

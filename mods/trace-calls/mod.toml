@@ -5,11 +5,12 @@ version = "0.1.0"
 section = "dev"
 description = "Debug tool: print a line when chosen functions are called."
 authors = ["openlina-kit"]
+after = ["core"]
 
 [options.functions]
 type = "list"
 default = []
-description = "Functions to trace, as `pkg.Class.method` or findex strings."
+description = "Functions to trace: `pkg.Class.method`, a findex, or `hook:<name>` for a core hook."
 
 [options.first]
 type = "int"

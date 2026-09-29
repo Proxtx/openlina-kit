@@ -1,0 +1,12 @@
+name = "screen-wrap: the game's own modifier roll can draw it"
+mods = ["screen-wrap"]
+timeout = 30
+
+[harness]
+level = "greendemo 1"
+roll_modifier = true
+seed = 11            # this seed draws screen-wrap (id 8900 = modifiers::id_of("screen-wrap"))
+end_tick = 3
+
+[[expect]]
+contains = "[harness] level tick 1: greendemo 1 modifier 8900"

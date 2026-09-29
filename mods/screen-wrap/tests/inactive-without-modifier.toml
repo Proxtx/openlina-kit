@@ -1,0 +1,31 @@
+name = "screen-wrap: without the modifier, objects leaving the screen are deleted as usual"
+mods = ["screen-wrap"]
+fixtures = ["debug-spawn", "trace-calls"]
+timeout = 60
+
+[options.screen-wrap]
+trace = true
+
+[options.debug-spawn]
+object = "box"
+tick = 30
+x = 540.0
+y = 60.0
+
+[options.trace-calls]
+functions = ["hook:edge_exit"]
+first = 1
+every = 0
+
+[harness]
+level = "greendemo 1"
+modifier = 0
+end_tick = 600
+
+# the box reached the edge...
+[[expect]]
+contains = "[trace-calls] hook/edge_exit call #1"
+
+# ...and was not wrapped
+[[expect]]
+not_contains = "[screen-wrap] tick"

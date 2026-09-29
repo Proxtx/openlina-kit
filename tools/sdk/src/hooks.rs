@@ -48,6 +48,20 @@ pub const CORE_HOOKS: &[HookInfo] = &[
               1 = coin (fruit; deleting it is how levels are won), 2 = secondary physics object. Return true \
               to keep it (e.g. after moving it).",
     },
+    HookInfo {
+        name: "modifier_pool",
+        args: "(pool: ArrayBytes_Int, dx: Bool)",
+        returns: "Void",
+        doc: "A level's modifier is about to be drawn from `pool` (LevelManager.rollRaw and reroll). Push \
+              modifier ids to make them possible. Use `openlina_sdk::modifiers::register` instead of this hook.",
+    },
+    HookInfo {
+        name: "modifier_icon",
+        args: "(icon: OClass_optionthingos)",
+        returns: "Bool",
+        doc: "The HUD modifier icon is about to show the current level's modifier. Return true after setting \
+              the icon's sprite yourself. Use `openlina_sdk::modifiers::register` instead of this hook.",
+    },
 ];
 
 fn debug_file(name: &str) -> String {

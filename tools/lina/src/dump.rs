@@ -196,7 +196,13 @@ pub fn disassemble_range(code: &Code, f: &Function, range: Option<std::ops::Rang
             .and_then(|d| d.get(i))
             .map(|(_, l)| format!("L{l}"))
             .unwrap_or_default();
-        let _ = writeln!(out, "  {i:>5} {line:>6}  {}", op.display(bc, f, i as i32, 12));
+        let note = match op {
+            hlbc::opcodes::Opcode::GetGlobal { global, .. } => {
+                code.global_string(*global).map(|s| format!("  // {s:?}")).unwrap_or_default()
+            }
+            _ => String::new(),
+        };
+        let _ = writeln!(out, "  {i:>5} {line:>6}  {}{note}", op.display(bc, f, i as i32, 12));
     }
     out.push('\n');
 }

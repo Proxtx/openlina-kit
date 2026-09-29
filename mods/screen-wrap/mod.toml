@@ -1,12 +1,17 @@
 [mod]
 id = "screen-wrap"
 name = "Screen Wrap"
-version = "0.2.0"
+version = "0.3.0"
 section = "modifiers"
-description = "Objects leaving the screen come back on the opposite side instead of being destroyed. Long levels and boss arenas wrap top and bottom only."
+description = "A new modifier: in levels that roll it, objects leaving the screen come back on the opposite side instead of being destroyed. Long levels and boss arenas wrap top and bottom only."
 authors = ["openlina-kit"]
 game_builds = ["22056877"]
 requires = ["core"]
+
+[options.always]
+type = "bool"
+default = false
+description = "Apply in every level instead of as a rolled modifier."
 
 [options.coins]
 type = "bool"

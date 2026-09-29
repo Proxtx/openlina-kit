@@ -40,6 +40,7 @@ struct Opts {
     capture: Option<(i32, i32, i32)>,
     capture_dir: String,
     list_levels: bool,
+    roll_modifier: bool,
 }
 
 fn list(cfg: &ModConfig, key: &str) -> Result<Vec<String>> {
@@ -98,13 +99,17 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
         level: cfg.str("level", "")?.to_string(),
         level_n: cfg.i64("level_n", -1)? as i32,
         seed: cfg.i64("seed", 1)? as i32,
-        modifier: cfg.i64("modifier", -1)? as i32,
+        modifier: match cfg.str("modifier_key", "")? {
+            "" => cfg.i64("modifier", -1)? as i32,
+            key => openlina_sdk::modifiers::id_of(key),
+        },
         items: list(cfg, "items")?,
         inputs: list(cfg, "inputs")?.iter().map(|s| parse_input(s)).collect::<Result<_>>()?,
         end_tick: cfg.i64("end_tick", 0)? as i32,
         capture: parse_capture(cfg.str("capture", "")?)?,
         capture_dir: cfg.str("capture_dir", "frames")?.to_string(),
         list_levels: cfg.bool("list_levels", false)?,
+        roll_modifier: cfg.bool("roll_modifier", false)?,
     };
 
     let i32_t = code.ty_i32();
@@ -185,7 +190,7 @@ fn build_tick(code: &mut Code, o: &Opts, state: RefGlobal, capture: Option<RefFu
     let load = code.method("fish.system.LevelManager", "loadCurrentLevel")?;
     let push = code.method("hl.types.ArrayObj", "push")?;
     let (bool_t, dyn_t) = (code.ty_bool(), code.ty_dyn());
-    let reload = !o.level.is_empty() || o.modifier >= 0 || !o.items.is_empty() || o.list_levels;
+    let reload = !o.level.is_empty() || o.modifier >= 0 || !o.items.is_empty() || o.list_levels || o.roll_modifier;
 
     let mut f = hooks::handler(code, "tick", "harness/tick")?;
     let layout = f.arg(1);
@@ -280,9 +285,13 @@ fn build_tick(code: &mut Code, o: &Opts, state: RefGlobal, capture: Option<RefFu
         let rand = f.new_obj("hxd.Rand")?;
         let seed = f.const_i32(o.seed);
         f.call_new(rand_init, &[rand, seed])?;
+        // rollRaw(rng, hasModifier, dx, coop): with hasModifier the game draws a modifier from its
+        // pool (the decompiler shows these parameter names shifted by one).
         let no = f.reg(bool_t);
         f.bool(no, false);
-        f.call_new(roll, &[lm, rand, no, no, no])?;
+        let has_mod = f.reg(bool_t);
+        f.bool(has_mod, o.roll_modifier);
+        f.call_new(roll, &[lm, rand, has_mod, no, no])?;
         if o.modifier >= 0 {
             let cur = f.get_new(lm, "currentLevel")?;
             let m = f.const_i32(o.modifier);

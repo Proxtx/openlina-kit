@@ -26,13 +26,15 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
         Some(_) => bail!("`functions` must be an array of strings"),
     };
     for name in names {
-        let target = match name.parse::<usize>() {
+        let target = if let Some(hook) = name.strip_prefix("hook:") {
+            openlina_sdk::hooks::find(code, hook)?
+        } else { match name.parse::<usize>() {
             Ok(i) => openlina_sdk::hlbc::types::RefFun(i),
             Err(_) => {
                 let (class, method) = name.rsplit_once('.').ok_or_else(|| anyhow::anyhow!("bad function `{name}`"))?;
                 code.method(class, method)?
             }
-        };
+        } };
         let label = code.func_name(target);
         let i32_t = code.ty_i32();
         let void = code.ty_void();

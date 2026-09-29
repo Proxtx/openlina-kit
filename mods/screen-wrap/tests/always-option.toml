@@ -1,10 +1,11 @@
-name = "screen-wrap: with the modifier, a falling box wraps from bottom to top"
+name = "screen-wrap: with always = true it wraps in every level, no modifier needed"
 mods = ["screen-wrap"]
 fixtures = ["debug-spawn"]
 timeout = 60
 
 [options.screen-wrap]
 trace = true
+always = true
 
 [options.debug-spawn]
 object = "box"
@@ -14,17 +15,9 @@ y = 60.0
 
 [harness]
 level = "greendemo 1"
-modifier_key = "screen-wrap"   # force the modifier
-seed = 1
+modifier = 0
 end_tick = 600
-
-[[expect]]
-contains = "[harness] level tick 1: greendemo 1"
 
 [[expect]]
 contains = "[screen-wrap] tick"
 min = 2
-
-[gif]
-capture = "20-380/4"
-out = "media/box-wraps.gif"

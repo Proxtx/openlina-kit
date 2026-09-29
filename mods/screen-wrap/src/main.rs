@@ -1,4 +1,9 @@
-//! `screen-wrap`: objects leaving the screen come back on the opposite side.
+//! `screen-wrap`: a modifier. In levels that roll it, objects leaving the screen come back on the
+//! opposite side.
+//!
+//! It registers a modifier (`openlina_sdk::modifiers`, key `screen-wrap`) with its own HUD icon
+//! (`assets/images/openlina/screen-wrap.png`), rolled like the vanilla modifiers. With the option
+//! `always`, it applies in every level instead and no modifier is registered.
 //!
 //! Subscribes to the core `edge_exit` hook, which fires when vanilla is about to delete an
 //! object that left the screen (see `mods/core`). The handler moves the object by one
@@ -18,6 +23,7 @@
 
 use anyhow::Result;
 use openlina_sdk::asm::Print;
+use openlina_sdk::modifiers::{self, Modifier};
 use openlina_sdk::{hooks, Code, ModConfig};
 
 /// Play-field size in layout units, hardcoded in the game's edge test.
@@ -34,6 +40,15 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     let trace = cfg.bool("trace", false)?;
     let max_overshoot = cfg.f64("max_overshoot", 200.0)?;
     let min_tick = cfg.i64("min_tick", 5)? as i32;
+    let always = cfg.bool("always", false)?;
+    let modifier = if always {
+        None
+    } else {
+        Some(modifiers::register(
+            code,
+            &Modifier { key: "screen-wrap", icon: "images/openlina/screen-wrap.png", size: (16.0, 16.0), in_dx: true },
+        )?)
+    };
 
     let f64_t = code.ty_f64();
     let bool_t = code.ty_bool();
@@ -45,6 +60,11 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     let max = f.const_f64(max_overshoot);
     let fail = f.label();
 
+    // Only in levels that rolled the modifier.
+    if let Some(id) = modifier {
+        let active = modifiers::is_active(&mut f, id)?;
+        f.jfalse(active, fail);
+    }
     // Which kinds of objects to handle.
     if !coins {
         let one = f.const_i32(1);

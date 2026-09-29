@@ -32,6 +32,16 @@ type = "int"
 default = -1
 description = "Force this modifier id (-1: rolled)."
 
+[options.roll_modifier]
+type = "bool"
+default = false
+description = "Let the game draw a random modifier for the level (seeded), as it does in runs."
+
+[options.modifier_key]
+type = "string"
+default = ""
+description = "Force the modifier registered with this key (e.g. \"screen-wrap\"); overrides `modifier`."
+
 [options.items]
 type = "list"
 default = []

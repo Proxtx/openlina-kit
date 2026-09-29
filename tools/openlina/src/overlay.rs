@@ -2,12 +2,14 @@
 //!
 //! The game finds its resources (`./fish/game/res`) and saves (`./userdata`) relative to its
 //! working directory. The overlay is a directory of symlinks to every entry of the install, with
-//! the patched `hlboot.dat` and mod assets added on top. Running the game there leaves the
-//! install untouched, and `userdata` stays shared with the vanilla game.
+//! the patched `hlboot.dat` on top. When mods ship assets, `fish/` is mirrored with hard links
+//! (symlinks inside the resource tree confuse Heaps' path handling) and the assets are copied in.
+//! Running the game there leaves the install untouched, and `userdata` stays shared with the
+//! vanilla game.
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 
 /// (Re)create `overlay` for `game` with `bytecode` and `assets` (paths relative to
 /// `fish/game/res`, source files).
@@ -26,13 +28,20 @@ pub fn create(game: &Path, overlay: &Path, bytecode: &[u8], assets: &[(PathBuf, 
     }
     std::fs::write(overlay.join("hlboot.dat"), bytecode)?;
 
+    if !assets.is_empty() {
+        // Heaps resolves resource paths through realpath and slices them against its base
+        // directory, so symlinked entries below the resource root break it. Mirror `fish/` as
+        // real directories with hard links (no disk space; copies across filesystems).
+        let fish = overlay.join("fish");
+        std::fs::remove_file(&fish)?;
+        mirror(&game.join("fish"), &fish)?;
+    }
     let res = Path::new("fish/game/res");
     for (rel, src) in assets {
-        let dst_rel = res.join(rel);
-        if let Some(parent) = dst_rel.parent() {
-            materialize(overlay, parent)?;
+        let dst = overlay.join(res).join(rel);
+        if let Some(parent) = dst.parent() {
+            std::fs::create_dir_all(parent)?;
         }
-        let dst = overlay.join(&dst_rel);
         if dst.symlink_metadata().is_ok() {
             std::fs::remove_file(&dst)?; // a mod asset replaces a game file of the same name
         }
@@ -41,28 +50,16 @@ pub fn create(game: &Path, overlay: &Path, bytecode: &[u8], assets: &[(PathBuf, 
     Ok(())
 }
 
-/// Make every directory along `rel` (inside `root`) a real directory, replacing a symlinked
-/// directory by a real one holding symlinks to its entries.
-fn materialize(root: &Path, rel: &Path) -> Result<()> {
-    let mut cur = root.to_path_buf();
-    for c in rel.components() {
-        cur.push(c);
-        match cur.symlink_metadata() {
-            Ok(m) if m.file_type().is_symlink() => {
-                let target = std::fs::read_link(&cur)?;
-                if !target.is_dir() {
-                    bail!("{} is not a directory", target.display());
-                }
-                std::fs::remove_file(&cur)?;
-                std::fs::create_dir(&cur)?;
-                for e in std::fs::read_dir(&target)? {
-                    let e = e?;
-                    symlink(&e.path(), &cur.join(e.file_name()))?;
-                }
-            }
-            Ok(m) if m.is_dir() => {}
-            Ok(_) => bail!("{} is not a directory", cur.display()),
-            Err(_) => std::fs::create_dir(&cur)?,
+/// Recreate `src` at `dst`: real directories, files hard-linked (copied if that fails).
+fn mirror(src: &Path, dst: &Path) -> Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for e in std::fs::read_dir(src)? {
+        let e = e?;
+        let (from, to) = (e.path(), dst.join(e.file_name()));
+        if e.file_type()?.is_dir() {
+            mirror(&from, &to)?;
+        } else if std::fs::hard_link(&from, &to).is_err() {
+            std::fs::copy(&from, &to).with_context(|| format!("copying {}", from.display()))?;
         }
     }
     Ok(())
