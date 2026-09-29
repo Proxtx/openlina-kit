@@ -78,6 +78,35 @@ for (o in secondary_physics.insts)                       // same test, no edgewi
   level data, relying on the edge test to delete them (first ticks of a layout). Mods that change edge
   behavior need to leave those alone.
 
+## Timing
+
+The game steps at a fixed `Main.frameTime` = 1/120 s: **120 ticks per second**. `Layout.currentTick` counts ticks
+since the layout started. Runs are deterministic: the same bytecode, level, seed and inputs give the same ticks and
+coordinates.
+
+## Starting levels and items
+
+- Title screen: `EvSheet_first_screen_ev.update`; any key runs `levelManager.refreshPool(Main.i.packManager);
+  layout.goToLayout("main")`. The title layout also runs `EvSheet_gameplay.update` for its first 2 ticks.
+- A run starts with the tutorial `jeppetutorial` unless `manager.tutorial_done` is set
+  (`game.ev_instancing_ev.manager.first()`, an `OClass_manager`, which also holds the run's RNG seeds).
+- Loading a level (editor Play button, `Main.renderLevelPreview`): `levelManager.levelPool = [instance]`,
+  `rollRaw(rand, false, directors_cut, coop)`, `ev_manager_ev.rollItemsRaw()`, `loadCurrentLevel(game)`.
+- The pool after `refreshPool` holds the base game's 361 levels, named e.g. `greendemo 1`, `bluedemo 12`,
+  `reddemo 3` (the harness `list_levels` option prints them all).
+- Items: `itemManager.itemPool` holds 48 item types `{aimType, baseAmmo, name, secondLayer}` (`box`, `bomb`,
+  `phaser`, `rocket`, …); `itemManager.currentItems[k]` is `{locked, type, wins}` and is shared with the HUD slot
+  `ev_manager_ev.b_item.insts[k].item` (`OClass_b_item`, which also has `ammo`).
+- `Picker.insts` is typed `hl.types.ArrayDyn` but holds an `hl.types.ArrayObj`; cast before indexing (the SDK's
+  `array_get`/`array_len` do).
+
+## Rendering a frame
+
+`Main.renderGifFrame` shows how: `engine.resize(600, 338); game.onResize(600, 338);
+engine.pushTarget(Main.i.gifTarget); game.render(engine, false); engine.popTarget()`, then
+`gifTarget.capturePixels().toPNG()`, and resize back. Works headless (SDL offscreen driver). The harness does
+this for `lina gif`.
+
 ## Input
 
 Default keyboard map (`KeymapManager.defaultKeymap`, closure fn@17238; SDL scancodes → actions):
@@ -91,8 +120,12 @@ Default keyboard map (`KeymapManager.defaultKeymap`, closure fn@17238; SDL scanc
 | R | retry |
 | Return / Esc | confirm / back |
 
-`xdotool` with `--window` (XSendEvent) does not reach the game, so input can't be automated that way. Test
-from inside the game instead (see `debug-spawn` and `trace-calls`).
+Per frame, `PlayerInputs.updateSP` (called from `Main.mainLoop`) reads keyboard/gamepad into 9 action slots:
+`inputs[i] = frame` while action `i` is held (`isDown(i)` = `inputs[i] == frame`). Bits for `toBin`/`readBin`
+(replays): 0 up, 1 down, 2 left, 3 right, 4 jump, 5 shoot, 6 switch, 7 restart, 8 pause. `readBin(bits)` advances
+the frame and sets the held actions, which is how the harness plays scripted inputs.
+
+`xdotool` (XSendEvent) does not reach the game; use the harness.
 
 ## Level data
 

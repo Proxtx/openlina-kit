@@ -50,6 +50,30 @@ default = false
 description = "Print what the mod does to stdout."
 "#;
 
+const SMOKE_TEST: &str = r#"# Run with `lina test --mod {id}`; see tools/lina/src/scenario.rs for the format.
+name = "{id}: builds, loads a level and runs for 2 seconds"
+mods = ["{id}"]
+timeout = 60
+
+[options.{id}]
+trace = true
+
+[harness]
+level = "greendemo 1"
+end_tick = 240
+
+[[expect]]
+contains = "[harness] level tick 1: greendemo 1"
+
+[[expect]]
+contains = "[harness] end at tick 240"
+
+# Record a showcase gif with `lina gif mods/{id}/tests/smoke.toml`.
+[gif]
+capture = "1-240/4"
+out = "media/smoke.gif"
+"#;
+
 const CARGO: &str = r#"[package]
 name = "openlina-mod-{id}"
 edition.workspace = true
@@ -84,6 +108,8 @@ pub fn new_mod(section: &str, id: &str) -> Result<()> {
     ModManifest::parse(&fill(MANIFEST))?; // validates the id
     std::fs::create_dir_all(dir.join("src"))?;
     std::fs::create_dir_all(dir.join("media"))?;
+    std::fs::create_dir_all(dir.join("tests"))?;
+    std::fs::write(dir.join("tests/smoke.toml"), fill(SMOKE_TEST))?;
     std::fs::write(dir.join("Cargo.toml"), fill(CARGO))?;
     std::fs::write(dir.join("mod.toml"), fill(MANIFEST))?;
     std::fs::write(dir.join("src/main.rs"), fill(MAIN))?;

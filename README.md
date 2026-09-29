@@ -47,7 +47,7 @@ can be combined. See [AGENTS.md](AGENTS.md) for how to write one and [docs/mods.
 | `screen-wrap` | modifiers | objects leaving the screen come back on the other side |
 | `trace-calls` | dev | print when chosen functions are called |
 | `debug-spawn` | dev | spawn an object in every level (test fixture) |
-| `autostart` | dev | skip the title screen without input (test harness) |
+| `harness` | dev | drive the game without input: level, items, modifier, scripted inputs, frame capture, exit (tests) |
 
 ## Packages and packs
 
@@ -78,6 +78,9 @@ The helper keeps its state in `~/.local/share/openlina` (`OPENLINA_HOME` overrid
 | `mods`, `new <section> <id>` | list mods; scaffold a new one |
 | `build [--mod id] [--wasm]`, `run [--build] [--timeout s] [--headless]` | apply mods (native or wasm) and play; `--headless` runs without a window (tests) |
 | `pack [ids] [--bundle name]` | wasm packages and pack zips in `dist/` |
+| `test [files] [--mod id] [--wasm]` | run scenario tests headless (`mods/*/tests/*.toml`) and check their logs |
+| `gif <scenario>` | record a scenario's `[gif]` section into a showcase gif (game renderer, headless) |
+| `sprite <file> [--out png] [--scale n]`, `sprite --palette` | pixel art from text grids |
 
 ## Limitations
 

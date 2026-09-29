@@ -74,24 +74,31 @@ Rules:
 
 ## 4. Verify
 
+Everything runs headless (SDL offscreen driver): no window, no human, faster than real time.
+
 1. `lina build --mod <id>` (natively; `--wasm` for exactly what players run). Each mod validates the functions
-   it touched (register bounds, jumps, call arity and value kinds, fields, returns) before writing its output,
-   and the result must parse.
+   it touched (register bounds, jumps, call arity and value kinds, fields, returns) and the result must parse.
 2. `lina fn <patched fn> --input work/hlboot.modded.dat --ops a..b` to eyeball the patch.
-3. **Run it headless**, no window and no human needed:
-   `lina run --headless --timeout 30 > log 2>&1`. SDL's offscreen driver renders through EGL. Look for `SIGNAL`,
-   `Uncaught` or a stack trace; injected code appears as `openlina/<name>:<line>`.
-4. **Runtime checks without input.** Synthetic input (`xdotool`) doesn't reach the game. Put test fixtures in a
-   test modpack (e.g. `work/test.toml`, `lina build --pack work/test.toml`):
-   - `autostart` skips the title screen, so the run reaches the first level
-   - `debug-spawn` (or a fixture mod of your own, subscribing to `tick`) sets up a situation in a level
-   - `trace-calls` (`options = { functions = [...] }`) and your mod's `trace` option print what happens; grep the
-     log. The physics is deterministic: the same build and fixtures give the same ticks and coordinates, so
-     assertions on trace lines are reliable.
-   - screenshots of a windowed run: `import -window $(xdotool search --name '^Mosa Lina$' | head -1) shot.png`
-5. `cargo test --release` (relocation, validator and manifest tests; the relocation tests use the real bytecode)
-   and `cargo clippy --release`.
-6. `lina pack <id>` to produce the package; test the player flow with a throwaway data dir:
+3. **Write scenarios** in `mods/<id>/tests/*.toml` (`lina new` creates `tests/smoke.toml`; format:
+   `tools/lina/src/scenario.rs`) and run them with `lina test --mod <id>` (`--wasm` too before publishing):
+   - `[harness]`: `level` (names: run a scenario with `list_levels = true` and read its log), `seed`, `items`
+     (item names, same listing), `modifier`, `inputs` (`"60-90:right+jump"`), `end_tick`
+   - `fixtures`: `debug-spawn` (spawn an object at a tick/position), `trace-calls` (log calls to any function),
+     or a fixture mod of your own subscribing to `tick`
+   - `[[expect]]`: `contains` (+ `min`/`max`) and `not_contains` on log lines; your mod's `trace` option is what
+     makes behavior visible. A run also fails on a crash, a `[harness] ERROR`, a non-zero exit or the timeout.
+   - **Make every test able to fail.** Assert that the situation happened (e.g. `trace-calls` shows vanilla's
+     function ran), not just that nothing bad was printed; test options in both directions.
+   - The physics is deterministic: same build and scenario, same ticks and coordinates.
+   - Logs: `work/test/<n>/log.txt`.
+4. **Showcase gifs**: add a `[gif]` section (`capture = "from-to/step"` in level ticks, 120 ticks per second;
+   `out = "media/x.gif"`) and run `lina gif mods/<id>/tests/<scenario>.toml`. Frames come from the game's own
+   renderer at 600×338. Look at them before publishing (`work/gif/frames/*.png`).
+5. **Graphics**: pixel art as text grids in `mods/<id>/art/*.toml`, rendered with
+   `lina sprite art/x.toml --out assets/images/x.png` (game sprites) or `--out media/icon.png` (website icon).
+   `lina sprite --palette` lists the game palette; `--scale 16` writes a preview you can look at.
+6. `cargo test --release` (relocation, validator and manifest tests) and `cargo clippy --release`.
+7. `lina pack <id>` produces the package; test the player flow with a throwaway data dir:
    `OPENLINA_HOME=work/home dist/…/openlina install dist/<id>-<version>.zip`.
 
 ## HashLink pitfalls (learned the hard way)

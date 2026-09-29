@@ -76,8 +76,23 @@ Subscribes to `tick`. Spawns an object at layout tick `tick` of every gameplay l
 (default 300, 60) on layer `layer`. It's a test fixture: with `screen-wrap`, the box falls through the floor
 and wraps forever.
 
-## autostart (dev)
+## harness (dev)
 
-Skips the title screen at title-screen tick `tick` (default 30) exactly like a key press does
-(`levelManager.refreshPool(Main.i.packManager); layout.goToLayout("main")`), so headless test runs reach the first
-level without input. Patches `EvSheet_first_screen_ev.update` directly (no hook needed).
+Drives the game for tests and recordings without input (source: `mods/harness/src/main.rs`):
+
+| option | default | |
+|---|---|---|
+| `start_tick` | 5 | title-screen tick at which to skip to the game (like a key press) |
+| `level` | "" | level to load by name, e.g. `"greendemo 1"`; empty keeps the run's first level (the tutorial) |
+| `level_n` | -1 | level number within the pack (-1: any) |
+| `seed` | 1 | seed for rolling the level, modifier and items |
+| `modifier` | -1 | force a modifier id |
+| `items` | [] | item names for the item slots, e.g. `["box", "bomb"]` |
+| `inputs` | [] | scripted inputs in level ticks: `"60-90:right+jump"`, `"120:shoot"` (up down left right jump shoot switch restart); the keyboard is ignored while set |
+| `end_tick` | 0 | exit the game (code 0) at this level tick |
+| `capture` / `capture_dir` | "" / "frames" | save 600×338 PNG frames `from-to/step` |
+| `list_levels` | false | print every level and item name, then exit |
+
+It prints `[harness] …` lines (`title skipped`, `loading level …`, `level tick 1: <name> modifier <m> frameTime <dt>`,
+`end at tick N`, `ERROR …`), which `lina test` checks. Use it through scenarios (`lina test`, `lina gif`), see
+AGENTS.md.

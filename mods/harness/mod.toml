@@ -1,0 +1,63 @@
+[mod]
+id = "harness"
+name = "Test Harness"
+version = "0.1.0"
+section = "dev"
+description = "Drives the game for tests and recordings without input: skips the title, loads a chosen level with chosen items and modifier, plays scripted inputs, captures frames, exits at a given tick."
+authors = ["openlina-kit"]
+requires = ["core"]
+
+[options.start_tick]
+type = "int"
+default = 5
+description = "Title screen tick at which to skip to the game."
+
+[options.level]
+type = "string"
+default = ""
+description = "Level to load, by name (see list_levels). Empty: keep the run's first level (the tutorial)."
+
+[options.level_n]
+type = "int"
+default = -1
+description = "Level number within `level`'s pack (-1: any)."
+
+[options.seed]
+type = "int"
+default = 1
+description = "Seed for rolling the level, modifier and items."
+
+[options.modifier]
+type = "int"
+default = -1
+description = "Force this modifier id (-1: rolled)."
+
+[options.items]
+type = "list"
+default = []
+description = "Item names for the item slots, in order (see the item pool)."
+
+[options.inputs]
+type = "list"
+default = []
+description = "Scripted inputs in level ticks: \"60-90:right+jump\" or \"120:shoot\". Actions: up down left right jump shoot switch restart. While set, the keyboard is ignored."
+
+[options.end_tick]
+type = "int"
+default = 0
+description = "Exit the game (code 0) at this level tick. 0: never."
+
+[options.capture]
+type = "string"
+default = ""
+description = "Capture frames \"from-to/step\" in level ticks, e.g. \"60-300/2\"."
+
+[options.capture_dir]
+type = "string"
+default = "frames"
+description = "Directory for captured frames (absolute, or relative to the overlay game dir)."
+
+[options.list_levels]
+type = "bool"
+default = false
+description = "Print all levels in the pool and all items in the item pool, then exit."

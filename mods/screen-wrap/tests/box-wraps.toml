@@ -1,0 +1,29 @@
+name = "screen-wrap: a falling box wraps from bottom to top"
+mods = ["screen-wrap"]
+fixtures = ["debug-spawn"]
+timeout = 60
+
+[options.screen-wrap]
+trace = true
+
+[options.debug-spawn]
+object = "box"
+tick = 30
+x = 540.0
+y = 60.0
+
+[harness]
+level = "greendemo 1"
+seed = 1
+end_tick = 600
+
+[[expect]]
+contains = "[harness] level tick 1: greendemo 1"
+
+[[expect]]
+contains = "[screen-wrap] tick"
+min = 2
+
+[gif]
+capture = "20-380/4"
+out = "media/box-wraps.gif"

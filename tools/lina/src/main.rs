@@ -7,6 +7,8 @@ mod build;
 mod dump;
 mod inspect;
 mod scaffold;
+mod scenario;
+mod sprite;
 
 /// Pristine bytecode copied from the game by `lina setup`.
 pub const ORIG: &str = "work/hlboot.orig.dat";
@@ -104,6 +106,36 @@ enum Cmd {
         #[arg(long, default_value = "dist")]
         out: PathBuf,
     },
+    /// Run test scenarios headless (default: every mods/*/tests/*.toml) and check their logs.
+    Test {
+        /// Scenario files (default: all).
+        files: Vec<PathBuf>,
+        /// Only the scenarios of this mod.
+        #[arg(long = "mod")]
+        only: Option<String>,
+        /// Use the wasm builds (what players run).
+        #[arg(long)]
+        wasm: bool,
+    },
+    /// Record a scenario's [gif] section: capture frames headless, write the gif (default: the
+    /// scenario's gif.out, relative to its mod directory).
+    Gif {
+        scenario: PathBuf,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    /// Render pixel art from a text sprite file to PNG (see `lina sprite --palette`).
+    Sprite {
+        file: Option<PathBuf>,
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// Enlarge every pixel (previews).
+        #[arg(long, default_value_t = 1)]
+        scale: u32,
+        /// Print the built-in game palette.
+        #[arg(long)]
+        palette: bool,
+    },
     /// Self-test: roundtrip the pristine bytecode and run the validator on every function.
     Check {
         #[arg(long, default_value = ORIG)]
@@ -131,6 +163,20 @@ fn main() -> Result<()> {
             build::run(&game, timeout, headless)
         }
         Cmd::Pack { ids, bundle, out } => build::pack(&ids, bundle.as_deref(), &out),
+        Cmd::Test { files, only, wasm } => {
+            let files = scenario::find(&files, only.as_deref())?;
+            scenario::test(&game_dir()?, &files, wasm)
+        }
+        Cmd::Gif { scenario, out } => scenario::gif(&game_dir()?, &scenario, out.as_deref()),
+        Cmd::Sprite { file, out, scale, palette } => {
+            if palette {
+                sprite::print_palette();
+                return Ok(());
+            }
+            let file = file.ok_or_else(|| anyhow::anyhow!("give a sprite file (or --palette)"))?;
+            let out = out.unwrap_or_else(|| file.with_extension("png"));
+            sprite::render(&file, &out, scale)
+        }
         Cmd::Check { input } => build::check(&input),
     }
 }

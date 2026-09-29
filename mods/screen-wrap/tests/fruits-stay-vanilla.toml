@@ -1,0 +1,30 @@
+name = "screen-wrap: fruits are not wrapped by default (pushing them out still wins)"
+mods = ["screen-wrap"]
+fixtures = ["debug-spawn", "trace-calls"]
+timeout = 60
+
+[options.screen-wrap]
+trace = true
+
+[options.debug-spawn]
+object = "coin"
+tick = 30
+x = 540.0
+y = 400.0
+
+[options.trace-calls]
+functions = ["fish.game.evsheet.EvSheet_gameplay.coinedgecheck"]
+first = 1
+every = 0
+
+[harness]
+level = "greendemo 1"
+end_tick = 600
+
+# the fruit, spawned just below the bottom edge, is handled by vanilla...
+[[expect]]
+contains = "[trace-calls] fish.game.evsheet.EvSheet_gameplay.coinedgecheck call #1"
+
+# ...and screen-wrap left it alone
+[[expect]]
+not_contains = "kind 1"

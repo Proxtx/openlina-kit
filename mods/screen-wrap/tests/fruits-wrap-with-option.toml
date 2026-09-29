@@ -1,0 +1,22 @@
+name = "screen-wrap: with coins = true, fruits wrap too"
+mods = ["screen-wrap"]
+fixtures = ["debug-spawn"]
+timeout = 60
+
+[options.screen-wrap]
+trace = true
+coins = true
+
+[options.debug-spawn]
+object = "coin"
+tick = 30
+x = 540.0
+y = 400.0
+
+[harness]
+level = "greendemo 1"
+end_tick = 600
+
+# the fruit is wrapped instead of collected
+[[expect]]
+contains = "kind 1"

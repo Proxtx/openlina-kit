@@ -56,13 +56,14 @@ pub fn read_bytecode(game: &Path) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-/// Run the JIT in `run_dir` (the overlay, or the game directory itself). With `bytecode` it
-/// runs that file, else `run_dir/hlboot.dat`. The game's bundled libraries must be on the
-/// library path; the JIT binary has no rpath for them.
+/// The command that runs the JIT in `run_dir` (the overlay, or the game directory itself). With
+/// `bytecode` it runs that file, else `run_dir/hlboot.dat`. The game's bundled libraries must be
+/// on the library path; the JIT binary has no rpath for them.
 ///
 /// `headless` runs without any window or display server: SDL's `offscreen` video driver renders
-/// through EGL (Mesa). The game runs normally, which is what automated tests need.
-pub fn launch(game: &Path, run_dir: &Path, bytecode: Option<&Path>, timeout: Option<u64>, headless: bool) -> Result<ExitStatus> {
+/// through EGL (Mesa). The game runs normally (faster than real time), which is what automated
+/// tests need.
+pub fn command(game: &Path, run_dir: &Path, bytecode: Option<&Path>, timeout: Option<u64>, headless: bool) -> Result<Command> {
     let mut ld = game.as_os_str().to_owned();
     if let Some(old) = std::env::var_os("LD_LIBRARY_PATH") {
         ld.push(":");
@@ -84,5 +85,10 @@ pub fn launch(game: &Path, run_dir: &Path, bytecode: Option<&Path>, timeout: Opt
     if headless {
         cmd.env("SDL_VIDEODRIVER", "offscreen").env_remove("DISPLAY").env_remove("WAYLAND_DISPLAY");
     }
-    cmd.status().context("launching the game")
+    Ok(cmd)
+}
+
+/// Run the game (see [`command`]) with inherited stdio.
+pub fn launch(game: &Path, run_dir: &Path, bytecode: Option<&Path>, timeout: Option<u64>, headless: bool) -> Result<ExitStatus> {
+    command(game, run_dir, bytecode, timeout, headless)?.status().context("launching the game")
 }

@@ -276,16 +276,12 @@ impl<'a> FnBuilder<'a> {
         Ok(dst)
     }
 
-    /// Print a line to stdout (`Sys.println`), e.g.
-    /// `f.print(&[Print::Str("y = "), Print::Val(y)])`. Values of any type are converted with
-    /// `Std.string`. Useful to trace injected code at runtime.
-    pub fn print(&mut self, parts: &[Print]) -> Result<()> {
+    /// New register holding a `String` built from pieces: literals and values of any type
+    /// (converted with `Std.string`).
+    pub fn string_of(&mut self, parts: &[Print]) -> Result<Reg> {
         let dyn_t = self.code.ty_dyn();
-        let void = self.code.ty_void();
         let std_string = self.code.method("Std", "string")?;
         let concat = self.code.method("String", "__add__")?;
-        let println = self.code.method("Sys", "println")?;
-
         let acc = self.string_obj("")?;
         for part in parts {
             let piece = match part {
@@ -303,8 +299,108 @@ impl<'a> FnBuilder<'a> {
             };
             self.call(acc, concat, &[acc, piece]);
         }
+        Ok(acc)
+    }
+
+    /// Print a line to stdout (`Sys.println`), e.g.
+    /// `f.print(&[Print::Str("y = "), Print::Val(y)])`. Useful to trace injected code at runtime.
+    pub fn print(&mut self, parts: &[Print]) -> Result<()> {
+        let void = self.code.ty_void();
+        let println = self.code.method("Sys", "println")?;
+        let line = self.string_of(parts)?;
         let out = self.reg(void);
-        self.call(out, println, &[acc]);
+        self.call(out, println, &[line]);
+        Ok(())
+    }
+
+    // --------------------------------------------------------------- objects/arrays
+
+    /// Cast `src` to type `to`: `ToVirtual` for virtual types, `SafeCast` otherwise (a runtime
+    /// checked downcast). Returns `src` itself if it already has that type.
+    pub fn cast(&mut self, src: Reg, to: RefType) -> Reg {
+        if self.reg_type(src) == to {
+            return src;
+        }
+        let dst = self.reg(to);
+        if matches!(self.code.bc.types[to.0], hlbc::types::Type::Virtual { .. }) {
+            self.op(Opcode::ToVirtual { dst, src });
+        } else {
+            self.op(Opcode::SafeCast { dst, src });
+        }
+        dst
+    }
+
+    /// Allocate an object of `class` without calling a constructor (call an init method yourself).
+    pub fn new_obj(&mut self, class: &str) -> Result<Reg> {
+        let t = self.code.class(class)?;
+        let dst = self.reg(t);
+        self.op(Opcode::New { dst });
+        Ok(dst)
+    }
+
+    /// `arr` as an `hl.types.ArrayObj`. Fields typed `hl.types.ArrayDyn` (e.g. `Picker.insts`)
+    /// hold an `ArrayObj` at runtime; the game's code casts them the same way before use.
+    pub fn as_array_obj(&mut self, arr: Reg) -> Result<Reg> {
+        let obj_t = self.code.class("hl.types.ArrayObj")?;
+        match self.code.type_name(self.reg_type(arr)).as_str() {
+            "hl.types.ArrayObj" => Ok(arr),
+            "hl.types.ArrayDyn" | "hl.types.ArrayBase" | "Dyn" => Ok(self.cast(arr, obj_t)),
+            other => bail!("{other} is not an object array"),
+        }
+    }
+
+    /// `arr.length` of a Haxe object array (`ArrayObj`, or an `ArrayDyn` holding one).
+    pub fn array_len(&mut self, arr: Reg) -> Result<Reg> {
+        let arr = self.as_array_obj(arr)?;
+        self.get_new(arr, "length")
+    }
+
+    /// `arr[idx]` of a Haxe object array, cast to `elem`. No bounds check: stay below `length`.
+    pub fn array_get(&mut self, arr: Reg, idx: Reg, elem: RefType) -> Result<Reg> {
+        let arr = self.as_array_obj(arr)?;
+        let native = self.get_new(arr, "array")?;
+        let dyn_t = self.code.ty_dyn();
+        let v = self.reg(dyn_t);
+        self.op(Opcode::GetArray { dst: v, array: native, index: idx });
+        Ok(self.cast(v, elem))
+    }
+
+    /// `for (i in 0...count) body(i)`. `count` is read once.
+    pub fn for_range(&mut self, count: Reg, mut body: impl FnMut(&mut Self, Reg) -> Result<()>) -> Result<()> {
+        let i = self.const_i32(0);
+        let (head, end) = (self.label(), self.label());
+        self.place(head);
+        self.jge(i, count, end);
+        body(self, i)?;
+        self.op(Opcode::Incr { dst: i });
+        self.jmp(head);
+        self.place(end);
+        Ok(())
+    }
+
+    /// Jump to `l` unless the `String` in `s` equals `lit` (null check, length check and native
+    /// `string_compare`, which is how the game compiles string equality).
+    pub fn jstr_ne(&mut self, s: Reg, lit: &str, l: Label) -> Result<()> {
+        let cmp = self.code.native("string_compare")?;
+        let bytes_t = self.code.ty_bytes();
+        self.jnull(s, l);
+        let len = self.get_new(s, "length")?;
+        let want = self.const_i32(lit.encode_utf16().count() as i32);
+        self.jne(len, want, l);
+        let a = self.get_new(s, "bytes")?;
+        let b = self.reg(bytes_t);
+        self.string(b, lit);
+        let r = self.call_new(cmp, &[a, b, len])?;
+        let zero = self.const_i32(0);
+        self.jne(r, zero, l);
+        Ok(())
+    }
+
+    /// End the process with `code` (native `sys_exit`).
+    pub fn exit(&mut self, code: i32) -> Result<()> {
+        let f = self.code.native("sys_exit")?;
+        let c = self.const_i32(code);
+        self.call_new(f, &[c])?;
         Ok(())
     }
 

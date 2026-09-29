@@ -1,11 +1,11 @@
 [package]
-name = "openlina-mod-autostart"
+name = "openlina-mod-harness"
 edition.workspace = true
 version = "0.1.0"
 publish = false
 
 [[bin]]
-name = "autostart"
+name = "harness"
 path = "src/main.rs"
 
 [dependencies]

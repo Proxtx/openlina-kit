@@ -108,7 +108,25 @@ fn select(pack_path: &Path, only: &[String]) -> Result<(ModPack, Vec<(PathBuf, M
 }
 
 pub fn build(game_dir: &Path, pack_path: &Path, only: &[String], wasm: bool, out: &Path) -> Result<()> {
-    let (pack, chosen) = select(pack_path, only)?;
+    let (pack, _) = select(pack_path, only)?;
+    let bytes = build_pack(game_dir, &pack, wasm, Path::new(OVERLAY))?;
+    if let Some(d) = out.parent() {
+        std::fs::create_dir_all(d)?;
+    }
+    std::fs::write(out, &bytes)?;
+    println!("wrote {} and the overlay {OVERLAY}", out.display());
+    Ok(())
+}
+
+/// Build the mods of `pack` from mods/, apply them to the pristine bytecode and create the
+/// overlay game directory `overlay`. Returns the patched bytecode.
+pub fn build_pack(game_dir: &Path, pack: &ModPack, wasm: bool, overlay: &Path) -> Result<Vec<u8>> {
+    let all = all_mods()?;
+    let mut chosen = Vec::new();
+    for e in &pack.mods {
+        let found = all.iter().find(|(_, m)| m.info.id == e.id).with_context(|| format!("no mod `{}` in mods/", e.id))?;
+        chosen.push(found.clone());
+    }
     let ids: Vec<String> = chosen.iter().map(|(_, m)| m.info.id.clone()).collect();
     cargo_build(&ids, wasm)?;
     let packages: Vec<Package> = chosen
@@ -121,18 +139,33 @@ pub fn build(game_dir: &Path, pack_path: &Path, only: &[String], wasm: bool, out
         .collect();
     let input = std::fs::read(ORIG).context("run `lina setup` first")?;
     println!("building {} mod(s){}", packages.len(), if wasm { " (wasm)" } else { "" });
-    let bytes = openlina::build(input, &packages, &pack)?;
-    if let Some(d) = out.parent() {
-        std::fs::create_dir_all(d)?;
-    }
-    std::fs::write(out, &bytes)?;
+    let bytes = openlina::build(input, &packages, pack)?;
     let mut assets = Vec::new();
     for p in &packages {
         assets.extend(p.assets()?);
     }
-    overlay::create(game_dir, Path::new(OVERLAY), &bytes, &assets)?;
-    println!("wrote {} and the overlay {OVERLAY} ({} asset file(s))", out.display(), assets.len());
-    Ok(())
+    overlay::create(game_dir, overlay, &bytes, &assets)?;
+    Ok(bytes)
+}
+
+/// Add every mod `requires`d by the pack's mods (with default options).
+pub fn add_requirements(pack: &mut ModPack) -> Result<()> {
+    let all = all_mods()?;
+    loop {
+        let mut missing = Vec::new();
+        for e in &pack.mods {
+            let (_, m) = all.iter().find(|(_, m)| m.info.id == e.id).with_context(|| format!("no mod `{}` in mods/", e.id))?;
+            for r in &m.info.requires {
+                if !pack.mods.iter().any(|x| &x.id == r) && !missing.contains(r) {
+                    missing.push(r.clone());
+                }
+            }
+        }
+        if missing.is_empty() {
+            return Ok(());
+        }
+        pack.mods.extend(missing.into_iter().map(|id| PackEntry { id, ..Default::default() }));
+    }
 }
 
 pub fn run(game_dir: &Path, timeout: Option<u64>, headless: bool) -> Result<()> {

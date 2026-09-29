@@ -47,7 +47,7 @@ mosa-mod/                 (plain folder)
       modifier plumbing
 - [x] 1. Website design prototype (Claude Design, Mosa Lina style, placeholder mods), approved by the user
 - [x] 2. Kit foundation: wasm package format, `openlina` helper, core hooks/registries, screen-wrap ported
-- [ ] 3. Harness + `lina test` / `lina gif` / `lina sprite`
+- [x] 3. Harness + `lina test` / `lina gif` / `lina sprite`
 - [ ] 4. Showcase mods: modifier → general → item → level, each with icon, gifs, tests
 - [ ] 5. Website implementation: API, voting, zip/JSON export, upload tokens, review queue
 - [ ] 6. Agent integration: `lina pull/publish`, skill, change-request workflow, docs polish
@@ -93,4 +93,9 @@ mosa-mod/                 (plain folder)
 - **Deterministic physics:** the same build and fixtures reproduce identical ticks/coordinates (box spawned by
   debug-spawn first wraps at tick 418 from y=345.99 in every run), so tests can assert on trace output.
 - **Title screen:** a key press runs `levelManager.refreshPool(Main.i.packManager); layout.goToLayout("main")`
-  in `EvSheet_first_screen_ev.update` (the `autostart` mod does this without input).
+  in `EvSheet_first_screen_ev.update` (the `harness` mod does this without input).
+- **Stage 3 (done):** `harness` mod (title skip, level/seed/items/modifier selection, scripted inputs through
+  `readBin`, frame capture via the game renderer, exit at a tick), scenario files `mods/<id>/tests/*.toml`,
+  `lina test` (headless, expectations on the log), `lina gif` (ImageMagick + gifsicle from the nix shell),
+  `lina sprite` (text grids → PNG, game palette). screen-wrap has 3 tests (box wraps; fruits vanilla by default;
+  fruits wrap with `coins = true`) and `media/box-wraps.gif`, `media/icon.png`. A scenario run takes 7-10 s.
