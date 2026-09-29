@@ -1,0 +1,8 @@
+[mod]
+id = "core"
+name = "OpenLina Core"
+version = "0.1.0"
+section = "core"
+description = "Hook points other mods build on (tick, edge_exit). Required by most mods; changes nothing on its own."
+authors = ["openlina-kit"]
+game_builds = ["22056877"]

@@ -1,0 +1,15 @@
+[package]
+name = "lina"
+description = "OpenLina mod development CLI"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+openlina-sdk.workspace = true
+openlina.workspace = true
+hlbc.workspace = true
+hlbc-decompiler.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+toml.workspace = true
+sha2.workspace = true

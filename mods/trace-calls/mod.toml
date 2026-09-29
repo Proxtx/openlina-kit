@@ -1,0 +1,22 @@
+[mod]
+id = "trace-calls"
+name = "Trace Calls"
+version = "0.1.0"
+section = "dev"
+description = "Debug tool: print a line when chosen functions are called."
+authors = ["openlina-kit"]
+
+[options.functions]
+type = "list"
+default = []
+description = "Functions to trace, as `pkg.Class.method` or findex strings."
+
+[options.first]
+type = "int"
+default = 3
+description = "Print the first N calls of each function."
+
+[options.every]
+type = "int"
+default = 600
+description = "Then print every N-th call (0 = never)."

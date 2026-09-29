@@ -1,0 +1,33 @@
+[mod]
+id = "debug-spawn"
+name = "Debug Spawn"
+version = "0.1.0"
+section = "dev"
+description = "Test fixture: spawn an object at a fixed tick of every gameplay layout."
+authors = ["openlina-kit"]
+requires = ["core"]
+
+[options.object]
+type = "string"
+default = "box"
+description = "Object type to create (see fish.game.oclass.OClass_*)."
+
+[options.tick]
+type = "int"
+default = 60
+description = "Layout tick at which to spawn."
+
+[options.x]
+type = "float"
+default = 300.0
+description = "x position (the play field is 600 x 338)."
+
+[options.y]
+type = "float"
+default = 60.0
+description = "y position."
+
+[options.layer]
+type = "int"
+default = 0
+description = "Layer index."

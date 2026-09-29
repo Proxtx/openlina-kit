@@ -1,0 +1,13 @@
+[package]
+name = "openlina-mod-autostart"
+edition.workspace = true
+version = "0.1.0"
+publish = false
+
+[[bin]]
+name = "autostart"
+path = "src/main.rs"
+
+[dependencies]
+openlina-sdk.workspace = true
+anyhow.workspace = true

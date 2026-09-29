@@ -1,0 +1,11 @@
+[package]
+name = "openlina-sdk"
+description = "Read, query and patch Mosa Lina's HashLink bytecode; write OpenLina mods"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+hlbc.workspace = true
+anyhow.workspace = true
+toml.workspace = true
+serde.workspace = true

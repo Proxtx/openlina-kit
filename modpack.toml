@@ -1,0 +1,10 @@
+# Mods applied by `lina build` / `lina run --build`, with option overrides.
+# Same format as the modpack.toml in pack zips (see openlina_sdk::manifest).
+openlina = 1
+
+[[mod]]
+id = "core"
+
+[[mod]]
+id = "screen-wrap"
+options = { trace = false }

@@ -45,8 +45,8 @@ mosa-mod/                 (plain folder)
 
 - [x] 0. Spikes: asset overlay + frame data, direct level loading, input injection, frame capture, item/`shoot`/
       modifier plumbing
-- [~] 1. Website design prototype (Claude Design, Mosa Lina style, placeholder mods), approved by the user
-- [ ] 2. Kit foundation: wasm package format, `openlina` helper, core hooks/registries, screen-wrap ported
+- [x] 1. Website design prototype (Claude Design, Mosa Lina style, placeholder mods), approved by the user
+- [x] 2. Kit foundation: wasm package format, `openlina` helper, core hooks/registries, screen-wrap ported
 - [ ] 3. Harness + `lina test` / `lina gif` / `lina sprite`
 - [ ] 4. Showcase mods: modifier → general → item → level, each with icon, gifs, tests
 - [ ] 5. Website implementation: API, voting, zip/JSON export, upload tokens, review queue
@@ -56,7 +56,7 @@ mosa-mod/                 (plain folder)
 
 (Filled in as stages complete. Details in game-internals.md.)
 
-- Design prototype: https://claude.ai/artifact/SeqU5XWxttwHCJwjgDh6Uy (copy in openlina-web/design/), awaiting approval.
+- Design prototype: https://claude.ai/artifact/SeqU5XWxttwHCJwjgDh6Uy (copy in openlina-web/design/), approved.
 
 - Items are created in code (`EvSheet_instancing_ev`, ~L100–278) as `OClass_item` with `NAME`, `ammo`,
   `aim_type`, `unlocked`, `secondLayer`, then `ItemManager.initBaseItems`. Behavior is dispatched in
@@ -84,3 +84,13 @@ mosa-mod/                 (plain folder)
   `EvSheet_edge_ev.update` ~L471. A new modifier needs an extra frame in that animation. Effects are checked
   in `EvSheet_gameplay.update` (e.g. L16093 `modifier == 1`) and on level load; object types `mod_*`
   (`mod_random_block`, `mod_no_portal`, `mod_below_protec`, …) implement some modifiers.
+- **Stage 2 (done):** mods are separate crates (`mods/<id>`), run as stdin/stdout programs natively or as
+  `wasm32-wasip1` in wasmtime (~0.3 s per mod including compilation). `core` provides the `tick` and `edge_exit`
+  hooks; screen-wrap is an `edge_exit` subscriber. `openlina` installs packs into `~/.local/share/openlina` and
+  runs the game from an overlay dir. Verified end to end: pack zip → `openlina install` → build (wasm) → game runs.
+- **Headless runs work without Xvfb:** `SDL_VIDEODRIVER=offscreen` (EGL via the system's Mesa), with `DISPLAY`
+  and `WAYLAND_DISPLAY` unset. nixpkgs' Xvfb had no GLX visuals, so Xvfb is not used.
+- **Deterministic physics:** the same build and fixtures reproduce identical ticks/coordinates (box spawned by
+  debug-spawn first wraps at tick 418 from y=345.99 in every run), so tests can assert on trace output.
+- **Title screen:** a key press runs `levelManager.refreshPool(Main.i.packManager); layout.goToLayout("main")`
+  in `EvSheet_first_screen_ev.update` (the `autostart` mod does this without input).

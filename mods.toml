@@ -1,8 +1,0 @@
-# Mods applied by `mosa build` / `mosa run --build`.
-# Each table is a mod id (see `mosa mods`); `enabled` toggles it, other keys are its options.
-
-[screen-wrap]
-enabled = true
-coins = false     # also wrap coins (fruits). Pushing fruits out is the win condition: true makes levels unwinnable!
-secondary = true  # also wrap "secondary physics" objects
-trace = false     # print every wrap to stdout

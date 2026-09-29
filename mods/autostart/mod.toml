@@ -1,0 +1,12 @@
+[mod]
+id = "autostart"
+name = "Autostart"
+version = "0.1.0"
+section = "dev"
+description = "Test harness: skip the title screen as if a key was pressed, so tests can reach a level without input."
+authors = ["openlina-kit"]
+
+[options.tick]
+type = "int"
+default = 30
+description = "Title screen tick at which to start."

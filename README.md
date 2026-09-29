@@ -1,83 +1,89 @@
-# mosa-mod
+# openlina-kit
 
-A modding framework for [Mosa Lina](https://store.steampowered.com/app/2477090/Mosa_Lina/), written in Rust.
-It patches the game's HashLink bytecode (`hlboot.dat`); the game install is never modified.
+Everything to create, test and package mods for [Mosa Lina](https://store.steampowered.com/app/2477090/Mosa_Lina/),
+the toolkit behind OpenLina (the mod hub in `../openlina-web`). Written in Rust; agents are first-class users
+(see [AGENTS.md](AGENTS.md)).
 
-The first mod is **screen-wrap**: items that leave the screen come back on the opposite side instead of being
-destroyed. In long/boss levels, which scroll horizontally, only the top and bottom wrap.
+Mods patch the game's HashLink bytecode (`hlboot.dat`). The game install is never modified: the patched game runs
+from an overlay directory of symlinks.
 
-## Quick start
+## Layout
+
+```
+tools/sdk/        openlina-sdk: bytecode lookups, assembler, code editing, validator, hooks, mod runner
+tools/lina/       lina: the development CLI (inspect the game, scaffold/build/run/package mods)
+tools/openlina/   openlina: the player helper (install packs, build, run, Steam launch wrapper)
+mods/<id>/        one crate per mod: mod.toml + src/main.rs (+ assets/, media/)
+modpack.toml      which mods `lina build` applies, and their options
+docs/             plan, game internals, mods
+flake.nix         dev shell: Rust + wasm32-wasip1 target, imagemagick, gifsicle
+```
+
+## Quick start (development)
 
 ```bash
+nix develop
 cargo build --release
-./target/release/mosa setup          # copy the pristine hlboot.dat to work/, check the game version
-./target/release/mosa build          # apply the mods enabled in mods.toml -> work/hlboot.modded.dat
-./target/release/mosa run            # play the modded game
+lina() { target/nix/release/lina "$@"; }
+lina setup          # copy the pristine hlboot.dat to work/, check the game version
+lina build          # build the mods in modpack.toml and apply them -> work/hlboot.modded.dat + work/game
+lina run            # play it
 ```
 
-The game directory defaults to `~/.local/share/Steam/steamapps/common/Mosa Lina`. Override it with
-`--game-dir` or `MOSA_GAME_DIR`.
-
-### Playing through Steam
-
-In Steam: *Mosa Lina → Properties → Launch Options*:
-
-```
-"/path/to/mosa-mod/scripts/steam-launch.sh" %command%
-```
-
-The script starts the game with `work/hlboot.modded.dat`. It falls back to the vanilla game if no modded build
-exists or `MOSA_VANILLA=1` is set. Clear the launch options to go back to vanilla for good.
-
-## How it works
-
-The game is written in Haxe on the Heaps engine. It ships two builds:
-
-- `Mosa Lina`: HL/C, compiled to native code. This is what Steam launches, and it can't be modded this way.
-- `Mosa Lina_jit` + `hlboot.dat`: the HashLink JIT VM and the same game as bytecode.
-
-`mosa` loads `hlboot.dat` with [hlbc](https://github.com/Gui-Yom/hlbc), applies Rust-written patches, validates
-them and writes a new bytecode file. That file is run with the game's own JIT VM
-(`Mosa Lina_jit <file>`, from the game directory).
-
-```
-crates/
-  mosa-bc/    library: lookups, assembler, code editing with jump relocation, validator, Mod trait
-  mosa-mods/  the mods (screen-wrap, plus debug tools: trace-calls, debug-spawn)
-  mosa/       the CLI
-mods.toml     which mods `mosa build` applies, and their options
-docs/         game internals, framework guide
-AGENTS.md     playbook for AI agents (and humans) writing new mods
-```
-
-## Commands
-
-| command | what it does |
-|---|---|
-| `mosa setup` | copy the pristine `hlboot.dat` to `work/hlboot.orig.dat`, report the game version |
-| `mosa dump` | decompile everything into `work/dump/` (`hx/` pseudo-Haxe, `asm/` exact disassembly, `classes.tsv`, `functions.tsv`) |
-| `mosa fn <Class.method or findex> [--hx] [--ops a..b] [--input file]` | show one function |
-| `mosa callers <Class.method or findex>` | who calls this function / makes a closure of it |
-| `mosa strings <text>` | search string constants and the functions that use them |
-| `mosa mods` | list the mods and their options |
-| `mosa build [--config f] [--mod id]... [--out f]` | apply the mods, validate, write the modded bytecode |
-| `mosa run [--build] [--bytecode f] [--timeout s]` | launch the game with a bytecode file |
-| `mosa check` | self-test: serializer roundtrip, and the validator on all vanilla functions |
+The game directory defaults to `~/.local/share/Steam/steamapps/common/Mosa Lina` (`--game-dir` or `MOSA_GAME_DIR`).
 
 ## Mods
 
-| id | description |
-|---|---|
-| `screen-wrap` | objects leaving the screen wrap to the opposite edge (top/bottom only in long/boss levels) |
-| `trace-calls` | debug: print when chosen functions are called |
-| `debug-spawn` | debug: spawn an object at a fixed tick of each level (test fixture) |
+A mod is a small program: game bytecode in on stdin, patched bytecode out on stdout, options in
+`OPENLINA_OPTIONS`. The same crate builds natively (fast development) and for `wasm32-wasip1`, which is what
+players get: the helper runs `patch.wasm` in wasmtime with no file or network access.
 
-See [docs/mods.md](docs/mods.md) for their options and exact behavior.
+Mods build on **hooks** provided by the `core` mod instead of patching the same game code, so independent mods
+can be combined. See [AGENTS.md](AGENTS.md) for how to write one and [docs/mods.md](docs/mods.md) for the mods.
+
+| id | section | |
+|---|---|---|
+| `core` | core | hook points (`tick`, `edge_exit`); changes nothing on its own |
+| `screen-wrap` | modifiers | objects leaving the screen come back on the other side |
+| `trace-calls` | dev | print when chosen functions are called |
+| `debug-spawn` | dev | spawn an object in every level (test fixture) |
+| `autostart` | dev | skip the title screen without input (test harness) |
+
+## Packages and packs
+
+```bash
+lina pack core screen-wrap --bundle my-pack   # dist/<id>-<version>.zip per mod + dist/my-pack.zip
+```
+
+A package is `mod.toml` + `patch.wasm` + `assets/` (overlaid onto `fish/game/res/`) + `media/` (website).
+A pack zip holds the `openlina` helper, `modpack.toml` and `mods/<id>/`. Players unzip it and run:
+
+```bash
+./openlina install .        # installs into ~/.local/share/openlina, builds, prints the Steam launch option
+openlina run                # or play from Steam with: "<data dir>/bin/openlina" steam %command%
+openlina set screen-wrap coins=true
+openlina list | uninstall <id> | build | launch-option
+```
+
+The helper keeps its state in `~/.local/share/openlina` (`OPENLINA_HOME` overrides it): installed mods,
+`modpack.toml`, a copy of itself for the launch option, and the overlay game directory `game/`.
+
+## `lina` commands
+
+| command | |
+|---|---|
+| `setup`, `check` | copy the game bytecode; self-test (roundtrip + validator on all vanilla functions) |
+| `dump` | decompile everything into `work/dump/` (`hx/`, `asm/`, `classes.tsv`, `functions.tsv`) |
+| `fn`, `callers`, `strings` | inspect one function, its callers, string constants |
+| `mods`, `new <section> <id>` | list mods; scaffold a new one |
+| `build [--mod id] [--wasm]`, `run [--build] [--timeout s] [--headless]` | apply mods (native or wasm) and play; `--headless` runs without a window (tests) |
+| `pack [ids] [--bundle name]` | wasm packages and pack zips in `dist/` |
 
 ## Limitations
 
-- Only the JIT build can run mods. The launch script handles this for Steam.
-- A game update replaces `hlboot.dat`. Run `mosa setup` again. Mods check every assumption they make about the
-  code, so they fail at build time with a clear error instead of producing a broken game.
-- Builds aren't byte-for-byte reproducible: hlbc stores class bindings in a `HashMap`, so their order in the
-  output varies. Their order has no effect on the game.
+- Only the JIT build (`Mosa Lina_jit` + `hlboot.dat`) can run mods; Steam starts the native build, hence the
+  launch wrapper. Windows ships the JIT too (untested).
+- A game update replaces `hlboot.dat`; mods check every assumption they make about the code and fail at build
+  time instead of producing a broken game.
+- Builds aren't byte-for-byte reproducible (hlbc stores class bindings in a `HashMap`); this doesn't affect
+  the game.

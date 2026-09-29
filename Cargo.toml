@@ -1,17 +1,21 @@
 [workspace]
 resolver = "2"
-members = ["crates/*"]
+members = ["tools/*", "mods/*"]
+exclude = ["tools/steam-launch.sh"]
 
 [workspace.package]
 edition = "2021"
 version = "0.1.0"
 
 [workspace.dependencies]
+openlina-sdk = { path = "tools/sdk" }
+openlina = { path = "tools/openlina" }
 hlbc = "0.7"
 hlbc-decompiler = "0.7"
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 toml = "0.8"
+serde = { version = "1", features = ["derive"] }
 sha2 = "0.10"
 
 [profile.dev]
@@ -19,3 +23,6 @@ opt-level = 1
 
 [profile.dev.package."*"]
 opt-level = 3
+
+[profile.release]
+lto = "thin"

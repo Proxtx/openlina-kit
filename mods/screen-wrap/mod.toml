@@ -1,0 +1,34 @@
+[mod]
+id = "screen-wrap"
+name = "Screen Wrap"
+version = "0.2.0"
+section = "modifiers"
+description = "Objects leaving the screen come back on the opposite side instead of being destroyed. Long levels and boss arenas wrap top and bottom only."
+authors = ["openlina-kit"]
+game_builds = ["22056877"]
+requires = ["core"]
+
+[options.coins]
+type = "bool"
+default = false
+description = "Also wrap fruits. Pushing fruits out is how levels are won, so this makes levels unwinnable."
+
+[options.secondary]
+type = "bool"
+default = true
+description = "Also wrap secondary physics objects."
+
+[options.max_overshoot]
+type = "float"
+default = 200.0
+description = "Only wrap objects at most this far past the edge. Physics objects move at most 100 units per tick; the game parks objects it wants deleted about 1000 units out."
+
+[options.min_tick]
+type = "int"
+default = 5
+description = "Don't wrap during the first ticks of a layout, when levels delete objects placed off-screen."
+
+[options.trace]
+type = "bool"
+default = false
+description = "Print every wrap to stdout."

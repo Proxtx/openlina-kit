@@ -1,0 +1,16 @@
+[package]
+name = "openlina"
+description = "Install and run OpenLina mod packs for Mosa Lina"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+openlina-sdk.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+toml.workspace = true
+serde.workspace = true
+sha2.workspace = true
+wasmtime = { version = "49", default-features = false, features = ["cranelift", "runtime", "std", "parallel-compilation"] }
+wasmtime-wasi = "49"
+zip = { version = "2", default-features = false, features = ["deflate"] }
