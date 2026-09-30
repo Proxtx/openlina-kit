@@ -39,7 +39,7 @@ mosa-mod/                 (plain folder)
 | Items | Portal gun: two portals on surfaces, objects/player pass through with momentum |
 | Modifiers | Screen wrap as a real modifier id in the game's modifier pool, with display/icon |
 | General | Mod menu: "OpenLina" entry in the pause menu listing active mods and options |
-| Level | "Tumble": gravity rotates 90° every 10 s, camera rotates along, geometry the editor can't place |
+| Level | "Tumble": a drum of tiles built in code that makes a quarter turn every 10 s (the world turns instead of gravity + camera: same effect for the player, far less patching) |
 
 ## Stages
 
@@ -48,7 +48,7 @@ mosa-mod/                 (plain folder)
 - [x] 1. Website design prototype (Claude Design, Mosa Lina style, placeholder mods), approved by the user
 - [x] 2. Kit foundation: wasm package format, `openlina` helper, core hooks/registries, screen-wrap ported
 - [x] 3. Harness + `lina test` / `lina gif` / `lina sprite`
-- [ ] 4. Showcase mods: modifier → general → item → level, each with icon, gifs, tests
+- [x] 4. Showcase mods: modifier → general → item → level, each with icon, gifs, tests
 - [ ] 5. Website implementation: API, voting, zip/JSON export, upload tokens, review queue
 - [ ] 6. Agent integration: `lina pull/publish`, skill, change-request workflow, docs polish
 

@@ -150,6 +150,7 @@ Everything runs headless (SDL offscreen driver): no window, no human, faster tha
 | `hooks` | `CORE_HOOKS`, `find`, `signature`, `handler`, `subscribe`, `define` |
 | `modifiers` | `register` a modifier (pool + HUD icon), `is_active`, `id_of`, `current_modifier` |
 | `items` | `register` an item (pool entry, HUD icon, label), `is_item`, `crosshair_pos`; behavior in an `item_use` handler |
+| `levels` | `LevelPack::from_toml` + `register`: level packs built in code (core `packs` hook); `current_level_name`, `jump_unless_in_pack` |
 | `text` | `set(key, value)`: texts the game looks up (`Localisation.loc`), e.g. `TOOL_<NAME>` item labels |
 | `anims` | `ensure`: a one-frame animation from a mod image in an object class's animation map |
 | `runner` | `run_mod`: the `main` of every mod |

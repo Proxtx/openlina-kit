@@ -6,6 +6,7 @@
 //! - [`edit`]: finding opcodes, replacing them, inserting code with automatic jump relocation
 //! - [`validate`]: a static checker that catches most broken patches before the JIT does
 //! - [`hooks`]: find and subscribe to the hook points injected by the `core` mod
+//! - [`items`], [`modifiers`], [`levels`], [`text`], [`anims`]: register game content from a mod
 //! - [`runner`]: the `main` of every mod (bytecode in on stdin, patched bytecode out on stdout)
 //! - [`manifest`]: `mod.toml` and `modpack.toml`, shared by the tools and the website
 //!
@@ -27,6 +28,7 @@ pub mod asm;
 pub mod edit;
 pub mod hooks;
 pub mod items;
+pub mod levels;
 pub mod manifest;
 pub mod modifiers;
 pub mod runner;

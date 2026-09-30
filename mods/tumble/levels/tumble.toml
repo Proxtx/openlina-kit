@@ -1,0 +1,15 @@
+# The fixed parts of "Tumble 1"; the ring of tiles is generated in src/main.rs.
+name = "Tumble"
+creator = "openlina-kit"
+
+[[level]]
+fruit = "blue"
+bg = [58, 52, 74]
+objects = [
+  { type = "portal", x = 300, y = 190 },
+  { type = "coin", x = 300, y = 110 },
+  # shelves sticking in from the ring
+  { type = "tile_short", x = 200, y = 200, angle = 20 },
+  { type = "tile_short", x = 400, y = 200, angle = -20 },
+  { type = "box", x = 330, y = 240 },
+]

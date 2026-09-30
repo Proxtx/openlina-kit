@@ -108,6 +108,7 @@ fn build_place(code: &mut Code, st: &State, o: &Opts) -> Result<openlina_sdk::hl
 
     let mut f = FnBuilder::new(code, "portal-gun/place", &[layout_t, i32_t, f64_t, f64_t], void);
     let (layout, which, x, y) = (f.arg(0), f.arg(1), f.arg(2), f.arg(3));
+    #[allow(clippy::needless_range_loop)] // k indexes several arrays and is a constant
     for k in 0..2 {
         let other = f.label();
         let kr = f.const_i32(k as i32);

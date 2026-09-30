@@ -11,3 +11,6 @@ options = { trace = false }
 
 [[mod]]
 id = "ammo-boost"
+
+[[mod]]
+id = "tumble"

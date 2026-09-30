@@ -87,6 +87,13 @@ pub const CORE_HOOKS: &[HookInfo] = &[
               crosshair_point objects (the aim point). Return true when the item is yours and handled: the game's \
               own item behaviors are skipped. Use `openlina_sdk::items` helpers.",
     },
+    HookInfo {
+        name: "packs",
+        args: "(packManager: PackManager)",
+        returns: "Void",
+        doc: "The game just loaded its level packs (`packManager.packs`, in the PackManager constructor). Push \
+              packs to add levels. Use `openlina_sdk::levels::register` instead of this hook.",
+    },
 ];
 
 fn debug_file(name: &str) -> String {

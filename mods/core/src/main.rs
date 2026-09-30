@@ -135,7 +135,24 @@ fn apply(code: &mut Code) -> Result<()> {
 
     modifier_hooks(code)?;
     item_hooks(code)?;
+    packs_hook(code)?;
     loc_hook(code)
+}
+
+/// `packs(packManager)`: in the PackManager constructor, right after the local and downloaded
+/// level packs were loaded (before `loadHidden`), so mods can add level packs. See
+/// `openlina_sdk::levels`.
+fn packs_hook(code: &mut Code) -> Result<()> {
+    let ctor = code.method("fish.system.PackManager", "__constructor__")?;
+    let downloaded = code.method("fish.system.PackManager", "loadDownloadedLevels")?;
+    let pm_t = code.class("fish.system.PackManager")?;
+    let void = code.ty_void();
+    let hook = hooks::define(code, "packs", &[pm_t], void)?;
+    let at = expect_one(find_calls(code.func(ctor)?, downloaded), "the PackManager constructor calls loadDownloadedLevels")?;
+    let f = code.func_mut(ctor)?;
+    let r = add_reg(f, void);
+    insert_ops(f, at + 1, vec![call(r, hook, &[Reg(0)])], Incoming::ToInserted);
+    Ok(())
 }
 
 /// `loc(key) -> String`: at the start of `Localisation.loc(this, key, args)`,

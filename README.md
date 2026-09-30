@@ -43,8 +43,13 @@ can be combined. See [AGENTS.md](AGENTS.md) for how to write one and [docs/mods.
 
 | id | section | |
 |---|---|---|
-| `core` | core | hook points (`tick`, `edge_exit`); changes nothing on its own |
+| `core` | core | hook points (`tick`, `edge_exit`, items, modifiers, texts, level packs); changes nothing on its own |
 | `screen-wrap` | modifiers | objects leaving the screen come back on the other side |
+| `solid-edges` | modifiers | the screen border is a wall; objects bounce off it (always on) |
+| `portal-gun` | items | Portal Gun: shoot two portals, objects and Lina pass through |
+| `tumble` | levels | Tumble: a drum of tiles that makes a quarter turn every 10 s |
+| `mod-menu` | general | pause-menu entry listing the pack's mods and options |
+| `ammo-boost` | general | more ammo for every item |
 | `trace-calls` | dev | print when chosen functions are called |
 | `debug-spawn` | dev | spawn an object in every level (test fixture) |
 | `harness` | dev | drive the game without input: level, items, modifier, scripted inputs, frame capture, exit (tests) |

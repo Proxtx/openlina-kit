@@ -1,0 +1,18 @@
+name = "tumble: other levels don't turn"
+mods = ["tumble"]
+timeout = 90
+
+[options.tumble]
+trace = true
+period = 120
+turn_ticks = 30
+
+[harness]
+level = "greendemo 1"
+end_tick = 480
+
+[[expect]]
+contains = "[harness] level tick 1: greendemo 1"
+
+[[expect]]
+not_contains = "[tumble]"

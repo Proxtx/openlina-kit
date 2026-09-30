@@ -1,0 +1,21 @@
+# Run with `lina test --mod tumble`; see tools/lina/src/scenario.rs for the format.
+name = "tumble: the level loads and the drum turns after 8.5 s"
+mods = ["tumble"]
+timeout = 90
+
+[options.tumble]
+trace = true
+
+[harness]
+level = "Tumble 1"
+end_tick = 1260
+
+[[expect]]
+contains = "[harness] level tick 1: Tumble 1"
+
+[[expect]]
+contains = "[tumble] tick 1020 turning"
+max = 1
+
+[[expect]]
+contains = "[harness] end at tick 1260"

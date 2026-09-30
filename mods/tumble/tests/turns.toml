@@ -1,0 +1,25 @@
+name = "tumble: quarter turns every `period` ticks (showcase gif)"
+mods = ["tumble"]
+timeout = 90
+
+[options.tumble]
+trace = true
+period = 300
+turn_ticks = 60
+
+[harness]
+level = "Tumble 1"
+end_tick = 1260
+
+# turns start at 240, 540, 840, 1140
+[[expect]]
+contains = "turning"
+min = 4
+max = 4
+
+[[expect]]
+contains = "[tumble] tick 1140 turning"
+
+[gif]
+capture = "180-900/4"
+out = "media/turn.gif"

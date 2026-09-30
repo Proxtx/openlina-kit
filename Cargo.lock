@@ -1192,6 +1192,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "openlina-mod-tumble"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "openlina-sdk",
+]
+
+[[package]]
 name = "openlina-sdk"
 version = "0.1.0"
 dependencies = [

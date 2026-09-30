@@ -31,6 +31,7 @@ on its own; with no subscribers every hook falls through to vanilla.
 | `item_pool` | `(itemManager) -> Void` | the item pool was built; used by `openlina_sdk::items` |
 | `item_use` | `(slot, sheet, player, crosshair) -> Bool` | the player fires the item in `slot` (ammo already decremented); return true to replace the game's behavior |
 | `loc` | `(key) -> String` | a text is looked up; return a text or null; used by `openlina_sdk::text` |
+| `packs` | `(packManager) -> Void` | the game loaded its level packs (PackManager constructor); push packs; used by `openlina_sdk::levels` |
 
 `edge_exit` also passes the object's `physics` behavior (last argument).
 
@@ -47,6 +48,18 @@ Lina too. Portals reset every level. Pool entry, HUD icon and label via `openlin
 Options: `ammo`, `radius`, `range`, `preset` (`"ax,ay,bx,by"`: place both portals at level start, for tests and
 showcases), `trace`. Tests: in the pool; firing places blue then orange along the aim; a box loops through
 the portals (showcase `media/loop.gif`).
+
+## tumble (levels)
+
+A level pack, **Tumble**, built in code with `openlina_sdk::levels`. "Tumble 1" is a drum: a ring of `segments`
+(14) long tiles of `radius` (130) around the screen center, each turned to the tangent, one left out as a gap, plus
+two shelves, a box and the fruit (`levels/tumble.toml` + the generated ring). During the last `turn_ticks` (180) of
+every `period` (1200 ticks = 10 s) the drum makes a quarter turn clockwise: every static body is rotated around the
+center, and whatever is loose inside tumbles and may fall out through the gap. Only while a Tumble level is played.
+
+The pack shows up with the custom level packs (a "downloaded" pack named Tumble, creator openlina-kit); nothing is
+written to `userdata`. Tests: loads and turns; turn count and timing with short periods (showcase
+`media/turn.gif`); other levels don't turn.
 
 ## solid-edges (modifiers, always on)
 

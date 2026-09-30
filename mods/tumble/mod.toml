@@ -1,0 +1,34 @@
+[mod]
+id = "tumble"
+name = "Tumble"
+version = "0.1.0"
+section = "levels"
+description = "A level that turns: a drum of tiles makes a quarter turn every 10 seconds. Get the fruit out through the gap."
+authors = ["openlina-kit"]
+game_builds = ["22056877"]
+requires = ["core"]
+
+[options.trace]
+type = "bool"
+default = false
+description = "Print what the mod does to stdout."
+
+[options.period]
+type = "int"
+default = 1200
+description = "Ticks between quarter turns (120 ticks per second)."
+
+[options.turn_ticks]
+type = "int"
+default = 180
+description = "How long a quarter turn takes, in ticks."
+
+[options.segments]
+type = "int"
+default = 14
+description = "Tiles in the ring (one of them is left out as the gap)."
+
+[options.radius]
+type = "float"
+default = 130.0
+description = "Radius of the ring."
