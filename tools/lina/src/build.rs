@@ -67,7 +67,11 @@ fn cargo_build(ids: &[String], wasm: bool) -> Result<()> {
         cmd.args(["-p", &format!("openlina-mod-{id}")]);
     }
     let status = cmd.status().context("running cargo")?;
-    ensure!(status.success(), "cargo build failed");
+    ensure!(
+        status.success(),
+        "cargo build failed (see the compiler output above){}",
+        if wasm { "; wasm builds need the wasm32-wasip1 target: run inside `nix develop`" } else { "" }
+    );
     Ok(())
 }
 
@@ -180,7 +184,7 @@ pub fn run(game_dir: &Path, timeout: Option<u64>, headless: bool) -> Result<()> 
     Ok(())
 }
 
-pub fn pack(ids: &[String], bundle: Option<&str>, out: &Path) -> Result<()> {
+pub fn pack(ids: &[String], bundle: Option<&str>, from: Option<&ModPack>, out: &Path) -> Result<()> {
     let all = all_mods()?;
     let chosen: Vec<_> = if ids.is_empty() {
         all.iter().filter(|(_, m)| m.info.section != Section::Dev).cloned().collect()
@@ -230,6 +234,7 @@ pub fn pack(ids: &[String], bundle: Option<&str>, out: &Path) -> Result<()> {
                 openlina::copy_dir(&dir.join(sub), &s.join(sub))?;
             }
         }
+        copy_source(dir, &s.join("source"))?;
         let zip_path = out.join(format!("{id}-{}.zip", m.info.version));
         let mut zip = openlina::zip::ZipWriter::new(std::fs::File::create(&zip_path)?);
         package::zip_dir(&s, id, &mut zip)?;
@@ -243,7 +248,19 @@ pub fn pack(ids: &[String], bundle: Option<&str>, out: &Path) -> Result<()> {
         openlina::copy_dir(&stage.join("mods"), &root.join("mods"))?;
         let pack = ModPack {
             openlina: 1,
-            mods: chosen.iter().map(|(_, m)| PackEntry { id: m.info.id.clone(), version: Some(m.info.version.clone()), ..Default::default() }).collect(),
+            mods: chosen
+                .iter()
+                .map(|(_, m)| {
+                    let given = from.and_then(|f| f.mods.iter().find(|e| e.id == m.info.id));
+                    PackEntry {
+                        id: m.info.id.clone(),
+                        version: Some(m.info.version.clone()),
+                        options: given.map(|e| e.options.clone()).unwrap_or_default(),
+                        request: given.and_then(|e| e.request.clone()),
+                        ..Default::default()
+                    }
+                })
+                .collect(),
             ..Default::default()
         };
         pack.save(&root.join("modpack.toml"))?;
@@ -257,6 +274,27 @@ pub fn pack(ids: &[String], bundle: Option<&str>, out: &Path) -> Result<()> {
         println!("wrote {} (run `./openlina install .` inside it)", zip_path.display());
     }
     std::fs::remove_dir_all(&stage)?;
+    Ok(())
+}
+
+/// The mod's crate (Cargo.toml, src/, tests/, art/, levels/, …) into a package's `source/`, so
+/// whoever pulls the package can change and rebuild it (`lina pull` puts it back into mods/<id>/).
+/// mod.toml, assets/ and media/ are at the package root already; build outputs are skipped.
+fn copy_source(dir: &Path, dst: &Path) -> Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for e in std::fs::read_dir(dir)? {
+        let e = e?;
+        let name = e.file_name();
+        let name = name.to_string_lossy();
+        if ["mod.toml", "assets", "media", "target"].contains(&name.as_ref()) || name.starts_with('.') {
+            continue;
+        }
+        if e.file_type()?.is_dir() {
+            openlina::copy_dir(&e.path(), &dst.join(&*name))?;
+        } else {
+            std::fs::copy(e.path(), dst.join(&*name))?;
+        }
+    }
     Ok(())
 }
 

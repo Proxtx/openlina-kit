@@ -50,7 +50,7 @@ mosa-mod/                 (plain folder)
 - [x] 3. Harness + `lina test` / `lina gif` / `lina sprite`
 - [x] 4. Showcase mods: modifier → general → item → level, each with icon, gifs, tests
 - [x] 5. Website implementation: API, voting, zip/JSON export, upload tokens, review queue (openlina-web)
-- [ ] 6. Agent integration: `lina pull/publish`, skill, change-request workflow, docs polish
+- [x] 6. Agent integration: `lina login/pull/publish`, skill (`.claude/skills/openlina-modding`), change-request workflow (`REQUESTS.md`), docs
 
 ## Findings
 

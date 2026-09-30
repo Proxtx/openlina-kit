@@ -5,6 +5,7 @@ use clap::{Parser, Subcommand};
 
 mod build;
 mod dump;
+mod hub;
 mod inspect;
 mod scaffold;
 mod scenario;
@@ -105,6 +106,10 @@ enum Cmd {
         /// Also write dist/<NAME>.zip containing the helper and these mods.
         #[arg(long)]
         bundle: Option<String>,
+        /// Take the mods and their options from a modpack (e.g. work/pull/<pack>/modpack.toml);
+        /// the bundle keeps the options.
+        #[arg(long)]
+        from: Option<PathBuf>,
         #[arg(long, default_value = "dist")]
         out: PathBuf,
     },
@@ -138,6 +143,36 @@ enum Cmd {
         #[arg(long)]
         palette: bool,
     },
+    /// Save an OpenLina site and your upload token (checked against the site) for pull/publish.
+    Login {
+        /// The site, e.g. `http://127.0.0.1:8080`.
+        site: String,
+        /// Upload token (`olt_…`); read from $OPENLINA_TOKEN or stdin when omitted.
+        token: Option<String>,
+    },
+    /// Download a pack from an OpenLina site: packages, the source of mods you don't have
+    /// (into mods/<id>/), and work/pull/<pack>/ with modpack.toml and REQUESTS.md (change requests).
+    Pull {
+        /// Pack link (`https://site/api/packs/<id>`) or pack id (on the site you logged in to).
+        pack: String,
+        /// Where to put the source of pulled mods.
+        #[arg(long, default_value = "mods")]
+        mods_dir: PathBuf,
+        /// Replace local mods of the same id with the pack's version.
+        #[arg(long)]
+        force: bool,
+    },
+    /// Upload a mod to the site you logged in to: runs its scenarios (wasm), packages it with its
+    /// source, shows what would be uploaded. Uploads only with --yes (ask the user first).
+    Publish {
+        id: String,
+        /// Really upload.
+        #[arg(long)]
+        yes: bool,
+        /// Skip the scenarios.
+        #[arg(long)]
+        no_test: bool,
+    },
     /// Self-test: roundtrip the pristine bytecode and run the validator on every function.
     Check {
         #[arg(long, default_value = ORIG)]
@@ -170,7 +205,15 @@ fn main() -> Result<()> {
             }
             build::run(&game, timeout, headless)
         }
-        Cmd::Pack { ids, bundle, out } => build::pack(&ids, bundle.as_deref(), &out),
+        Cmd::Pack { ids, bundle, from, out } => {
+            let from = from.map(|p| openlina_sdk::manifest::ModPack::load(&p)).transpose()?;
+            let mut ids = ids;
+            if let Some(f) = &from {
+                anyhow::ensure!(ids.is_empty(), "give either mod ids or --from, not both");
+                ids = f.mods.iter().map(|e| e.id.clone()).collect();
+            }
+            build::pack(&ids, bundle.as_deref(), from.as_ref(), &out)
+        }
         Cmd::Test { files, only, wasm } => {
             let files = scenario::find(&files, only.as_deref())?;
             scenario::test(&game_dir()?, &files, wasm)
@@ -186,5 +229,8 @@ fn main() -> Result<()> {
             sprite::render(&file, &out, scale)
         }
         Cmd::Check { input } => build::check(&input),
+        Cmd::Login { site, token } => hub::login(&site, token),
+        Cmd::Pull { pack, mods_dir, force } => hub::pull(&pack, &mods_dir, force),
+        Cmd::Publish { id, yes, no_test } => hub::publish(game_dir, &id, yes, !no_test),
     }
 }

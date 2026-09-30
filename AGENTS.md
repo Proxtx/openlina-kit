@@ -117,6 +117,15 @@ Everything runs headless (SDL offscreen driver): no window, no human, faster tha
    `lina pack <id> --bundle try && OPENLINA_HOME=$PWD/work/home target/nix/release/openlina install dist/try.zip`
    (a single mod zip can only be installed on top of its requirements).
 
+## 5. Share (OpenLina website)
+
+- `lina login <site> <token>`: token from the site's maintainer; saved in `~/.config/openlina/lina.toml` (600).
+- `lina pull <pack link>`: packages + source of mods you don't have into `mods/<id>/`; `work/pull/<pack>/` gets
+  `modpack.toml` (options, change requests) and `REQUESTS.md` (a to-do list: option or code change, bump the
+  version, test, bundle for the player).
+- `lina publish <id>`: scenarios on wasm, package with source (`source/` in the zip), dry-run summary; uploads
+  only with `--yes`, **after the user agreed**. The skill `.claude/skills/openlina-modding` has the full workflow.
+
 ## HashLink pitfalls (learned the hard way)
 
 - The **`String` opcode yields raw UTF-16 `hl.Bytes`**, not a `String` object. Use `FnBuilder::string_obj`.

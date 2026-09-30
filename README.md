@@ -60,7 +60,9 @@ can be combined. See [AGENTS.md](AGENTS.md) for how to write one and [docs/mods.
 lina pack core screen-wrap --bundle my-pack   # dist/<id>-<version>.zip per mod + dist/my-pack.zip
 ```
 
-A package is `mod.toml` + `patch.wasm` + `assets/` (overlaid onto `fish/game/res/`) + `media/` (website).
+A package is `mod.toml` + `patch.wasm` + `assets/` (overlaid onto `fish/game/res/`) + `media/` (website) +
+`source/` (the mod's crate, so others can change it). `lina pack --from <modpack.toml> --bundle <name>` bundles
+the mods of a modpack with its options.
 A pack zip holds the `openlina` helper, `modpack.toml` and `mods/<id>/`. Players unzip it and run:
 
 ```bash
@@ -69,6 +71,18 @@ openlina run                # or play from Steam with: "<data dir>/bin/openlina"
 openlina set screen-wrap coins=true
 openlina list | uninstall <id> | build | launch-option
 ```
+
+## The OpenLina website
+
+[openlina-web](../openlina-web) is the mod hub: people pick mods, add change requests and export a pack.
+
+```bash
+lina login https://<site> <token>   # token from the site's maintainer; stored in ~/.config/openlina/lina.toml
+lina pull <pack link>               # packages, source into mods/<id>/, work/pull/<pack>/REQUESTS.md
+lina publish <id>                   # tests (wasm), package, dry run; `--yes` uploads (agents ask the user first)
+```
+
+Claude Code picks up the skill in `.claude/skills/openlina-modding/` (new mods, change requests, publishing).
 
 The helper keeps its state in `~/.local/share/openlina` (`OPENLINA_HOME` overrides it): installed mods,
 `modpack.toml`, a copy of itself for the launch option, and the overlay game directory `game/`.
