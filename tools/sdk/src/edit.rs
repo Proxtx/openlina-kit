@@ -44,10 +44,7 @@ pub fn jump_offsets_mut(op: &mut Opcode) -> Vec<&mut i32> {
 /// Absolute jump targets of the op at index `pos`.
 pub fn jump_targets(op: &Opcode, pos: usize) -> Vec<usize> {
     let mut op = op.clone();
-    jump_offsets_mut(&mut op)
-        .into_iter()
-        .map(|o| (pos as i64 + 1 + *o as i64) as usize)
-        .collect()
+    jump_offsets_mut(&mut op).into_iter().map(|o| (pos as i64 + 1 + *o as i64) as usize).collect()
 }
 
 /// The function called by a direct call opcode (`Call0`..`CallN`), with its arguments.

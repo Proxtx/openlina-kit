@@ -195,7 +195,13 @@ fn main() -> Result<()> {
         Cmd::Mods => build::list_mods(),
         Cmd::Hooks => {
             for h in openlina_sdk::hooks::CORE_HOOKS {
-                println!("{}{} -> {}\n    {}\n", h.name, h.args, h.returns, h.doc.split_whitespace().collect::<Vec<_>>().join(" "));
+                println!(
+                    "{}{} -> {}\n    {}\n",
+                    h.name,
+                    h.args,
+                    h.returns,
+                    h.doc.split_whitespace().collect::<Vec<_>>().join(" ")
+                );
             }
             Ok(())
         }

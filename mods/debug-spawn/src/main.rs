@@ -1,4 +1,7 @@
-//! `debug-spawn`: spawn an object at a fixed tick of every gameplay layout.
+//! `debug-spawn`: spawn objects at fixed ticks of every gameplay layout.
+//!
+//! One object with `object`/`tick`/`x`/`y`/`layer`, or several with `spawns`, a list of
+//! `"<type>@<tick>:<x>,<y>"` (e.g. `["box@60:300,60", "s_ball@90:420,40"]`, layer 0).
 //!
 //! A test fixture for other mods, and a minimal example of a `tick` hook handler calling game
 //! code. With `screen-wrap`, a box spawned mid-air falls through the floor and keeps wrapping
@@ -12,34 +15,66 @@ fn main() {
     openlina_sdk::run_mod(apply)
 }
 
+struct Spawn {
+    object: String,
+    tick: i32,
+    x: f64,
+    y: f64,
+    layer: i32,
+}
+
+fn parse_spawn(s: &str) -> Result<Spawn> {
+    let err = || anyhow::anyhow!("spawn `{s}`: expected \"<type>@<tick>:<x>,<y>\"");
+    let (object, rest) = s.split_once('@').ok_or_else(err)?;
+    let (tick, pos) = rest.split_once(':').ok_or_else(err)?;
+    let (x, y) = pos.split_once(',').ok_or_else(err)?;
+    Ok(Spawn {
+        object: object.trim().to_string(),
+        tick: tick.trim().parse().map_err(|_| err())?,
+        x: x.trim().parse().map_err(|_| err())?,
+        y: y.trim().parse().map_err(|_| err())?,
+        layer: 0,
+    })
+}
+
 fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
-    let object = cfg.str("object", "box")?.to_string();
-    let tick = cfg.i64("tick", 60)? as i32;
-    let (x, y) = (cfg.f64("x", 300.0)?, cfg.f64("y", 60.0)?);
-    let layer = cfg.i64("layer", 0)? as i32;
+    let list = cfg.list("spawns")?;
+    let spawns: Vec<Spawn> = if list.is_empty() {
+        vec![Spawn {
+            object: cfg.str("object", "box")?.to_string(),
+            tick: cfg.i64("tick", 60)? as i32,
+            x: cfg.f64("x", 300.0)?,
+            y: cfg.f64("y", 60.0)?,
+            layer: cfg.i64("layer", 0)? as i32,
+        }]
+    } else {
+        list.iter().map(|s| parse_spawn(s)).collect::<Result<_>>()?
+    };
 
     let create = code.method("fish.system.Layout", "createObject")?;
     let cb_t = code.func_type(create)?.args[7];
     let bool_t = code.ty_bool();
 
-    // tick(sheet, layout):
+    // tick(sheet, layout): for each spawn
     //   if (layout.currentTick == tick) layout.createObject(object, layer, x, y, false, "", null);
     let mut f = hooks::handler(code, "tick", "debug-spawn/spawn")?;
     let layout = f.arg(1);
-    let skip = f.label();
     let now = f.get_new(layout, "currentTick")?;
-    let at = f.const_i32(tick);
-    f.jne(now, at, skip);
-    let name = f.string_obj(&object)?;
-    let layer = f.const_i32(layer);
-    let (x, y) = (f.const_f64(x), f.const_f64(y));
-    let no = f.reg(bool_t);
-    f.bool(no, false);
-    let empty = f.string_obj("")?;
-    let cb = f.reg(cb_t);
-    f.op(Opcode::Null { dst: cb });
-    f.call_new(create, &[layout, name, layer, x, y, no, empty, cb])?;
-    f.place(skip);
+    for s in &spawns {
+        let skip = f.label();
+        let at = f.const_i32(s.tick);
+        f.jne(now, at, skip);
+        let name = f.string_obj(&s.object)?;
+        let layer = f.const_i32(s.layer);
+        let (x, y) = (f.const_f64(s.x), f.const_f64(s.y));
+        let no = f.reg(bool_t);
+        f.bool(no, false);
+        let empty = f.string_obj("")?;
+        let cb = f.reg(cb_t);
+        f.op(Opcode::Null { dst: cb });
+        f.call_new(create, &[layout, name, layer, x, y, no, empty, cb])?;
+        f.place(skip);
+    }
     f.ret_void();
     let spawn = f.finish()?;
     hooks::subscribe(code, "tick", spawn)

@@ -90,7 +90,12 @@ impl LevelPack {
         ensure!(!p.name.is_empty(), "the level pack needs a name");
         ensure!(!p.levels.is_empty(), "the level pack has no [[level]]");
         for (i, l) in p.levels.iter().enumerate() {
-            ensure!(["blue", "green", "red"].contains(&l.fruit.as_str()), "level {}: unknown fruit `{}`", i + 1, l.fruit);
+            ensure!(
+                ["blue", "green", "red"].contains(&l.fruit.as_str()),
+                "level {}: unknown fruit `{}`",
+                i + 1,
+                l.fruit
+            );
             ensure!(l.objects.iter().any(|o| o.kind == "portal"), "level {}: no `portal` (the player's entry)", i + 1);
         }
         Ok(p)

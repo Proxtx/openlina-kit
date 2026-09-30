@@ -19,8 +19,8 @@
 use anyhow::Result;
 use openlina_sdk::asm::{FnBuilder, Print};
 use openlina_sdk::edit::{add_reg, call, find_field_access, insert_ops, Incoming};
-use openlina_sdk::manifest::Section;
 use openlina_sdk::hlbc::types::Reg;
+use openlina_sdk::manifest::Section;
 use openlina_sdk::{edit, Code, ModConfig};
 
 fn main() {

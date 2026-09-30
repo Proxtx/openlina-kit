@@ -330,6 +330,39 @@ impl<'a> FnBuilder<'a> {
         dst
     }
 
+    /// New register holding global `g` (mod state lives in globals, see `Code::add_global`).
+    pub fn get_global(&mut self, g: RefGlobal) -> Reg {
+        let t = self.code.bc.globals[g.0];
+        let r = self.reg(t);
+        self.op(Opcode::GetGlobal { dst: r, global: g });
+        r
+    }
+
+    /// `g = src`.
+    pub fn set_global(&mut self, g: RefGlobal, src: Reg) {
+        self.op(Opcode::SetGlobal { global: g, src });
+    }
+
+    /// `g = null`.
+    pub fn clear_global(&mut self, g: RefGlobal) {
+        let t = self.code.bc.globals[g.0];
+        let r = self.reg(t);
+        self.op(Opcode::Null { dst: r });
+        self.op(Opcode::SetGlobal { global: g, src: r });
+    }
+
+    /// New register holding a closure of function `fun` (e.g. a callback for a native), typed `t`
+    /// (the parameter type the callee expects; `None`: the function's own type).
+    pub fn static_closure(&mut self, fun: RefFun, t: Option<RefType>) -> Result<Reg> {
+        let t = match t {
+            Some(t) => t,
+            None => self.code.func(fun)?.t,
+        };
+        let dst = self.reg(t);
+        self.op(Opcode::StaticClosure { dst, fun });
+        Ok(dst)
+    }
+
     /// Allocate an object of `class` without calling a constructor (call an init method yourself).
     pub fn new_obj(&mut self, class: &str) -> Result<Reg> {
         let t = self.code.class(class)?;
@@ -369,7 +402,9 @@ impl<'a> FnBuilder<'a> {
             .iter()
             .find(|f| {
                 f.t.as_fun(&self.code.bc).is_some_and(|t| {
-                    t.ret == array_obj_t && t.args.len() == 1 && matches!(self.code.bc.types[t.args[0].0], hlbc::types::Type::Array)
+                    t.ret == array_obj_t
+                        && t.args.len() == 1
+                        && matches!(self.code.bc.types[t.args[0].0], hlbc::types::Type::Array)
                 })
             })
             .map(|f| f.findex)

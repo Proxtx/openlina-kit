@@ -118,17 +118,27 @@ pub fn check_function(code: &Code, fun: &Function) -> Vec<String> {
             match code.func_type(callee) {
                 Ok(sig) => {
                     if sig.args.len() != args.len() {
-                        err(i, format!(
-                            "call to {} with {} args, expects {}",
-                            code.func_name(callee), args.len(), sig.args.len()
-                        ));
+                        err(
+                            i,
+                            format!(
+                                "call to {} with {} args, expects {}",
+                                code.func_name(callee),
+                                args.len(),
+                                sig.args.len()
+                            ),
+                        );
                     } else {
                         for (j, (a, p)) in args.iter().zip(&sig.args).enumerate() {
                             if rk(a) != kind(code, *p) {
-                                err(i, format!(
-                                    "call to {} arg {j}: passing {:?} for {:?}",
-                                    code.func_name(callee), rk(a), kind(code, *p)
-                                ));
+                                err(
+                                    i,
+                                    format!(
+                                        "call to {} arg {j}: passing {:?} for {:?}",
+                                        code.func_name(callee),
+                                        rk(a),
+                                        kind(code, *p)
+                                    ),
+                                );
                             }
                         }
                     }
@@ -146,10 +156,9 @@ pub fn check_function(code: &Code, fun: &Function) -> Vec<String> {
             Opcode::Field { dst, obj, field } | Opcode::SetField { obj, field, src: dst } => {
                 let ot = fun.regs[obj.0 as usize];
                 match code.field_type(ot, *field) {
-                    Ok(ft) if kind(code, ft) != rk(dst) => err(i, format!(
-                        "field {} is {:?}, register is {:?}",
-                        field.0, kind(code, ft), rk(dst)
-                    )),
+                    Ok(ft) if kind(code, ft) != rk(dst) => {
+                        err(i, format!("field {} is {:?}, register is {:?}", field.0, kind(code, ft), rk(dst)))
+                    }
                     Ok(_) => {}
                     Err(e) => err(i, e.to_string()),
                 }
@@ -191,8 +200,12 @@ pub fn check_function(code: &Code, fun: &Function) -> Vec<String> {
 fn call_dst(op: &Opcode) -> hlbc::types::Reg {
     use Opcode::*;
     match op {
-        Call0 { dst, .. } | Call1 { dst, .. } | Call2 { dst, .. } | Call3 { dst, .. }
-        | Call4 { dst, .. } | CallN { dst, .. } => *dst,
+        Call0 { dst, .. }
+        | Call1 { dst, .. }
+        | Call2 { dst, .. }
+        | Call3 { dst, .. }
+        | Call4 { dst, .. }
+        | CallN { dst, .. } => *dst,
         _ => unreachable!(),
     }
 }

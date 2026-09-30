@@ -11,12 +11,9 @@
 //! - Firing: an `item_use` handler. The crosshair (`items::crosshair_pos`) only gives the
 //!   direction: the ray goes from Lina's position through the crosshair, `range` layout units
 //!   long. Returning true skips the game's own item behaviors, also when nothing is hit.
-//! - The ray is the game's own Box2D ray cast, the native `world_ray_cast(world, callback, from,
-//!   to)` that the Construct "Line of Sight" behavior (`fish.system.beh.LOS.castRay`) uses, in
-//!   physics units (layout units × `layout.worldScale`). The callback (`swap/ray_hit`, a static
-//!   closure; its state lives in globals) sees every fixture on the ray in any order; it ignores
-//!   Lina's own fixtures and returns the hit's fraction, which clips the ray, so the last fixture
-//!   it records is the nearest one. The fixture's user data is its `ObjectClass`.
+//! - The ray is the game's own Box2D ray cast (`world_ray_cast`, as the game's Line of Sight
+//!   behavior uses it) through `openlina_sdk::physics::RayCast`: the nearest `ObjectClass` on the
+//!   line, Lina herself excluded.
 //! - Walls: with `walls_block` (default) static bodies (`physics.immovable`: tiles, level
 //!   geometry) take part in the ray and stop it: when the nearest hit is static, nothing is
 //!   swapped. Without it the ray passes through static bodies and only movable objects count.
@@ -35,9 +32,9 @@
 use anyhow::{bail, Result};
 use openlina_sdk::asm::{FnBuilder, Print};
 use openlina_sdk::hlbc::opcodes::Opcode;
-use openlina_sdk::hlbc::types::{RefFun, RefGlobal, Reg};
+use openlina_sdk::hlbc::types::{RefGlobal, Reg};
 use openlina_sdk::items::{self, Aim, Item};
-use openlina_sdk::{hooks, Code, ModConfig};
+use openlina_sdk::{hooks, physics, Code, ModConfig};
 
 const ITEM: &str = "swap";
 /// A swap check counts as "at the old spot" within this distance (layout units).
@@ -56,10 +53,6 @@ struct Opts {
 
 /// Mod state, kept in globals.
 struct State {
-    /// The ray: who fired it (ignored by the callback), the nearest hit so far and its fraction.
-    shooter: RefGlobal,
-    best: RefGlobal,
-    frac: RefGlobal,
     /// The last swap, for the trace check: tick, both objects and their old positions.
     swap_tick: RefGlobal,
     swapped: RefGlobal,
@@ -99,95 +92,41 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
 
     items::register(
         code,
-        &Item { name: ITEM, label: "Swap", ammo: ammo as i32, aim, second_layer: false, icon: "images/openlina/swap.png", icon_size: (12.0, 12.0) },
+        &Item {
+            name: ITEM,
+            label: "Swap",
+            ammo: ammo as i32,
+            aim,
+            second_layer: false,
+            icon: "images/openlina/swap.png",
+            icon_size: (12.0, 12.0),
+        },
     )?;
 
     let (f64_t, i32_t) = (code.ty_f64(), code.ty_i32());
     let obj_t = code.class("fish.system.ObjectClass")?;
     let g = |code: &mut Code, t| code.add_global(t);
     let st = State {
-        shooter: g(code, obj_t),
-        best: g(code, obj_t),
-        frac: g(code, f64_t),
         swap_tick: g(code, i32_t),
         swapped: g(code, obj_t),
         player: g(code, obj_t),
         old: [g(code, f64_t), g(code, f64_t), g(code, f64_t), g(code, f64_t)],
     };
-    let hit = build_ray_hit(code, &st, &o)?;
-    build_use(code, &st, hit, &o)?;
+    let ray = physics::RayCast::install(code, "swap/ray_hit", o.walls_block)?;
+    build_use(code, &st, &ray, &o)?;
     if o.trace {
         build_check(code, &st, &o)?;
     }
     Ok(())
 }
 
-fn get_g(f: &mut FnBuilder, g: RefGlobal) -> Reg {
-    let t = f.code().bc.globals[g.0];
-    let r = f.reg(t);
-    f.op(Opcode::GetGlobal { dst: r, global: g });
-    r
-}
-
-fn set_g(f: &mut FnBuilder, g: RefGlobal, v: Reg) {
-    f.op(Opcode::SetGlobal { global: g, src: v });
-}
-
-fn set_null(f: &mut FnBuilder, g: RefGlobal) {
-    let t = f.code().bc.globals[g.0];
-    let n = f.reg(t);
-    f.op(Opcode::Null { dst: n });
-    set_g(f, g, n);
-}
-
-/// `swap/ray_hit(fixture, point, normal, fraction) -> F64`: the `world_ray_cast` callback.
-/// Box2D semantics: return -1 to ignore the fixture, the fraction to clip the ray there.
-fn build_ray_hit(code: &mut Code, st: &State, o: &Opts) -> Result<RefFun> {
-    let cast = code.native("world_ray_cast")?;
-    let cb_t = code.func_type(cast)?.args[1];
-    let Some(cb) = cb_t.as_fun(&code.bc).cloned() else { bail!("world_ray_cast: argument 2 is not a function type") };
-    // (b2Fixture, Vector2Default point, Vector2Default normal, F64 fraction) -> F64
-    anyhow::ensure!(cb.args.len() == 4 && cb.ret == code.ty_f64(), "world_ray_cast callback: unexpected signature {}", code.type_name(cb_t));
-    let user_data = code.native("fixture_get_user_data")?;
-    let obj_t = code.class("fish.system.ObjectClass")?;
-
-    let mut f = FnBuilder::new(code, "swap/ray_hit", &cb.args, cb.ret);
-    let (fixture, fraction) = (f.arg(0), f.arg(3));
-    let ignore = f.label();
-    let ud = f.call_new(user_data, &[fixture])?;
-    let obj = f.cast(ud, obj_t);
-    f.jnull(obj, ignore);
-    let shooter = get_g(&mut f, st.shooter);
-    f.jeq(obj, shooter, ignore);
-    let sprite = f.get_new(obj, "sprite")?;
-    f.jnull(sprite, ignore);
-    let destroyed = f.get_new(sprite, "destroyed")?;
-    f.jtrue(destroyed, ignore);
-    if !o.walls_block {
-        let physics = f.get_new(obj, "physics")?;
-        f.jnull(physics, ignore);
-        let immovable = f.get_new(physics, "immovable")?;
-        f.jtrue(immovable, ignore);
-    }
-    set_g(&mut f, st.best, obj);
-    set_g(&mut f, st.frac, fraction);
-    f.ret(fraction);
-    f.place(ignore);
-    let m1 = f.const_f64(-1.0);
-    f.ret(m1);
-    f.finish()
-}
-
 /// `item_use`: fire Swap.
-fn build_use(code: &mut Code, st: &State, hit: RefFun, o: &Opts) -> Result<()> {
+fn build_use(code: &mut Code, st: &State, ray: &physics::RayCast, o: &Opts) -> Result<()> {
     let (bool_t, f64_t) = (code.ty_bool(), code.ty_f64());
     let first = code.method("fish.system.Picker", "first")?;
     let player_t = code.class("fish.game.oclass.OClass_player")?;
     let obj_t = code.class("fish.system.ObjectClass")?;
     let sqrt = code.native("math_sqrt")?;
-    let ray_cast = code.native("world_ray_cast")?;
-    let cb_t = code.func_type(ray_cast)?.args[1];
-    let v2_new = code.method("hxmath.math.Vector2Default", "__constructor__")?;
 
     let mut f = hooks::handler(code, "item_use", "swap/use")?;
     let (slot, sheet, player_picker, cross) = (f.arg(0), f.arg(1), f.arg(2), f.arg(3));
@@ -222,49 +161,40 @@ fn build_use(code: &mut Code, st: &State, hit: RefFun, o: &Opts) -> Result<()> {
     f.mul(ty, ty, range);
     f.add(ty, ty, py);
 
-    // the ray in physics units
+    // the nearest object on the ray (Lina herself excluded)
     let layout = f.get_new(sheet, "layout")?;
-    let ws = f.get_new(layout, "worldScale")?;
-    let world = f.get_new(layout, "world")?;
-    f.jnull(world, handled);
-    let v2_t = f.code().func_type(v2_new)?.args[0];
-    let vec = |f: &mut FnBuilder, x: Reg, y: Reg| -> Result<Reg> {
-        let v = f.reg(v2_t);
-        f.op(Opcode::New { dst: v });
-        let (sx, sy) = (f.reg(f64_t), f.reg(f64_t));
-        f.mul(sx, x, ws);
-        f.mul(sy, y, ws);
-        f.call_new(v2_new, &[v, sx, sy])?;
-        Ok(v)
-    };
-    let from = vec(&mut f, px, py)?;
-    let to = vec(&mut f, tx, ty)?;
-    set_g(&mut f, st.shooter, player);
-    set_null(&mut f, st.best);
-    let one = f.const_f64(1.0);
-    set_g(&mut f, st.frac, one);
-    let cb = f.reg(cb_t);
-    f.op(Opcode::StaticClosure { dst: cb, fun: hit });
-    f.call_new(ray_cast, &[world, cb, from, to])?;
-    set_null(&mut f, st.shooter);
+    let best = ray.cast(&mut f, layout, (px, py), (tx, ty), Some(player))?;
 
     let tick = f.get_new(layout, "currentTick")?;
     let ammo = f.get_new(slot, "ammo")?;
     if o.trace {
         f.print(&[
-            Print::Str("[swap] tick "), Print::Val(tick), Print::Str(": ray ("), Print::Val(px), Print::Str(", "), Print::Val(py),
-            Print::Str(") -> ("), Print::Val(tx), Print::Str(", "), Print::Val(ty), Print::Str(")"),
+            Print::Str("[swap] tick "),
+            Print::Val(tick),
+            Print::Str(": ray ("),
+            Print::Val(px),
+            Print::Str(", "),
+            Print::Val(py),
+            Print::Str(") -> ("),
+            Print::Val(tx),
+            Print::Str(", "),
+            Print::Val(ty),
+            Print::Str(")"),
         ])?;
     }
-    let best = get_g(&mut f, st.best);
     let found = f.label();
     f.jnotnull(best, found);
     if o.trace {
-        f.print(&[Print::Str("[swap] tick "), Print::Val(tick), Print::Str(": nothing in line of sight (ammo left "), Print::Val(ammo), Print::Str(")")])?;
+        f.print(&[
+            Print::Str("[swap] tick "),
+            Print::Val(tick),
+            Print::Str(": nothing in line of sight (ammo left "),
+            Print::Val(ammo),
+            Print::Str(")"),
+        ])?;
     }
     f.jmp(handled);
     f.place(found);
-    set_null(&mut f, st.best);
     let physics = f.get_new(best, "physics")?;
     f.jnull(physics, handled);
     let btype = f.get_new(best, "type")?;
@@ -274,8 +204,13 @@ fn build_use(code: &mut Code, st: &State, hit: RefFun, o: &Opts) -> Result<()> {
         f.jfalse(immovable, movable);
         if o.trace {
             f.print(&[
-                Print::Str("[swap] tick "), Print::Val(tick), Print::Str(": blocked by "), Print::Val(btype),
-                Print::Str(" (ammo left "), Print::Val(ammo), Print::Str(")"),
+                Print::Str("[swap] tick "),
+                Print::Val(tick),
+                Print::Str(": blocked by "),
+                Print::Val(btype),
+                Print::Str(" (ammo left "),
+                Print::Val(ammo),
+                Print::Str(")"),
             ])?;
         }
         f.jmp(handled);
@@ -292,15 +227,27 @@ fn build_use(code: &mut Code, st: &State, hit: RefFun, o: &Opts) -> Result<()> {
     f.set(ppos, "y", by)?;
     if o.trace {
         f.print(&[
-            Print::Str("[swap] tick "), Print::Val(tick), Print::Str(": player ("), Print::Val(px), Print::Str(", "), Print::Val(py),
-            Print::Str(") <-> "), Print::Val(btype), Print::Str(" ("), Print::Val(bx), Print::Str(", "), Print::Val(by),
-            Print::Str(") (ammo left "), Print::Val(ammo), Print::Str(")"),
+            Print::Str("[swap] tick "),
+            Print::Val(tick),
+            Print::Str(": player ("),
+            Print::Val(px),
+            Print::Str(", "),
+            Print::Val(py),
+            Print::Str(") <-> "),
+            Print::Val(btype),
+            Print::Str(" ("),
+            Print::Val(bx),
+            Print::Str(", "),
+            Print::Val(by),
+            Print::Str(") (ammo left "),
+            Print::Val(ammo),
+            Print::Str(")"),
         ])?;
-        set_g(&mut f, st.swap_tick, tick);
-        set_g(&mut f, st.swapped, best);
-        set_g(&mut f, st.player, player);
+        f.set_global(st.swap_tick, tick);
+        f.set_global(st.swapped, best);
+        f.set_global(st.player, player);
         for (g, v) in st.old.iter().zip([px, py, bx, by]) {
-            set_g(&mut f, *g, v);
+            f.set_global(*g, v);
         }
     }
 
@@ -328,22 +275,22 @@ fn build_check(code: &mut Code, st: &State, o: &Opts) -> Result<()> {
     let not_new = f.label();
     let one = f.const_i32(1);
     f.jne(tick, one, not_new);
-    set_null(&mut f, st.swapped);
-    set_null(&mut f, st.player);
+    f.clear_global(st.swapped);
+    f.clear_global(st.player);
     f.jmp(end);
     f.place(not_new);
 
-    let swapped = get_g(&mut f, st.swapped);
+    let swapped = f.get_global(st.swapped);
     f.jnull(swapped, end);
-    let player = get_g(&mut f, st.player);
+    let player = f.get_global(st.player);
     f.jnull(player, end);
-    let at = get_g(&mut f, st.swap_tick);
+    let at = f.get_global(st.swap_tick);
     let ct = f.const_i32(o.check_ticks);
     f.add(at, at, ct);
     f.jne(tick, at, end);
-    set_null(&mut f, st.swapped);
+    f.clear_global(st.swapped);
 
-    let old: Vec<Reg> = st.old.iter().map(|g| get_g(&mut f, *g)).collect();
+    let old: Vec<Reg> = st.old.iter().map(|g| f.get_global(*g)).collect();
     // distance of `obj` now to (x, y); also prints where it is
     let near = f.const_f64(NEAR);
     let report = |f: &mut FnBuilder, who: &str, obj: Reg, x: Reg, y: Reg, whose: &str| -> Result<()> {
@@ -367,9 +314,18 @@ fn build_check(code: &mut Code, st: &State, o: &Opts) -> Result<()> {
         f.place(done);
         let name = f.get_new(obj, "type")?;
         f.print(&[
-            Print::Str("[swap] check: "), Print::Str(who), Print::Val(name), Print::Str(" at ("), Print::Val(nx), Print::Str(", "),
-            Print::Val(ny), Print::Str(&format!(") near {whose} old spot: ")), Print::Val(is_near), Print::Str(" (distance "),
-            Print::Val(d), Print::Str(")"),
+            Print::Str("[swap] check: "),
+            Print::Str(who),
+            Print::Val(name),
+            Print::Str(" at ("),
+            Print::Val(nx),
+            Print::Str(", "),
+            Print::Val(ny),
+            Print::Str(&format!(") near {whose} old spot: ")),
+            Print::Val(is_near),
+            Print::Str(" (distance "),
+            Print::Val(d),
+            Print::Str(")"),
         ])?;
         Ok(())
     };

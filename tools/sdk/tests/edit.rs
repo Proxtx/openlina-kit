@@ -45,9 +45,11 @@ fn insert_then_remove_is_identity_everywhere() {
 #[test]
 fn to_inserted_redirects_forward_jumps() {
     let Some(code) = load() else { return };
-    let fun = code.bc.functions.iter().find(|f| {
-        f.ops.iter().enumerate().any(|(p, op)| jump_targets(op, p).iter().any(|&t| t > p + 1))
-    });
+    let fun = code
+        .bc
+        .functions
+        .iter()
+        .find(|f| f.ops.iter().enumerate().any(|(p, op)| jump_targets(op, p).iter().any(|&t| t > p + 1)));
     let fun = fun.unwrap();
     let (p, t) = fun
         .ops

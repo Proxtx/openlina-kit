@@ -117,8 +117,12 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     if trace {
         let name = f.get_new(ty, "name")?;
         f.print(&[
-            Print::Str("[ammo-boost] "), Print::Val(name), Print::Str(": ammo "), Print::Val(ammo),
-            Print::Str(" -> "), Print::Val(out),
+            Print::Str("[ammo-boost] "),
+            Print::Val(name),
+            Print::Str(": ammo "),
+            Print::Val(ammo),
+            Print::Str(" -> "),
+            Print::Val(out),
         ])?;
     }
     f.ret(out);
@@ -181,15 +185,28 @@ fn report_slots(code: &mut Code) -> Result<()> {
         let odd = f.label();
         f.jne(rem, zero, odd);
         f.print(&[
-            Print::Str("[ammo-boost] level start slot "), Print::Val(i), Print::Str(": "), Print::Val(name),
-            Print::Str(" ammo "), Print::Val(ammo), Print::Str(" = "), Print::Val(base), Print::Str(" x "),
+            Print::Str("[ammo-boost] level start slot "),
+            Print::Val(i),
+            Print::Str(": "),
+            Print::Val(name),
+            Print::Str(" ammo "),
+            Print::Val(ammo),
+            Print::Str(" = "),
+            Print::Val(base),
+            Print::Str(" x "),
             Print::Val(ratio),
         ])?;
         f.jmp(skip);
         f.place(odd);
         f.print(&[
-            Print::Str("[ammo-boost] level start slot "), Print::Val(i), Print::Str(": "), Print::Val(name),
-            Print::Str(" ammo "), Print::Val(ammo), Print::Str(", base "), Print::Val(base),
+            Print::Str("[ammo-boost] level start slot "),
+            Print::Val(i),
+            Print::Str(": "),
+            Print::Val(name),
+            Print::Str(" ammo "),
+            Print::Val(ammo),
+            Print::Str(", base "),
+            Print::Val(base),
             Print::Str(" (not a multiple)"),
         ])?;
         f.place(skip);

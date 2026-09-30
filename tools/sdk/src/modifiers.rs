@@ -48,7 +48,12 @@ pub fn id_of(key: &str) -> i32 {
 pub fn register(code: &mut Code, m: &Modifier) -> Result<i32> {
     let id = id_of(m.key);
     let marker = format!("modifier/{id}");
-    if code.bc.functions.iter().any(|f| code.func_location(f).is_some_and(|l| l.starts_with(&format!("openlina/{marker}:")))) {
+    if code
+        .bc
+        .functions
+        .iter()
+        .any(|f| code.func_location(f).is_some_and(|l| l.starts_with(&format!("openlina/{marker}:"))))
+    {
         bail!("modifier id {id} (key `{}`) is already registered by another mod", m.key);
     }
     // A marker function records the registration in the bytecode.
@@ -81,7 +86,14 @@ pub fn register(code: &mut Code, m: &Modifier) -> Result<i32> {
     let cur_mod = current_modifier(&mut f)?;
     let want = f.const_i32(id);
     f.jne(cur_mod, want, no);
-    let name = crate::anims::ensure(&mut f, "fish.game.oclass.OClass_optionthingos", &format!("openlina_mod_{id}"), m.icon, m.size, no)?;
+    let name = crate::anims::ensure(
+        &mut f,
+        "fish.game.oclass.OClass_optionthingos",
+        &format!("openlina_mod_{id}"),
+        m.icon,
+        m.size,
+        no,
+    )?;
     let sprite = f.get_new(icon, "sprite")?;
     f.call_new(set_anim, &[sprite, name])?;
     let zero = f.const_i32(0);

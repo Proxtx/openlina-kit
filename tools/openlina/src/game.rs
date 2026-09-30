@@ -63,7 +63,13 @@ pub fn read_bytecode(game: &Path) -> Result<Vec<u8>> {
 /// `headless` runs without any window or display server: SDL's `offscreen` video driver renders
 /// through EGL (Mesa). The game runs normally (faster than real time), which is what automated
 /// tests need.
-pub fn command(game: &Path, run_dir: &Path, bytecode: Option<&Path>, timeout: Option<u64>, headless: bool) -> Result<Command> {
+pub fn command(
+    game: &Path,
+    run_dir: &Path,
+    bytecode: Option<&Path>,
+    timeout: Option<u64>,
+    headless: bool,
+) -> Result<Command> {
     let mut ld = game.as_os_str().to_owned();
     if let Some(old) = std::env::var_os("LD_LIBRARY_PATH") {
         ld.push(":");
@@ -89,6 +95,12 @@ pub fn command(game: &Path, run_dir: &Path, bytecode: Option<&Path>, timeout: Op
 }
 
 /// Run the game (see [`command`]) with inherited stdio.
-pub fn launch(game: &Path, run_dir: &Path, bytecode: Option<&Path>, timeout: Option<u64>, headless: bool) -> Result<ExitStatus> {
+pub fn launch(
+    game: &Path,
+    run_dir: &Path,
+    bytecode: Option<&Path>,
+    timeout: Option<u64>,
+    headless: bool,
+) -> Result<ExitStatus> {
     command(game, run_dir, bytecode, timeout, headless)?.status().context("launching the game")
 }

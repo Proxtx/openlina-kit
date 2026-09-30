@@ -59,7 +59,7 @@ through walls and only movable objects count. Anything with a Box2D fixture can 
 vines, enemies, the other player in co-op.
 
 The ray is the game's own Box2D ray cast (native `world_ray_cast`, as used by the Line of Sight behavior
-`fish.system.beh.LOS`) with an injected callback that keeps the nearest hit and skips Lina herself. Pool entry, HUD
+`fish.system.beh.LOS`) through `openlina_sdk::physics::RayCast`: the nearest hit, Lina herself skipped. Pool entry, HUD
 icon and label via `openlina_sdk::items`; icon drawn from `art/icon.toml`.
 
 Source: `mods/swap/src/main.rs`. Requires `core`.
@@ -73,11 +73,11 @@ Source: `mods/swap/src/main.rs`. Requires `core`.
 | `check_ticks` | `12` | With `trace`: ticks after a swap at which both positions are read back and compared. |
 | `trace` | `false` | Print every shot (`[swap] tick T: ray …`, `player (x, y) <-> box (x, y)`, `nothing in line of sight`, `blocked by <type>`, with the ammo left) and the check after each swap (`[swap] check: … near the object's old spot: true`). |
 
-Tests (`mods/swap/tests/`, 7 scenarios): in the pool with 3 shots; `ammo` option; a box right of Lina is swapped
+Tests (`mods/swap/tests/`, 8 scenarios): in the pool with 3 shots; `ammo` option; a box right of Lina is swapped
 and both positions hold 12 ticks later (read back from the game); aiming up at a box in the air swaps Lina up and
 the box down (showcase `media/swap-up.gif`, also `media/swap-box.gif`); firing into the empty sky swaps nothing but
 uses the shot; `walls_block` in both directions (the platform under Lina blocks a downward shot at a box below it;
-with `walls_block = false` the same shot swaps).
+with `walls_block = false` the same shot swaps); the swap checked by the `trace-positions` fixture alone.
 
 ## tumble (levels)
 
@@ -175,6 +175,16 @@ options = { functions = ["fish.game.evsheet.EvSheet_gameplay.update", "3751"], f
 Subscribes to `tick`. Spawns an object at layout tick `tick` of every gameplay layout: `object` (default `"box"`) at (`x`, `y`)
 (default 300, 60) on layer `layer`. It's a test fixture: with `screen-wrap`, the box falls through the floor
 and wraps forever.
+
+Several objects: `spawns = ["box@60:300,60", "s_ball@90:420,40"]` (`<type>@<tick>:<x>,<y>`, layer 0) instead of
+the single-object options.
+
+## trace-positions (dev)
+
+Test fixture: at every tick in `ticks` (`"60-600/60"`, `"130"`, `"59,72,200-260/20"`), prints
+`[pos] tick <t> <type> <x> <y>` for each object in `physics_obj` whose type is in `types` (default `["player"]`,
+`["*"]` for all). Scenarios check it with `[[expect]] position = { tick, type, x, y, within, away }`, so a test
+can see where things are without relying on the mod under test to print it (see `mods/swap/tests/swap-positions.toml`).
 
 ## harness (dev)
 

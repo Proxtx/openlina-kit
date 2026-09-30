@@ -222,7 +222,11 @@ fn install(data: &Path, path: &Path, yes: bool) -> Result<()> {
     };
     // A pack: modpack.toml + mods/<id>/. Else one mod, at the root or in a single folder.
     let root = find_root(&src)?;
-    let mut incoming = if root.join("modpack.toml").is_file() { ModPack::load(&root.join("modpack.toml"))? } else { ModPack::default() };
+    let mut incoming = if root.join("modpack.toml").is_file() {
+        ModPack::load(&root.join("modpack.toml"))?
+    } else {
+        ModPack::default()
+    };
     let mut dirs = Vec::new();
     if root.join("mods").is_dir() {
         for e in std::fs::read_dir(root.join("mods"))? {
@@ -301,7 +305,8 @@ fn find_root(dir: &Path) -> Result<PathBuf> {
     if dir.join("modpack.toml").is_file() || dir.join("mod.toml").is_file() || dir.join("mods").is_dir() {
         return Ok(dir.to_path_buf());
     }
-    let subdirs: Vec<_> = std::fs::read_dir(dir)?.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.is_dir()).collect();
+    let subdirs: Vec<_> =
+        std::fs::read_dir(dir)?.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.is_dir()).collect();
     match subdirs.as_slice() {
         [one] => Ok(one.clone()),
         _ => Ok(dir.to_path_buf()),

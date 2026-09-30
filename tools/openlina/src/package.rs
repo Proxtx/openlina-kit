@@ -92,7 +92,11 @@ pub fn zip_dir(src: &Path, prefix: &str, zip: &mut zip::ZipWriter<impl Write + S
     files.sort();
     let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
     for (rel, path) in files {
-        let name = if prefix.is_empty() { rel.to_string_lossy().to_string() } else { format!("{prefix}/{}", rel.to_string_lossy()) };
+        let name = if prefix.is_empty() {
+            rel.to_string_lossy().to_string()
+        } else {
+            format!("{prefix}/{}", rel.to_string_lossy())
+        };
         let mode = if is_executable(&path) { 0o755 } else { 0o644 };
         zip.start_file(name.replace('\\', "/"), opts.unix_permissions(mode))?;
         zip.write_all(&std::fs::read(&path)?)?;

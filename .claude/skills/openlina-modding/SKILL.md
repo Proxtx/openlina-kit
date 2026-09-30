@@ -16,9 +16,9 @@ lina doctor                      # toolchain, wasm target, ImageMagick, game: fi
 lina setup && lina dump && lina check   # pristine bytecode, searchable dump, validator self-test
 ```
 
-With nix, run everything inside `nix develop`. Without nix, Rust comes from rustup (`rust-toolchain.toml` pins
-the toolchain and adds the `wasm32-wasip1` target) and ImageMagick from the system's package manager; ask the
-user before installing anything. The game must be installed (Steam, Linux). Everything runs headless.
+With nix, run everything inside `nix develop`. Without nix, Rust comes from rustup (plus
+`rustup target add wasm32-wasip1`) and ImageMagick from the system's package manager. Ask the user before
+installing or updating anything, including rustup targets or toolchains. The game must be installed (Steam, Linux). Everything runs headless.
 
 ## A. A new mod
 

@@ -17,15 +17,14 @@ mods/<id>/        one crate per mod: mod.toml + src/main.rs (+ assets/, media/)
 modpack.toml      which mods `lina build` applies, and their options
 docs/             plan, game internals, mods
 flake.nix         dev shell: Rust + wasm32-wasip1 target, imagemagick, gifsicle (optional)
-rust-toolchain.toml  the same toolchain for rustup users
 lina, openlina    wrappers: build (if needed) and run the tools
 ```
 
 ## Quick start (development)
 
-With nix (`nix develop` gives Rust with the wasm target, imagemagick, gifsicle) or without it: install Rust with
-[rustup](https://rustup.rs) (the toolchain and the `wasm32-wasip1` target come from `rust-toolchain.toml`) and,
-for gifs, ImageMagick (and optionally gifsicle) from your package manager.
+With nix (`nix develop` gives Rust with the wasm target, imagemagick, gifsicle) or without it: a recent Rust from
+[rustup](https://rustup.rs) plus `rustup target add wasm32-wasip1`, and for gifs ImageMagick (optionally gifsicle)
+from your package manager. The kit never installs toolchains by itself; `./lina doctor` says what is missing.
 
 ```bash
 nix develop         # optional

@@ -38,7 +38,9 @@ fn new_fn(code: &mut Code, body: impl FnOnce(&mut FnBuilder)) {
 fn gameplay_code_is_clean() {
     let Some(found) = check(|code| {
         new_fn(code, |f| f.print(&[Print::Str("hello")]).unwrap());
-    }) else { return };
+    }) else {
+        return;
+    };
     assert!(found.is_empty(), "{found:?}");
 }
 
@@ -56,7 +58,9 @@ fn file_and_program_access_is_found() {
             let prog = f.string_obj("rm").unwrap();
             f.call_new(cmd, &[prog, args]).unwrap();
         });
-    }) else { return };
+    }) else {
+        return;
+    };
     assert!(found.iter().any(|f| f.starts_with("[files]") && f.contains("getContent")), "{found:?}");
     assert!(found.iter().any(|f| f.starts_with("[programs]") && f.contains("command")), "{found:?}");
 }
@@ -70,7 +74,12 @@ fn tampering_with_existing_code_and_constants_is_found() {
         openlina_sdk::edit::insert_ops(f, 0, vec![Opcode::Label], openlina_sdk::edit::Incoming::ToOriginal);
         let i = code.bc.strings.iter().position(|s| s.as_str() == "userdata").unwrap();
         code.bc.strings[i] = "../../.ssh".into();
-    }) else { return };
-    assert!(found.iter().any(|f| f.starts_with("[files]") && f.contains("changes `sys.io.$File.getContent`")), "{found:?}");
+    }) else {
+        return;
+    };
+    assert!(
+        found.iter().any(|f| f.starts_with("[files]") && f.contains("changes `sys.io.$File.getContent`")),
+        "{found:?}"
+    );
     assert!(found.iter().any(|f| f.starts_with("[constants]") && f.contains("userdata")), "{found:?}");
 }

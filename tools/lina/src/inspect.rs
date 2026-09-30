@@ -11,10 +11,23 @@ use hlbc_decompiler::fmt::FormatOptions;
 use openlina_sdk::edit::call_target;
 use openlina_sdk::Code;
 
-/// Resolve `1234` or `pkg.Class.method`.
+/// Resolve `1234`, `pkg.Class.method`, or the name of a function a mod injected (`swap/use`,
+/// `hook/tick`: the name given to `FnBuilder::new`, shown in dumps and stack traces).
 pub fn resolve(code: &Code, spec: &str) -> Result<RefFun> {
     if let Ok(i) = spec.parse::<usize>() {
         return Ok(RefFun(i));
+    }
+    if spec.contains('/') {
+        let found: Vec<RefFun> =
+            code.bc.functions.iter().map(|f| f.findex).filter(|&f| code.func_name(f) == spec).collect();
+        return match found.as_slice() {
+            [one] => Ok(*one),
+            [] => bail!("no injected function `{spec}` (patched bytecode: `--input work/hlboot.modded.dat`)"),
+            many => bail!(
+                "`{spec}` is ambiguous: fn@{}",
+                many.iter().map(|f| f.0.to_string()).collect::<Vec<_>>().join(", fn@")
+            ),
+        };
     }
     let (class, name) = spec.rsplit_once('.').context("expected `Class.method` or a findex")?;
     code.method(class, name)
@@ -89,9 +102,8 @@ pub fn callers(input: &Path, spec: &str) -> Result<()> {
 pub fn strings(input: &Path, pattern: &str) -> Result<()> {
     let code = Code::load(input)?;
     let pat = pattern.to_lowercase();
-    let hits: Vec<usize> = (0..code.bc.strings.len())
-        .filter(|&i| code.bc.strings[i].to_lowercase().contains(&pat))
-        .collect();
+    let hits: Vec<usize> =
+        (0..code.bc.strings.len()).filter(|&i| code.bc.strings[i].to_lowercase().contains(&pat)).collect();
     if hits.is_empty() {
         bail!("no string contains `{pattern}`");
     }

@@ -14,6 +14,7 @@
 //! requires = ["core"]              # must be in the pack; applied before this mod
 //! after = []                       # applied before this mod if present
 //! conflicts = []
+//! showcase = ["best.gif"]          # media/ gifs, in the website's order (others follow)
 //!
 //! [options.coins]
 //! type = "bool"                    # bool | int | float | string | list (of strings)
@@ -78,6 +79,10 @@ pub struct ModInfo {
     pub after: Vec<String>,
     #[serde(default)]
     pub conflicts: Vec<String>,
+    /// Showcase gifs in `media/` in the order the website shows them (the first leads); gifs
+    /// not listed follow alphabetically.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub showcase: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -144,10 +149,7 @@ impl ModManifest {
             out.insert(k.clone(), o.default.clone());
         }
         for (k, v) in user {
-            let spec = self
-                .options
-                .get(k)
-                .with_context(|| format!("mod `{}` has no option `{k}`", self.info.id))?;
+            let spec = self.options.get(k).with_context(|| format!("mod `{}` has no option `{k}`", self.info.id))?;
             out.insert(k.clone(), spec.check(k, v)?);
         }
         Ok(out)
@@ -244,11 +246,11 @@ pub fn resolve_order(mods: &[ModManifest]) -> Result<Vec<usize>> {
     let mut done = BTreeSet::new();
     let mut order = Vec::new();
     while order.len() < mods.len() {
-        let mut ready: Vec<usize> = (0..mods.len())
-            .filter(|i| !done.contains(i) && deps(&mods[*i]).iter().all(|d| done.contains(d)))
-            .collect();
+        let mut ready: Vec<usize> =
+            (0..mods.len()).filter(|i| !done.contains(i) && deps(&mods[*i]).iter().all(|d| done.contains(d))).collect();
         if ready.is_empty() {
-            let stuck: Vec<_> = (0..mods.len()).filter(|i| !done.contains(i)).map(|i| mods[i].info.id.clone()).collect();
+            let stuck: Vec<_> =
+                (0..mods.len()).filter(|i| !done.contains(i)).map(|i| mods[i].info.id.clone()).collect();
             bail!("dependency cycle between {}", stuck.join(", "));
         }
         ready.sort_by_key(|&i| (mods[i].info.section != Section::Core, mods[i].info.id.clone()));
@@ -277,7 +279,11 @@ mod tests {
 
     #[test]
     fn order_puts_dependencies_and_core_first() {
-        let mods = [m("zeta", "items", &["core"], &["alpha"]), m("alpha", "items", &["core"], &[]), m("core", "core", &[], &[])];
+        let mods = [
+            m("zeta", "items", &["core"], &["alpha"]),
+            m("alpha", "items", &["core"], &[]),
+            m("core", "core", &[], &[]),
+        ];
         assert_eq!(ids(&mods), ["core", "alpha", "zeta"]);
     }
 

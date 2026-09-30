@@ -81,7 +81,12 @@ fn agent() -> ureq::Agent {
 /// The body of a response, or an error with the site's `{"error": …}` message.
 fn read(mut res: ureq::http::Response<ureq::Body>, what: &str) -> Result<Vec<u8>> {
     let status = res.status();
-    let body = res.body_mut().with_config().limit(256 << 20).read_to_vec().with_context(|| format!("{what}: reading the response"))?;
+    let body = res
+        .body_mut()
+        .with_config()
+        .limit(256 << 20)
+        .read_to_vec()
+        .with_context(|| format!("{what}: reading the response"))?;
     if !status.is_success() {
         let msg = serde_json::from_slice::<Value>(&body)
             .ok()
@@ -169,8 +174,12 @@ fn pack_url(pack: &str) -> Result<String> {
         ensure!(u.contains("/api/packs/"), "`{pack}` is not a pack link (…/api/packs/<id>)");
         return Ok(u.to_string());
     }
-    ensure!(!pack.is_empty() && pack.chars().all(|c| c.is_ascii_alphanumeric()), "`{pack}` is neither a pack link nor a pack id");
-    let site = load_config()?.site.context("a bare pack id needs `lina login <site> …` first (or pass the full link)")?;
+    ensure!(
+        !pack.is_empty() && pack.chars().all(|c| c.is_ascii_alphanumeric()),
+        "`{pack}` is neither a pack link nor a pack id"
+    );
+    let site =
+        load_config()?.site.context("a bare pack id needs `lina login <site> …` first (or pass the full link)")?;
     Ok(format!("{site}/api/packs/{pack}"))
 }
 
@@ -214,7 +223,11 @@ pub fn pull(pack: &str, mods_dir: &Path, force: bool) -> Result<()> {
                         std::fs::remove_dir_all(&q)?;
                     }
                     openlina::copy_dir(&root, &q)?;
-                    format!("{}: NOT extracted, its source breaks the kit's rules ({why}); it is in {} for you to read", m.id, q.display())
+                    format!(
+                        "{}: NOT extracted, its source breaks the kit's rules ({why}); it is in {} for you to read",
+                        m.id,
+                        q.display()
+                    )
                 }
                 Ok(()) => {
                     if dst.exists() {
@@ -245,7 +258,11 @@ pub fn pull(pack: &str, mods_dir: &Path, force: bool) -> Result<()> {
             format!("{}: {} has no source (wasm only); it can be installed but not changed", m.id, m.version)
         };
         std::fs::remove_dir_all(&tmp)?;
-        let note = if m.status == "reviewed" { note } else { format!("{note}. WARNING: {} on the site", m.status.to_uppercase()) };
+        let note = if m.status == "reviewed" {
+            note
+        } else {
+            format!("{note}. WARNING: {} on the site", m.status.to_uppercase())
+        };
         println!("  {note}");
         notes.push(note);
     }
@@ -374,7 +391,9 @@ fn check_source(src: &Path, id: &str) -> std::result::Result<(), String> {
             "package" => {
                 let p = v.as_table().ok_or("[package] is not a table")?;
                 for (pk, pv) in p {
-                    if !["name", "version", "edition", "publish", "description", "authors", "license"].contains(&pk.as_str()) {
+                    if !["name", "version", "edition", "publish", "description", "authors", "license"]
+                        .contains(&pk.as_str())
+                    {
                         return Err(format!("[package] key `{pk}`"));
                     }
                     if pk == "name" && pv.as_str() != Some(&format!("openlina-mod-{id}")) {
@@ -397,9 +416,13 @@ fn check_source(src: &Path, id: &str) -> std::result::Result<(), String> {
             }
             "dependencies" => {
                 for (dep, spec) in v.as_table().ok_or("[dependencies] is not a table")? {
-                    let ok = spec.as_table().is_some_and(|s| s.len() == 1 && s.get("workspace").and_then(|w| w.as_bool()) == Some(true));
+                    let ok = spec
+                        .as_table()
+                        .is_some_and(|s| s.len() == 1 && s.get("workspace").and_then(|w| w.as_bool()) == Some(true));
                     if !ok || !workspace.contains_key(dep) {
-                        return Err(format!("dependency `{dep}` (only `<name>.workspace = true` of the kit's workspace dependencies)"));
+                        return Err(format!(
+                            "dependency `{dep}` (only `<name>.workspace = true` of the kit's workspace dependencies)"
+                        ));
                     }
                 }
             }
@@ -433,6 +456,48 @@ fn options_list(dir: &Path, chosen: &toml::Table) -> Result<String> {
 
 // ---------------------------------------------------------------------- publish
 
+/// Hash of everything a mod's test results depend on in this checkout: the mod, core, the test
+/// harness and fixtures, the SDK.
+fn source_fingerprint(id: &str) -> Result<String> {
+    fn walk(dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
+        if !dir.is_dir() {
+            return Ok(());
+        }
+        for e in std::fs::read_dir(dir)? {
+            let p = e?.path();
+            let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            if name.starts_with('.') || name == "target" {
+                continue;
+            }
+            if p.is_dir() {
+                walk(&p, out)?;
+            } else {
+                out.push(p);
+            }
+        }
+        Ok(())
+    }
+    let mut files = Vec::new();
+    for d in [
+        format!("mods/{id}"),
+        "mods/core".into(),
+        "mods/harness".into(),
+        "mods/debug-spawn".into(),
+        "mods/trace-positions".into(),
+        "mods/trace-calls".into(),
+        "tools/sdk/src".into(),
+    ] {
+        walk(Path::new(&d), &mut files)?;
+    }
+    files.sort();
+    let mut h = Sha256::new();
+    for f in files {
+        h.update(f.to_string_lossy().as_bytes());
+        h.update(std::fs::read(&f)?);
+    }
+    Ok(h.finalize().iter().map(|b| format!("{b:02x}")).collect())
+}
+
 pub fn publish(game: impl FnOnce() -> Result<PathBuf>, id: &str, yes: bool, test: bool) -> Result<()> {
     let (site, token) = site_and_token()?;
     let dir = PathBuf::from("mods").join(id);
@@ -441,22 +506,40 @@ pub fn publish(game: impl FnOnce() -> Result<PathBuf>, id: &str, yes: bool, test
     let me = get_json(&format!("{site}/api/me"), Some(&token)).context("checking the login")?;
 
     // Is this version new on the site?
-    let res = agent().get(&format!("{site}/api/mods/{id}")).call().with_context(|| format!("GET {site}/api/mods/{id}"))?;
-    let existing = if res.status() == 404 { None } else { Some(serde_json::from_slice::<Value>(&read(res, "mod lookup")?)?) };
+    let res =
+        agent().get(&format!("{site}/api/mods/{id}")).call().with_context(|| format!("GET {site}/api/mods/{id}"))?;
+    let existing =
+        if res.status() == 404 { None } else { Some(serde_json::from_slice::<Value>(&read(res, "mod lookup")?)?) };
     if let Some(e) = &existing {
-        let versions: Vec<&str> = e["versions"].as_array().into_iter().flatten().filter_map(|v| v["version"].as_str()).collect();
-        ensure!(!versions.contains(&version.as_str()), "{id} {version} is on the site already; bump `version` in mods/{id}/mod.toml");
+        let versions: Vec<&str> =
+            e["versions"].as_array().into_iter().flatten().filter_map(|v| v["version"].as_str()).collect();
+        ensure!(
+            !versions.contains(&version.as_str()),
+            "{id} {version} is on the site already; bump `version` in mods/{id}/mod.toml"
+        );
         if e["uploaded_by"].as_str() != me["name"].as_str() && me["admin"].as_bool() != Some(true) {
-            println!("note: {id} was uploaded by {}; the site only accepts new versions from its owner", e["uploaded_by"]);
+            println!(
+                "note: {id} was uploaded by {}; the site only accepts new versions from its owner",
+                e["uploaded_by"]
+            );
         }
     }
 
-    if test {
+    // The dry run tests; `--yes` right after it doesn't repeat that for the same sources.
+    let stamp = PathBuf::from("work/publish").join(format!("{id}.tested"));
+    let fingerprint = source_fingerprint(id)?;
+    let tested = std::fs::read_to_string(&stamp).is_ok_and(|s| s.trim() == fingerprint);
+    if test && tested {
+        println!("scenarios passed (wasm) for exactly these sources already; not running them again");
+    } else if test {
         let files = crate::scenario::find(&[], Some(id))?;
         if files.is_empty() {
             println!("warning: {id} has no scenarios (mods/{id}/tests/*.toml); publishing untested");
         } else {
-            crate::scenario::test(&game()?, &files, true).context("the mod's scenarios fail (wasm); fix them before publishing")?;
+            crate::scenario::test(&game()?, &files, true)
+                .context("the mod's scenarios fail (wasm); fix them before publishing")?;
+            std::fs::create_dir_all(stamp.parent().unwrap())?;
+            std::fs::write(&stamp, &fingerprint)?;
         }
     }
 
@@ -474,7 +557,13 @@ pub fn publish(game: impl FnOnce() -> Result<PathBuf>, id: &str, yes: bool, test
     archive.by_name(&format!("{id}/mod.toml"))?.read_to_string(&mut toml_text)?;
 
     println!("\nPublish to {site} as {}:", me["name"].as_str().unwrap_or("?"));
-    println!("  {} {version} ({}), {:.0} KB, {}", m.info.name, id, bytes.len() as f64 / 1024.0, if existing.is_some() { "new version" } else { "new mod" });
+    println!(
+        "  {} {version} ({}), {:.0} KB, {}",
+        m.info.name,
+        id,
+        bytes.len() as f64 / 1024.0,
+        if existing.is_some() { "new version" } else { "new mod" }
+    );
     println!("  files: {}", files.len());
     for f in files.iter().filter(|f| !f.contains("/source/")) {
         println!("    {f}");
@@ -491,7 +580,13 @@ pub fn publish(game: impl FnOnce() -> Result<PathBuf>, id: &str, yes: bool, test
         .send(&bytes[..])
         .context("uploading")?;
     let v: Value = serde_json::from_slice(&read(res, "upload")?)?;
-    println!("uploaded {} {} ({}): {}", v["id"].as_str().unwrap_or(id), v["version"].as_str().unwrap_or(&version), v["status"].as_str().unwrap_or("?"), v["url"].as_str().unwrap_or(""));
+    println!(
+        "uploaded {} {} ({}): {}",
+        v["id"].as_str().unwrap_or(id),
+        v["version"].as_str().unwrap_or(&version),
+        v["status"].as_str().unwrap_or("?"),
+        v["url"].as_str().unwrap_or("")
+    );
     if v["status"] == "unreviewed" {
         println!("It shows as UNREVIEWED until a maintainer checks it.");
     }

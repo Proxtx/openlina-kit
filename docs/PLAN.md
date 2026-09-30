@@ -29,7 +29,7 @@ mosa-mod/                 (plain folder)
 - **Testing without synthetic input** (xdotool doesn't reach the game): a harness patch boots straight into a
   level, gives items, picks modifiers, replays scripted inputs through `PlayerInputs`, emits assertion trace
   lines, captures frames via Heaps → `lina gif`. Run under Xvfb where possible.
-- **Tools installed via nix** (flake devShells per repo), but nix is optional: `rust-toolchain.toml` + rustup,
+- **Tools installed via nix** (flake devShells per repo), but nix is optional: rustup + `rustup target add wasm32-wasip1`,
   `./lina doctor` checks a machine.
 - **Safety** (mods are code running with the player's rights): capability check after every mod (`caps`),
   `openlina allow` for the rare mod that needs more; unreviewed mods need a confirmation; pulled mods are

@@ -55,9 +55,11 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     let update = code.method("fish.game.evsheet.EvSheet_gameplay", "update")?;
     let fun = code.func(update)?.clone();
     let elem_type = |code: &Code, field: &str| -> Result<RefType> {
-        let at = openlina_sdk::edit::expect_one(openlina_sdk::edit::find_field_access(code, &fun, field, false), field)?;
-        let Some(i) = openlina_sdk::edit::next_match(&fun, at, |op| matches!(op, openlina_sdk::hlbc::opcodes::Opcode::ToVirtual { .. }))
-        else {
+        let at =
+            openlina_sdk::edit::expect_one(openlina_sdk::edit::find_field_access(code, &fun, field, false), field)?;
+        let Some(i) = openlina_sdk::edit::next_match(&fun, at, |op| {
+            matches!(op, openlina_sdk::hlbc::opcodes::Opcode::ToVirtual { .. })
+        }) else {
             anyhow::bail!("no element cast after `{field}`")
         };
         let openlina_sdk::hlbc::opcodes::Opcode::ToVirtual { dst, .. } = fun.ops[i] else { unreachable!() };
@@ -65,8 +67,13 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     };
     // `physics_obj` is read in many places; its element type is the type of the object whose
     // `edgewith` the edge test reads (a unique anchor, the same one `core` uses).
-    let ew = openlina_sdk::edit::expect_one(openlina_sdk::edit::find_field_access(code, &fun, "edgewith", false), "`.edgewith` read")?;
-    let openlina_sdk::hlbc::opcodes::Opcode::Field { obj: item, .. } = fun.ops[ew] else { anyhow::bail!("`.edgewith` read is not a Field") };
+    let ew = openlina_sdk::edit::expect_one(
+        openlina_sdk::edit::find_field_access(code, &fun, "edgewith", false),
+        "`.edgewith` read",
+    )?;
+    let openlina_sdk::hlbc::opcodes::Opcode::Field { obj: item, .. } = fun.ops[ew] else {
+        anyhow::bail!("`.edgewith` read is not a Field")
+    };
     let obj_t = fun.regs[item.0 as usize];
     let sec_t = elem_type(code, "secondary_physics").context("secondary_physics element type")?;
 
@@ -194,9 +201,19 @@ fn collide(f: &mut FnBuilder, o: &Opts, obj: Reg, boss: Reg, tick: Reg, next: La
     if o.trace {
         f.jfalse(bounced, next);
         f.print(&[
-            Print::Str("[solid-edges] tick "), Print::Val(tick), Print::Str(" "), Print::Val(ty), Print::Str(" at ("),
-            Print::Val(x), Print::Str(", "), Print::Val(y), Print::Str(") v ("), Print::Val(vx), Print::Str(", "),
-            Print::Val(vy), Print::Str(")"),
+            Print::Str("[solid-edges] tick "),
+            Print::Val(tick),
+            Print::Str(" "),
+            Print::Val(ty),
+            Print::Str(" at ("),
+            Print::Val(x),
+            Print::Str(", "),
+            Print::Val(y),
+            Print::Str(") v ("),
+            Print::Val(vx),
+            Print::Str(", "),
+            Print::Val(vy),
+            Print::Str(")"),
         ])?;
     }
     Ok(())

@@ -27,10 +27,7 @@ pub fn run(input: &Path, out: &Path) -> Result<()> {
     let mut by_class: HashMap<String, Vec<&Function>> = HashMap::new();
     let mut functions_tsv = String::from("findex\tname\tsignature\tlocation\tops\n");
     for f in &bc.functions {
-        let owner = f
-            .parent
-            .map(|p| code.type_name(p).replace('$', ""))
-            .unwrap_or_else(|| "_global".into());
+        let owner = f.parent.map(|p| code.type_name(p).replace('$', "")).unwrap_or_else(|| "_global".into());
         let _ = writeln!(
             functions_tsv,
             "{}\t{}\t{}\t{}\t{}",
@@ -54,11 +51,8 @@ pub fn run(input: &Path, out: &Path) -> Result<()> {
     for (i, t) in bc.types.iter().enumerate() {
         let Type::Obj(obj) = t else { continue };
         let name = obj.name(bc).to_string();
-        let fields: Vec<String> = obj
-            .own_fields
-            .iter()
-            .map(|f| format!("{}:{}", f.name(bc), code.type_name(f.t)))
-            .collect();
+        let fields: Vec<String> =
+            obj.own_fields.iter().map(|f| format!("{}:{}", f.name(bc), code.type_name(f.t))).collect();
         let sup = obj.super_.map(|s| code.type_name(s)).unwrap_or_default();
         let _ = writeln!(classes_tsv, "{i}\t{name}\t{sup}\t{}", fields.join(", "));
         if name.contains('$') {
@@ -108,9 +102,7 @@ fn decompile_class(code: &Code, obj: &TypeObj, failed: &mut usize) -> String {
     out.push_str(" {\n");
 
     let static_type = obj.get_static_type(bc);
-    let is_bound = |o: &TypeObj, i: usize| {
-        o.bindings.contains_key(&RefField(i + o.fields.len() - o.own_fields.len()))
-    };
+    let is_bound = |o: &TypeObj, i: usize| o.bindings.contains_key(&RefField(i + o.fields.len() - o.own_fields.len()));
     for (i, f) in obj.own_fields.iter().enumerate() {
         if !is_bound(obj, i) {
             let _ = writeln!(out, "  var {}: {};", f.name(bc), code.type_name(f.t));
@@ -135,19 +127,9 @@ fn decompile_class(code: &Code, obj: &TypeObj, failed: &mut usize) -> String {
     let opts = FormatOptions::new(2);
     for (fun, static_, dynamic) in methods {
         let Ok(f) = code.func(fun) else { continue };
-        let _ = writeln!(
-            out,
-            "\n  // fn@{} {}",
-            fun.0,
-            code.func_location(f).unwrap_or_default()
-        );
+        let _ = writeln!(out, "\n  // fn@{} {}", fun.0, code.func_location(f).unwrap_or_default());
         let text = catch_unwind(AssertUnwindSafe(|| {
-            let m = Method {
-                fun,
-                static_,
-                dynamic,
-                statements: hlbc_decompiler::decompile_code(bc, f),
-            };
+            let m = Method { fun, static_, dynamic, statements: hlbc_decompiler::decompile_code(bc, f) };
             let t = m.display(bc, &opts).to_string();
             t
         }));
@@ -192,17 +174,19 @@ pub fn disassemble_range(code: &Code, f: &Function, range: Option<std::ops::Rang
         if range.as_ref().is_some_and(|r| !r.contains(&i)) {
             continue;
         }
-        let line = f
-            .debug_info
-            .as_ref()
-            .and_then(|d| d.get(i))
-            .map(|(_, l)| format!("L{l}"))
-            .unwrap_or_default();
+        let line = f.debug_info.as_ref().and_then(|d| d.get(i)).map(|(_, l)| format!("L{l}")).unwrap_or_default();
         // hlbc prints the whole target Function for closure ops; show its findex instead.
         let text = match op {
-            hlbc::opcodes::Opcode::StaticClosure { dst, fun } => format!("{:<12} {dst} = closure fn@{} {}", "StaticClosure", fun.0, code.func_name(*fun)),
+            hlbc::opcodes::Opcode::StaticClosure { dst, fun } => {
+                format!("{:<12} {dst} = closure fn@{} {}", "StaticClosure", fun.0, code.func_name(*fun))
+            }
             hlbc::opcodes::Opcode::InstanceClosure { dst, fun, obj } => {
-                format!("{:<12} {dst} = closure fn@{} {} bound to {obj}", "InstanceClosure", fun.0, code.func_name(*fun))
+                format!(
+                    "{:<12} {dst} = closure fn@{} {} bound to {obj}",
+                    "InstanceClosure",
+                    fun.0,
+                    code.func_name(*fun)
+                )
             }
             _ => name_anonymous(code, &op.display(bc, f, i as i32, 12).to_string()),
         };

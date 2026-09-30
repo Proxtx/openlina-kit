@@ -68,7 +68,8 @@ pub fn build(input: Vec<u8>, packages: &[Package], pack: &ModPack) -> Result<Bui
         let t = std::time::Instant::now();
         bytes = patch::run(&p.patch, &bytes, id, &options, &info_toml).with_context(|| format!("applying `{id}`"))?;
         // The result must still be valid bytecode.
-        let after = openlina_sdk::Code::from_bytes(&bytes).with_context(|| format!("the bytecode after `{id}` does not parse"))?;
+        let after = openlina_sdk::Code::from_bytes(&bytes)
+            .with_context(|| format!("the bytecode after `{id}` does not parse"))?;
         let found = openlina_sdk::caps::diff(&snap, &before, &after);
         println!("  applied {id} {} ({:.1}s)", p.manifest.info.version, t.elapsed().as_secs_f64());
         if !found.is_empty() {

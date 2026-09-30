@@ -70,7 +70,8 @@ fn apply(code: &mut Code) -> Result<()> {
     ensure!(coin_call > ew_op, "coinedgecheck() is not after the edge test");
 
     // ---- anchors: secondary_physics loop
-    let sp = expect_one(find_field_access(code, &fun, "secondary_physics", false), "update reads `.secondary_physics`")?;
+    let sp =
+        expect_one(find_field_access(code, &fun, "secondary_physics", false), "update reads `.secondary_physics`")?;
     let pos_op = next_match(&fun, sp, |op| is_field(code, &fun, op, "position")).context("secondary `.position`")?;
     let Opcode::Field { dst: pos2, obj: sprite2, .. } = fun.ops[pos_op] else { unreachable!() };
     let sprite_load = prev_match(&fun, pos_op, |op| matches!(op, Opcode::Field { dst, .. } if *dst == sprite2))
@@ -148,7 +149,8 @@ fn packs_hook(code: &mut Code) -> Result<()> {
     let pm_t = code.class("fish.system.PackManager")?;
     let void = code.ty_void();
     let hook = hooks::define(code, "packs", &[pm_t], void)?;
-    let at = expect_one(find_calls(code.func(ctor)?, downloaded), "the PackManager constructor calls loadDownloadedLevels")?;
+    let at =
+        expect_one(find_calls(code.func(ctor)?, downloaded), "the PackManager constructor calls loadDownloadedLevels")?;
     let f = code.func_mut(ctor)?;
     let r = add_reg(f, void);
     insert_ops(f, at + 1, vec![call(r, hook, &[Reg(0)])], Incoming::ToInserted);
@@ -227,7 +229,8 @@ fn item_hooks(code: &mut Code) -> Result<()> {
     let slot_t = cfun.regs[slot.0 as usize];
     let use_hook = hooks::define(code, "item_use", &[slot_t, params[0], params[1], params[2]], bool_t)?;
     let f = code.func_mut(closure)?;
-    let (sheet, player, cross, ok) = (add_reg(f, params[0]), add_reg(f, params[1]), add_reg(f, params[2]), add_reg(f, bool_t));
+    let (sheet, player, cross, ok) =
+        (add_reg(f, params[0]), add_reg(f, params[1]), add_reg(f, params[2]), add_reg(f, bool_t));
     let ef = |dst, field: usize| Opcode::EnumField {
         dst,
         value: Reg(0),
@@ -292,10 +295,12 @@ fn modifier_hooks(code: &mut Code) -> Result<()> {
     let edge = code.method("fish.game.evsheet.EvSheet_edge_ev", "update")?;
     let fun = code.func(edge)?.clone();
     let m = expect_one(find_field_access(code, &fun, "modifier", false), "edge_ev.update reads `.modifier`")?;
-    let set = next_match(&fun, m, |op| is_set_field(code, &fun, op, "animFrame")).context("animFrame after `.modifier`")?;
+    let set =
+        next_match(&fun, m, |op| is_set_field(code, &fun, op, "animFrame")).context("animFrame after `.modifier`")?;
     ensure!(set - m <= 12, "animFrame is set {} ops after `.modifier`", set - m);
     let Opcode::SetField { obj: sprite, .. } = fun.ops[set] else { unreachable!() };
-    let load = prev_match(&fun, set, |op| matches!(op, Opcode::Field { dst, .. } if *dst == sprite)).context("sprite load")?;
+    let load =
+        prev_match(&fun, set, |op| matches!(op, Opcode::Field { dst, .. } if *dst == sprite)).context("sprite load")?;
     let Opcode::Field { obj: icon, .. } = fun.ops[load] else { unreachable!() };
     ensure!(fun.regs[icon.0 as usize] == icon_t, "icon register is not an OClass_optionthingos");
     let f = code.func_mut(edge)?;

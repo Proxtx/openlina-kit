@@ -19,6 +19,8 @@
 //! min = 2                           # ...at least 2 of them (default 1); `max` for an upper bound
 //! [[expect]]
 //! not_contains = "Uncaught"
+//! [[expect]]                        # needs the fixture `trace-positions` (prints `[pos]` lines)
+//! position = { tick = 130, type = "player", x = 412, y = 150, within = 6 }   # `away = true` inverts
 //!
 //! [gif]                             # used by `lina gif`
 //! capture = "60-420/2"              # level ticks from-to/step (120 ticks per second)
@@ -72,6 +74,78 @@ pub struct Expect {
     pub not_contains: Option<String>,
     pub min: Option<usize>,
     pub max: Option<usize>,
+    /// Where an object is at a tick, from the `trace-positions` fixture's `[pos]` lines.
+    pub position: Option<PositionExpect>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PositionExpect {
+    pub tick: i64,
+    #[serde(rename = "type")]
+    pub kind: String,
+    /// Omit x or y to check one axis only.
+    pub x: Option<f64>,
+    pub y: Option<f64>,
+    /// Allowed distance (layout units).
+    #[serde(default = "eight")]
+    pub within: f64,
+    /// Invert: no such object may be within `within` (e.g. "it left its spot").
+    #[serde(default)]
+    pub away: bool,
+}
+
+fn eight() -> f64 {
+    8.0
+}
+
+impl PositionExpect {
+    /// Failure message, if any.
+    fn check(&self, log: &str) -> Option<String> {
+        let prefix = format!("[pos] tick {} {} ", self.tick, self.kind);
+        let found: Vec<(f64, f64)> = log
+            .lines()
+            .filter_map(|l| l.strip_prefix(&prefix))
+            .filter_map(|rest| {
+                let mut it = rest.split_whitespace().map(|v| v.parse::<f64>());
+                Some((it.next()?.ok()?, it.next()?.ok()?))
+            })
+            .collect();
+        if found.is_empty() {
+            return Some(format!(
+                "no `{prefix}…` line: add the fixture `trace-positions` with `types` including {:?} and `ticks` including {}",
+                self.kind, self.tick
+            ));
+        }
+        let dist = |(x, y): (f64, f64)| {
+            let dx = self.x.map_or(0.0, |w| x - w);
+            let dy = self.y.map_or(0.0, |w| y - w);
+            (dx * dx + dy * dy).sqrt()
+        };
+        let best = found.iter().copied().min_by(|a, b| dist(*a).total_cmp(&dist(*b))).unwrap();
+        let near = dist(best) <= self.within;
+        let want = format!(
+            "({}, {})",
+            self.x.map_or("*".into(), |v| v.to_string()),
+            self.y.map_or("*".into(), |v| v.to_string())
+        );
+        match (near, self.away) {
+            (false, false) => Some(format!(
+                "{} at tick {}: expected within {} of {want}, nearest at ({}, {}), {:.1} away",
+                self.kind,
+                self.tick,
+                self.within,
+                best.0,
+                best.1,
+                dist(best)
+            )),
+            (true, true) => Some(format!(
+                "{} at tick {}: expected none within {} of {want}, found one at ({}, {})",
+                self.kind, self.tick, self.within, best.0, best.1
+            )),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -116,7 +190,25 @@ impl Scenario {
 }
 
 /// Build and run a scenario headless. Returns (exit code, log).
-fn run(game: &Path, sc: &Scenario, extra_harness: toml::Table, wasm: bool, work: &Path) -> Result<(Option<i32>, String)> {
+fn run(
+    game: &Path,
+    sc: &Scenario,
+    extra_harness: toml::Table,
+    wasm: bool,
+    work: &Path,
+) -> Result<(Option<i32>, String)> {
+    let mut extra_harness = extra_harness;
+    // Frame capture outside `lina gif` (e.g. `capture` in a scenario's [harness] to look at a
+    // probe run): the frames go to <work>/frames, which must exist.
+    let capturing = sc.harness.contains_key("capture") || extra_harness.contains_key("capture");
+    if capturing && !sc.harness.contains_key("capture_dir") && !extra_harness.contains_key("capture_dir") {
+        let frames = work.join("frames");
+        std::fs::create_dir_all(&frames)?;
+        extra_harness.insert(
+            "capture_dir".into(),
+            toml::Value::String(std::fs::canonicalize(&frames)?.to_string_lossy().into()),
+        );
+    }
     let pack = sc.pack(extra_harness)?;
     let overlay = work.join("game");
     let bytes = build::build_pack(game, &pack, wasm, &overlay)?;
@@ -128,15 +220,26 @@ fn run(game: &Path, sc: &Scenario, extra_harness: toml::Table, wasm: bool, work:
         std::fs::remove_file(&userdata).or_else(|_| std::fs::remove_dir_all(&userdata))?;
     }
     std::fs::create_dir(&userdata)?;
-    let out = openlina::game::command(game, &std::fs::canonicalize(&overlay)?, Some(&overlay.join("hlboot.dat")), Some(sc.timeout), true)?
-        .output()
-        .context("running the game")?;
+    let out = openlina::game::command(
+        game,
+        &std::fs::canonicalize(&overlay)?,
+        Some(&overlay.join("hlboot.dat")),
+        Some(sc.timeout),
+        true,
+    )?
+    .output()
+    .context("running the game")?;
     let mut log = String::from_utf8_lossy(&out.stdout).to_string();
     log.push_str(&String::from_utf8_lossy(&out.stderr));
     // Steam's client library is chatty; keep the log readable.
     let log: String = log
         .lines()
-        .filter(|l| !l.starts_with("[S_API") && !l.starts_with("[STEAM]") && !l.starts_with("Setting breakpad") && !l.starts_with("SteamInternal"))
+        .filter(|l| {
+            !l.starts_with("[S_API")
+                && !l.starts_with("[STEAM]")
+                && !l.starts_with("Setting breakpad")
+                && !l.starts_with("SteamInternal")
+        })
         .map(|l| format!("{l}\n"))
         .collect();
     std::fs::write(work.join("log.txt"), &log)?;
@@ -168,6 +271,11 @@ fn check(sc: &Scenario, code: Option<i32>, log: &str) -> Vec<String> {
                 if n > max {
                     fails.push(format!("expected at most {max} line(s) containing {text:?}, found {n}"));
                 }
+            }
+        }
+        if let Some(p) = &e.position {
+            if let Some(msg) = p.check(log) {
+                fails.push(msg);
             }
         }
         if let Some(text) = &e.not_contains {
@@ -290,7 +398,12 @@ pub fn gif(game: &Path, file: &Path, out: Option<&Path>) -> Result<()> {
 
 /// ImageMagick 7 is `magick`, ImageMagick 6 (still common in distributions) is `convert`.
 pub fn magick() -> &'static str {
-    let works = |c: &str| Command::new(c).arg("-version").output().is_ok_and(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).contains("ImageMagick"));
+    let works = |c: &str| {
+        Command::new(c)
+            .arg("-version")
+            .output()
+            .is_ok_and(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).contains("ImageMagick"))
+    };
     if works("magick") {
         "magick"
     } else if works("convert") {

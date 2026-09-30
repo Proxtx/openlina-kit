@@ -28,13 +28,16 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     for name in names {
         let target = if let Some(hook) = name.strip_prefix("hook:") {
             openlina_sdk::hooks::find(code, hook)?
-        } else { match name.parse::<usize>() {
-            Ok(i) => openlina_sdk::hlbc::types::RefFun(i),
-            Err(_) => {
-                let (class, method) = name.rsplit_once('.').ok_or_else(|| anyhow::anyhow!("bad function `{name}`"))?;
-                code.method(class, method)?
+        } else {
+            match name.parse::<usize>() {
+                Ok(i) => openlina_sdk::hlbc::types::RefFun(i),
+                Err(_) => {
+                    let (class, method) =
+                        name.rsplit_once('.').ok_or_else(|| anyhow::anyhow!("bad function `{name}`"))?;
+                    code.method(class, method)?
+                }
             }
-        } };
+        };
         let label = code.func_name(target);
         // Anonymous closures all print as `<anonymous>`: the findex and source location tell them apart.
         let place = match code.func(target).ok().and_then(|f| code.func_location(f)) {
@@ -59,7 +62,13 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
         }
         f.jmp(done);
         f.place(print);
-        f.print(&[Print::Str("[trace-calls] "), Print::Str(&label), Print::Str(" call #"), Print::Val(n), Print::Str(&place)])?;
+        f.print(&[
+            Print::Str("[trace-calls] "),
+            Print::Str(&label),
+            Print::Str(" call #"),
+            Print::Val(n),
+            Print::Str(&place),
+        ])?;
         f.place(done);
         f.ret_void();
         let hook = f.finish()?;

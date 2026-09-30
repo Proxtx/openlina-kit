@@ -33,7 +33,13 @@ pub fn doctor(game_dir: Option<PathBuf>) -> Result<()> {
     let nix = std::env::var_os("IN_NIX_SHELL").is_some();
     println!("toolchain ({})", if nix { "nix dev shell" } else { "no nix: rustup" });
     match run("cargo", &["--version"]) {
-        Some(v) => r.ok("cargo", &v),
+        Some(v) => r.ok(
+            "cargo",
+            &format!(
+                "{v}{}",
+                run("rustup", &["show", "active-toolchain"]).map(|t| format!(" (rustup: {t})")).unwrap_or_default()
+            ),
+        ),
         None => r.fail("cargo", "install Rust with rustup (https://rustup.rs), or use `nix develop`"),
     }
     let wasm = run("rustc", &["--print", "sysroot"]).map(|s| Path::new(&s).join("lib/rustlib/wasm32-wasip1").is_dir());
@@ -41,12 +47,17 @@ pub fn doctor(game_dir: Option<PathBuf>) -> Result<()> {
         Some(true) => r.ok("wasm target", "wasm32-wasip1 (what players run)"),
         _ => r.fail(
             "wasm target wasm32-wasip1",
-            "`rustup target add wasm32-wasip1` (rustup also installs it from rust-toolchain.toml on the next cargo run)",
+            "`rustup target add wasm32-wasip1` (adds it to the toolchain cargo uses here; ask the user first), or use `nix develop`",
         ),
     }
     match crate::scenario::magick() {
-        m if run(m, &["-version"]).is_some_and(|v| v.contains("ImageMagick")) => r.ok("ImageMagick", &format!("`{m}` (lina gif)")),
-        _ => r.warn("ImageMagick not found: `lina gif` can't assemble gifs", "install imagemagick with your package manager"),
+        m if run(m, &["-version"]).is_some_and(|v| v.contains("ImageMagick")) => {
+            r.ok("ImageMagick", &format!("`{m}` (lina gif)"))
+        }
+        _ => r.warn(
+            "ImageMagick not found: `lina gif` can't assemble gifs",
+            "install imagemagick with your package manager",
+        ),
     }
     if run("gifsicle", &["--version"]).is_some() {
         r.ok("gifsicle", "gifs get optimized");
@@ -56,7 +67,10 @@ pub fn doctor(game_dir: Option<PathBuf>) -> Result<()> {
 
     println!("game");
     if !cfg!(target_os = "linux") {
-        r.warn("not Linux", "building and packing work; running the game (lina run/test/gif) is only tested on Linux so far");
+        r.warn(
+            "not Linux",
+            "building and packing work; running the game (lina run/test/gif) is only tested on Linux so far",
+        );
     }
     match openlina::game::game_dir(game_dir) {
         Ok(dir) => {
@@ -66,7 +80,10 @@ pub fn doctor(game_dir: Option<PathBuf>) -> Result<()> {
                     let h = openlina::game::sha256(&b);
                     match openlina::game::known_version(&h) {
                         Some(build) => r.ok("version", &format!("Steam build {build}")),
-                        None => r.warn("unknown game version", "mods may need updates for this build; `lina check` and the tests tell"),
+                        None => r.warn(
+                            "unknown game version",
+                            "mods may need updates for this build; `lina check` and the tests tell",
+                        ),
                     }
                 }
                 Err(_) => r.fail("hlboot.dat", "the install looks incomplete (verify the game files in Steam)"),

@@ -108,11 +108,16 @@ fn select(pack_path: &Path, only: &[String]) -> Result<(ModPack, Vec<(PathBuf, M
                 break;
             }
         }
-        ModPack { openlina: 1, mods: want.into_iter().map(|id| PackEntry { id, ..Default::default() }).collect(), ..Default::default() }
+        ModPack {
+            openlina: 1,
+            mods: want.into_iter().map(|id| PackEntry { id, ..Default::default() }).collect(),
+            ..Default::default()
+        }
     };
     let mut chosen = Vec::new();
     for e in &pack.mods {
-        let found = all.iter().find(|(_, m)| m.info.id == e.id).with_context(|| format!("no mod `{}` in mods/", e.id))?;
+        let found =
+            all.iter().find(|(_, m)| m.info.id == e.id).with_context(|| format!("no mod `{}` in mods/", e.id))?;
         chosen.push(found.clone());
     }
     Ok((pack, chosen))
@@ -135,11 +140,13 @@ pub fn build_pack(game_dir: &Path, pack: &ModPack, wasm: bool, overlay: &Path) -
     let all = all_mods()?;
     let mut chosen = Vec::new();
     for e in &pack.mods {
-        let found = all.iter().find(|(_, m)| m.info.id == e.id).with_context(|| format!("no mod `{}` in mods/", e.id))?;
+        let found =
+            all.iter().find(|(_, m)| m.info.id == e.id).with_context(|| format!("no mod `{}` in mods/", e.id))?;
         chosen.push(found.clone());
     }
     // Mods pulled from a site are someone else's code: they only ever run sandboxed (wasm).
-    let (foreign, own): (Vec<_>, Vec<_>) = chosen.iter().map(|(d, m)| (d, m.info.id.clone())).partition(|(d, _)| is_pulled(d));
+    let (foreign, own): (Vec<_>, Vec<_>) =
+        chosen.iter().map(|(d, m)| (d, m.info.id.clone())).partition(|(d, _)| is_pulled(d));
     let own: Vec<String> = own.into_iter().map(|(_, id)| id).collect();
     let foreign: Vec<String> = foreign.into_iter().map(|(_, id)| id).collect();
     if !own.is_empty() {
@@ -152,7 +159,11 @@ pub fn build_pack(game_dir: &Path, pack: &ModPack, wasm: bool, overlay: &Path) -
         .into_iter()
         .map(|(dir, manifest)| {
             let id = manifest.info.id.clone();
-            let patch = if wasm || foreign.contains(&id) { Patch::Wasm(patch_path(&id, true)) } else { Patch::Native(patch_path(&id, false)) };
+            let patch = if wasm || foreign.contains(&id) {
+                Patch::Wasm(patch_path(&id, true))
+            } else {
+                Patch::Native(patch_path(&id, false))
+            };
             Package { dir, manifest, patch }
         })
         .collect();
@@ -193,7 +204,8 @@ pub fn add_requirements(pack: &mut ModPack) -> Result<()> {
     loop {
         let mut missing = Vec::new();
         for e in &pack.mods {
-            let (_, m) = all.iter().find(|(_, m)| m.info.id == e.id).with_context(|| format!("no mod `{}` in mods/", e.id))?;
+            let (_, m) =
+                all.iter().find(|(_, m)| m.info.id == e.id).with_context(|| format!("no mod `{}` in mods/", e.id))?;
             for r in &m.info.requires {
                 if !pack.mods.iter().any(|x| &x.id == r) && !missing.contains(r) {
                     missing.push(r.clone());
@@ -241,7 +253,8 @@ pub fn pack(ids: &[String], bundle: Option<&str>, from: Option<&ModPack>, out: &
                 break;
             }
             for r in missing {
-                let found = all.iter().find(|(_, m)| m.info.id == r).cloned().with_context(|| format!("no mod `{r}`"))?;
+                let found =
+                    all.iter().find(|(_, m)| m.info.id == r).cloned().with_context(|| format!("no mod `{r}`"))?;
                 if !chosen.iter().any(|(_, c)| c.info.id == r) {
                     println!("adding required mod `{r}` to the bundle");
                     chosen.push(found);

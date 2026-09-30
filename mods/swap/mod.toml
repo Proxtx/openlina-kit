@@ -7,6 +7,7 @@ description = "A new item: fire a ray along your aim and trade places with the f
 authors = ["openlina-kit"]
 game_builds = ["22056877"]
 requires = ["core"]
+showcase = ["swap-up.gif", "swap-box.gif"]
 
 [options.ammo]
 type = "int"

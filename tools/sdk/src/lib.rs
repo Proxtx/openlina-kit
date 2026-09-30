@@ -17,11 +17,11 @@ use std::path::Path;
 
 use anyhow::{anyhow, bail, Context, Result};
 pub use hlbc;
-pub use toml;
 use hlbc::types::{
     FunPtr, Function, RefField, RefFloat, RefFun, RefGlobal, RefInt, RefString, RefType, Type, TypeFun, TypeObj,
 };
 use hlbc::{Bytecode, Resolve, Str};
+pub use toml;
 
 pub mod anims;
 pub mod asm;
@@ -32,6 +32,7 @@ pub mod items;
 pub mod levels;
 pub mod manifest;
 pub mod modifiers;
+pub mod physics;
 pub mod runner;
 pub mod text;
 pub mod validate;
@@ -72,6 +73,19 @@ impl ModConfig {
             Some(v) => bail!("option `{key}` must be an integer, got {v}"),
         }
     }
+    /// A `list` option (strings); empty when not set.
+    pub fn list(&self, key: &str) -> Result<Vec<String>> {
+        match self.table.get(key) {
+            None => Ok(Vec::new()),
+            Some(toml::Value::Array(a)) => a
+                .iter()
+                .map(|v| {
+                    v.as_str().map(String::from).ok_or_else(|| anyhow!("option `{key}` must be a list of strings"))
+                })
+                .collect(),
+            Some(v) => bail!("option `{key}` must be a list of strings, got {v}"),
+        }
+    }
     pub fn str<'a>(&'a self, key: &str, default: &'a str) -> Result<&'a str> {
         match self.table.get(key) {
             None => Ok(default),
@@ -107,8 +121,7 @@ impl Code {
     }
 
     pub fn save(&self, path: impl AsRef<Path>) -> Result<()> {
-        std::fs::write(path.as_ref(), self.to_bytes()?)
-            .with_context(|| format!("writing {}", path.as_ref().display()))
+        std::fs::write(path.as_ref(), self.to_bytes()?).with_context(|| format!("writing {}", path.as_ref().display()))
     }
 
     /// Serialize and parse again. hlbc keeps private lookup tables (findex -> function) that
@@ -390,7 +403,9 @@ impl Code {
                 // Free functions have no name in the bytecode (hlbc reports string 0). Injected
                 // functions are recognizable by their `openlina/<name>` debug file.
                 None => match self.func_location(fun) {
-                    Some(loc) if loc.starts_with("openlina/") => loc[9..loc.rfind(':').unwrap_or(loc.len())].to_string(),
+                    Some(loc) if loc.starts_with("openlina/") => {
+                        loc[9..loc.rfind(':').unwrap_or(loc.len())].to_string()
+                    }
                     _ if fun.name.0 == 0 => "<anonymous>".to_string(),
                     _ => self.str(fun.name).to_string(),
                 },

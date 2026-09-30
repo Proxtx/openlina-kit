@@ -6,8 +6,8 @@ for what's known about the game, and [docs/PLAN.md](docs/PLAN.md) for where the 
 ## Setup (once per game version)
 
 ```bash
-nix develop                       # optional: Rust + wasm32-wasip1, imagemagick, gifsicle. Without nix: rustup
-                                  # (rust-toolchain.toml adds the wasm target) + imagemagick from the package manager
+nix develop                       # optional: Rust + wasm32-wasip1, imagemagick, gifsicle. Without nix: rustup +
+                                  # `rustup target add wasm32-wasip1` + imagemagick (ask the user before installing)
 lina() { ./lina "$@"; }           # the wrapper builds the tools when needed
 lina doctor                       # checks all of the above and the game; fix what it reports
 lina setup                        # work/hlboot.orig.dat (+ version check)
@@ -61,13 +61,14 @@ lina new items portal-gun         # mods/portal-gun/: Cargo.toml, mod.toml, src/
   - **Load order**: a mod runs after everything in its `requires` (must be present) and `after` (if present);
     the `core` section goes first; otherwise mods run in id order. `conflicts = [...]` refuses to build with the
     listed mods. The order matters when mods patch the same code; prefer hooks, where order doesn't matter much.
-  - Read options with `cfg.bool` / `cfg.i64` (for `int`) / `cfg.f64` / `cfg.str`; list options through
-    `cfg.table`.
+  - Read options with `cfg.bool` / `cfg.i64` (for `int`) / `cfg.f64` / `cfg.str` / `cfg.list`.
 - `src/main.rs`: `openlina_sdk::run_mod(|code, cfg| { ... })`. Read options with `cfg.bool/i64/f64/str`; the host
   always passes every declared option (defaults filled in), and rejects unknown or mistyped ones.
 - `assets/` (optional): files overlaid onto `fish/game/res/` (e.g. `assets/images/my-sheet.png`).
 - `media/` (optional): icon and showcase gifs for the website.
-- Add it to `modpack.toml` to include it in `lina build`.
+- `modpack.toml` is the development pack `lina build` / `lina run` use without `--mod`; add your mod there if you
+  want it in those runs. Tests (`lina test`), `lina build --mod <id>` and publishing don't need it.
+- `[mod] showcase = ["best.gif", …]`: the order of the gifs on the website (the first leads).
 
 Rules:
 
@@ -87,15 +88,19 @@ Everything runs headless (SDL offscreen driver): no window, no human, faster tha
 
 1. `lina build --mod <id>` (natively; `--wasm` for exactly what players run). Each mod validates the functions
    it touched (register bounds, jumps, call arity and value kinds, fields, returns) and the result must parse.
-2. `lina fn <patched fn> --input work/hlboot.modded.dat --ops a..b` to eyeball the patch.
+2. `lina fn <patched fn> --input work/hlboot.modded.dat --ops a..b` to eyeball the patch; functions you added are
+   found by the name you gave `FnBuilder::new` (`lina fn swap/use --input work/hlboot.modded.dat`).
 3. **Write scenarios** in `mods/<id>/tests/*.toml` (`lina new` creates `tests/smoke.toml`; format:
    `tools/lina/src/scenario.rs`) and run them with `lina test --mod <id>` (`--wasm` too before publishing):
    - `[harness]`: `level` (names: run a scenario with `list_levels = true` and read its log), `seed`, `items`
      (item names, same listing), `modifier`, `inputs` (`"60-90:right+jump"`), `end_tick`
-   - `fixtures`: `debug-spawn` (spawn an object at a tick/position), `trace-calls` (log calls to any function),
-     or a fixture mod of your own subscribing to `tick`
-   - `[[expect]]`: `contains` (+ `min`/`max`) and `not_contains` on log lines; your mod's `trace` option is what
-     makes behavior visible. A run also fails on a crash, a `[harness] ERROR`, a non-zero exit or the timeout.
+   - `fixtures`: `debug-spawn` (spawn objects: `object`/`tick`/`x`/`y`, or `spawns = ["box@60:300,60", …]`),
+     `trace-positions` (prints `[pos] tick T <type> x y` for `types` at `ticks`), `trace-calls` (log calls to any
+     function), or a fixture mod of your own subscribing to `tick`
+   - `[[expect]]`: `contains` (+ `min`/`max`) and `not_contains` on log lines; `position = { tick, type, x, y,
+     within, away }` on `trace-positions` output (where things are, independent of your mod's own trace). A run
+     also fails on a crash, a `[harness] ERROR`, a non-zero exit or the timeout.
+   - Aiming in scenarios: see "Aiming" in docs/game-internals.md (hold the direction on the shoot tick).
    - **Make every test able to fail.** Assert that the situation happened (e.g. `trace-calls` shows vanilla's
      function ran), not just that nothing bad was printed; test options in both directions.
    - Runs are deterministic: the harness seeds every RNG of the run from `seed`, so the same build and scenario give
@@ -106,12 +111,15 @@ Everything runs headless (SDL offscreen driver): no window, no human, faster tha
    - Logs: `work/test/<n>/log.txt`, numbered by position in the run. A run fails on a crash, a logged Haxe
      exception (`Null access`, `Called from …`), a `[harness] ERROR`, a non-zero exit or the timeout.
 4. **Showcase gifs** (the scenario's expectations are checked too): add a `[gif]` section (`capture = "from-to/step"` in level ticks, 120 ticks per second;
-   `out = "media/x.gif"`) and run `lina gif mods/<id>/tests/<scenario>.toml`. Frames come from the game's own
-   renderer at 600×338. Look at them before publishing (`work/gif/frames/*.png`).
+   `out = "media/x.gif"`) and run `lina gif mods/<id>/tests/<scenario>.toml` (`--out <file>` writes elsewhere,
+   e.g. for a probe). Frames come from the game's own renderer at 600×338. Look at them before publishing
+   (`work/gif/frames/*.png`). `capture` in a plain `lina test` also works (frames in `work/test/<n>/frames/`).
 5. **Graphics**: pixel art as text grids in `mods/<id>/art/*.toml`, rendered with
-   `lina sprite art/x.toml --out assets/images/x.png` (game sprites) or `--out media/icon.png` (website icon).
+   `lina sprite mods/<id>/art/x.toml --out mods/<id>/assets/images/x.png` (game sprites; paths are relative to
+   where you run it) or `--out mods/<id>/media/icon.png` (website icon).
    `lina sprite --palette` lists the game palette; `--scale 16` writes a preview you can look at.
-6. `cargo test --release` (relocation, validator and manifest tests) and `cargo clippy --release`.
+6. `cargo test --release` (relocation, validator and manifest tests), `cargo clippy --release`, `cargo fmt`
+   (`rustfmt.toml`: 120 columns).
 7. `lina pack <id>` produces `dist/<id>-<version>.zip`. To test the player flow, bundle it (required mods such as
    `core` are added automatically) and install into a throwaway data dir:
    `lina pack <id> --bundle try && OPENLINA_HOME=$PWD/work/home ./openlina install dist/try.zip`
@@ -119,7 +127,8 @@ Everything runs headless (SDL offscreen driver): no window, no human, faster tha
 
 ## 5. Share (OpenLina website)
 
-- `lina login <site> <token>`: token from the site's maintainer; saved in `~/.config/openlina/lina.toml` (600).
+- `lina login <site> <token>`: token from the site's maintainer (or on stdin); saved in
+  `~/.config/openlina/lina.toml` (600), or the file in `$OPENLINA_CONFIG`.
 - `lina pull <pack link>`: packages + source of mods you don't have into `mods/<id>/`; `work/pull/<pack>/` gets
   `modpack.toml` (options, change requests) and `REQUESTS.md` (a to-do list: option or code change, bump the
   version, test, bundle for the player).
@@ -159,7 +168,7 @@ Everything runs headless (SDL offscreen driver): no window, no human, faster tha
 | module | purpose |
 |---|---|
 | `Code` (lib.rs) | load/save, `class`, `field`, `field_type`, `method`, `native`, `func(_mut)`, `func_type`, `func_name`, `op_location`, interning (`string`, `float`, `int`, `intern_type`, `ty_*`), `add_global` |
-| `asm::FnBuilder` | new functions: registers, labels, jumps, constants, `get`/`set` fields, `call`, `static_obj`, `new_obj`, `cast`, `string_obj`, `string_of`, `print`, arrays (`array_len`, `array_get`, `new_array_obj`, `empty_f64_array`, `for_range`), `jstr_ne`, `exit` |
+| `asm::FnBuilder` | new functions: registers, labels, jumps, constants, `get`/`set` fields, `call`, `static_obj`, `new_obj`, `cast`, `string_obj`, `string_of`, `print`, arrays (`array_len`, `array_get`, `new_array_obj`, `empty_f64_array`, `for_range`), `jstr_ne`, `exit`, globals (`get_global`, `set_global`, `clear_global`), `static_closure` |
 | `edit` | `find*`, `expect_one`, `next_match`/`prev_match`, `replace_op`, `insert_ops`, `insert_ops_with_exits`, `guard_op`, `prepend_call`, `remove_ops`, `add_reg` |
 | `hooks` | `CORE_HOOKS`, `find`, `signature`, `handler`, `subscribe`, `define` |
 | `modifiers` | `register` a modifier (pool + HUD icon), `is_active`, `id_of`, `current_modifier` |
@@ -170,4 +179,5 @@ Everything runs headless (SDL offscreen driver): no window, no human, faster tha
 | `runner` | `run_mod`: the `main` of every mod |
 | `manifest` | `ModManifest` (mod.toml), `ModPack` (modpack.toml), `resolve_order` |
 | `validate` | `check_function`, `check_touched`, `kind` |
+| `physics` | `RayCast`: the nearest object on a line (Box2D `world_ray_cast`), e.g. line of sight |
 | `caps` | `Snapshot`, `diff`: what a patch makes the game able to do outside the game (see Safety above) |

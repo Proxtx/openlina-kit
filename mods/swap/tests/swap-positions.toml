@@ -1,0 +1,38 @@
+name = "swap: positions read by the trace-positions fixture show the swap (independent of the mod's trace)"
+mods = ["swap"]
+fixtures = ["debug-spawn", "trace-positions"]
+timeout = 60
+
+[options.swap]
+trace = false
+
+# a box on the platform to the right of Lina (she starts at about 122, 194, aiming right)
+[options.debug-spawn]
+object = "box"
+tick = 10
+x = 170.0
+y = 185.0
+
+[options.trace-positions]
+types = ["player", "box"]
+ticks = "59,72"
+
+[harness]
+level = "greendemo 1"
+seed = 3
+items = ["swap", "box"]
+inputs = ["60:shoot"]
+end_tick = 150
+
+# before the shot (tick 59): Lina at about (122, 194), the box at about (170, 190)
+[[expect]]
+position = { tick = 59, type = "player", x = 122, y = 194, within = 4 }
+[[expect]]
+position = { tick = 59, type = "box", x = 170, y = 190, within = 4 }
+# after (tick 72): swapped
+[[expect]]
+position = { tick = 72, type = "player", x = 170, y = 190, within = 6 }
+[[expect]]
+position = { tick = 72, type = "box", x = 122, y = 194, within = 6 }
+[[expect]]
+position = { tick = 72, type = "player", x = 122, y = 194, within = 20, away = true }

@@ -1,0 +1,18 @@
+[mod]
+id = "trace-positions"
+name = "Trace Positions"
+version = "0.1.0"
+section = "dev"
+description = "Test fixture: print where objects are at chosen ticks, for [[expect]] position checks."
+authors = ["openlina-kit"]
+requires = ["core"]
+
+[options.types]
+type = "list"
+default = ["player"]
+description = "Object types to report (the `type` of physics objects: player, box, coin, frog, …); [\"*\"] for all."
+
+[options.ticks]
+type = "string"
+default = "60-600/60"
+description = "Layout ticks: `from-to/step`, a single tick, or several separated by commas (e.g. \"118,130,200-260/20\")."

@@ -1235,6 +1235,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "openlina-mod-trace-positions"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "openlina-sdk",
+]
+
+[[package]]
 name = "openlina-mod-tumble"
 version = "0.1.0"
 dependencies = [

@@ -126,8 +126,19 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     if trace {
         let p = Print::Str;
         f.print(&[
-            p("[screen-wrap] tick "), Print::Val(tick), p(" kind "), Print::Val(kind), p(" ("), Print::Val(x),
-            p(", "), Print::Val(y), p(") -> ("), Print::Val(nx), p(", "), Print::Val(ny), p(")"),
+            p("[screen-wrap] tick "),
+            Print::Val(tick),
+            p(" kind "),
+            Print::Val(kind),
+            p(" ("),
+            Print::Val(x),
+            p(", "),
+            Print::Val(y),
+            p(") -> ("),
+            Print::Val(nx),
+            p(", "),
+            Print::Val(ny),
+            p(")"),
         ])?;
     }
     let t = f.reg(bool_t);

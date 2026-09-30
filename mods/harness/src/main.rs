@@ -72,17 +72,18 @@ fn parse_input(s: &str) -> Result<(i32, i32, i32)> {
     ensure!(from < to, "input `{s}`: empty tick range");
     let mut bits = 0;
     for a in actions.split('+').map(str::trim).filter(|a| !a.is_empty()) {
-        bits |= 1 << match a {
-            "up" => 0,
-            "down" => 1,
-            "left" => 2,
-            "right" => 3,
-            "jump" => 4,
-            "shoot" => 5,
-            "switch" => 6,
-            "restart" => 7,
-            other => bail!("input `{s}`: unknown action `{other}`"),
-        };
+        bits |= 1
+            << match a {
+                "up" => 0,
+                "down" => 1,
+                "left" => 2,
+                "right" => 3,
+                "jump" => 4,
+                "shoot" => 5,
+                "switch" => 6,
+                "restart" => 7,
+                other => bail!("input `{s}`: unknown action `{other}`"),
+            };
     }
     Ok((from, to, bits))
 }
@@ -239,7 +240,14 @@ fn build_tick(code: &mut Code, o: &Opts, state: RefGlobal, capture: Option<RefFu
                 let nm = f.get_new(it, "name")?;
                 let ammo = f.get_new(it, "baseAmmo")?;
                 let aim = f.get_new(it, "aimType")?;
-                f.print(&[Print::Str("[harness] item "), Print::Val(nm), Print::Str(" ammo="), Print::Val(ammo), Print::Str(" aim="), Print::Val(aim)])
+                f.print(&[
+                    Print::Str("[harness] item "),
+                    Print::Val(nm),
+                    Print::Str(" ammo="),
+                    Print::Val(ammo),
+                    Print::Str(" aim="),
+                    Print::Val(aim),
+                ])
             })?;
             f.print(&[Print::Str("[harness] end (list_levels)")])?;
             f.exit(0)?;
@@ -289,8 +297,18 @@ fn build_tick(code: &mut Code, o: &Opts, state: RefGlobal, capture: Option<RefFu
         f.bool(yes, true);
         f.set(manager, "tutorial_done", yes)?;
         // Seed every RNG of the run (items come from `toolSeed`, which is random at startup).
-        for (k, field) in ["mainSeed", "levelSeed", "toolSeed", "toolBlockSeed", "modifierSeed", "colorSeed", "musicSeed",
-            "sfxSeed", "bossSeed", "endwormSeed"]
+        for (k, field) in [
+            "mainSeed",
+            "levelSeed",
+            "toolSeed",
+            "toolBlockSeed",
+            "modifierSeed",
+            "colorSeed",
+            "musicSeed",
+            "sfxSeed",
+            "bossSeed",
+            "endwormSeed",
+        ]
         .iter()
         .enumerate()
         {
@@ -379,8 +397,12 @@ fn build_tick(code: &mut Code, o: &Opts, state: RefGlobal, capture: Option<RefFu
         let st = f.static_obj("fish.system.Main")?;
         let dt = f.get_new(st, "frameTime")?;
         f.print(&[
-            Print::Str("[harness] level tick 1: "), Print::Val(name), Print::Str(" modifier "), Print::Val(m),
-            Print::Str(" frameTime "), Print::Val(dt),
+            Print::Str("[harness] level tick 1: "),
+            Print::Val(name),
+            Print::Str(" modifier "),
+            Print::Val(m),
+            Print::Str(" frameTime "),
+            Print::Val(dt),
         ])?;
         // [harness] slot k: <item> ammo <n>
         let mgr = f.get_new(game, "ev_manager_ev")?;
@@ -396,7 +418,14 @@ fn build_tick(code: &mut Code, o: &Opts, state: RefGlobal, capture: Option<RefFu
             f.jnull(ty, skip);
             let nm = f.get_new(ty, "name")?;
             let ammo = f.get_new(slot, "ammo")?;
-            f.print(&[Print::Str("[harness] slot "), Print::Val(k), Print::Str(": "), Print::Val(nm), Print::Str(" ammo "), Print::Val(ammo)])?;
+            f.print(&[
+                Print::Str("[harness] slot "),
+                Print::Val(k),
+                Print::Str(": "),
+                Print::Val(nm),
+                Print::Str(" ammo "),
+                Print::Val(ammo),
+            ])?;
             f.place(skip);
             Ok(())
         })?;
@@ -513,11 +542,14 @@ fn build_capture(code: &mut Code, dir: &str, ui: bool) -> Result<RefFun> {
     let (cwf, chf) = (f.const_f64(600.0), f.const_f64(338.0));
     f.call_new(resize, &[engine, cw, ch])?;
     f.call_new(on_resize, &[game, cwf, chf])?;
-    let nulls: Vec<Reg> = push_args[2..].iter().map(|t| {
-        let r = f.reg(*t);
-        f.op(Opcode::Null { dst: r });
-        r
-    }).collect();
+    let nulls: Vec<Reg> = push_args[2..]
+        .iter()
+        .map(|t| {
+            let r = f.reg(*t);
+            f.op(Opcode::Null { dst: r });
+            r
+        })
+        .collect();
     f.call_new(push_target, &[engine, target, nulls[0], nulls[1], nulls[2]])?;
     let no = f.reg(bool_t);
     f.bool(no, false);
@@ -528,11 +560,14 @@ fn build_capture(code: &mut Code, dir: &str, ui: bool) -> Result<RefFun> {
         f.call_new(scene_render, &[s2d, engine])?;
     }
     f.call_new(pop_target, &[engine])?;
-    let cnulls: Vec<Reg> = cap_args[1..].iter().map(|t| {
-        let r = f.reg(*t);
-        f.op(Opcode::Null { dst: r });
-        r
-    }).collect();
+    let cnulls: Vec<Reg> = cap_args[1..]
+        .iter()
+        .map(|t| {
+            let r = f.reg(*t);
+            f.op(Opcode::Null { dst: r });
+            r
+        })
+        .collect();
     let pixels = f.call_new(capture, &[target, cnulls[0], cnulls[1], cnulls[2]])?;
     let (wf, hf) = (f.reg(f64_t), f.reg(f64_t));
     f.op(Opcode::ToSFloat { dst: wf, src: w });

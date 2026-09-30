@@ -63,11 +63,24 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
             Some([a, b, c, d])
         }
     };
-    let o = Opts { radius: cfg.f64("radius", 14.0)?, range: cfg.f64("range", 160.0)?, preset, trace: cfg.bool("trace", false)? };
+    let o = Opts {
+        radius: cfg.f64("radius", 14.0)?,
+        range: cfg.f64("range", 160.0)?,
+        preset,
+        trace: cfg.bool("trace", false)?,
+    };
 
     items::register(
         code,
-        &Item { name: ITEM, label: "Portal Gun", ammo, aim: Aim::Long, second_layer: false, icon: "images/openlina/portal-gun.png", icon_size: (12.0, 12.0) },
+        &Item {
+            name: ITEM,
+            label: "Portal Gun",
+            ammo,
+            aim: Aim::Long,
+            second_layer: false,
+            icon: "images/openlina/portal-gun.png",
+            icon_size: (12.0, 12.0),
+        },
     )?;
 
     let (f64_t, i32_t) = (code.ty_f64(), code.ty_i32());
@@ -154,7 +167,13 @@ fn build_place(code: &mut Code, st: &State, o: &Opts) -> Result<openlina_sdk::hl
         f.set(sprite, "height", h)?;
         f.place(skip_anim);
         if o.trace {
-            f.print(&[Print::Str(&format!("[portal-gun] placed {} at (", COLORS[k])), Print::Val(x), Print::Str(", "), Print::Val(y), Print::Str(")")])?;
+            f.print(&[
+                Print::Str(&format!("[portal-gun] placed {} at (", COLORS[k])),
+                Print::Val(x),
+                Print::Str(", "),
+                Print::Val(y),
+                Print::Str(")"),
+            ])?;
         }
         f.place(other);
     }
@@ -235,7 +254,10 @@ fn build_tick(code: &mut Code, st: &State, place: openlina_sdk::hlbc::types::Ref
     // Element type of `physics_obj` (see solid-edges: the object whose `edgewith` the edge test reads).
     let update = code.method("fish.game.evsheet.EvSheet_gameplay", "update")?;
     let fun = code.func(update)?.clone();
-    let ew = openlina_sdk::edit::expect_one(openlina_sdk::edit::find_field_access(code, &fun, "edgewith", false), "`.edgewith` read")?;
+    let ew = openlina_sdk::edit::expect_one(
+        openlina_sdk::edit::find_field_access(code, &fun, "edgewith", false),
+        "`.edgewith` read",
+    )?;
     let Opcode::Field { obj: item, .. } = fun.ops[ew] else { bail!("`.edgewith` read is not a Field") };
     let obj_t: RefType = fun.regs[item.0 as usize];
     let get_vx = code.method("fish.system.beh.Physics", "getVelocityX")?;
@@ -354,9 +376,15 @@ fn build_tick(code: &mut Code, st: &State, place: openlina_sdk::hlbc::types::Ref
             if o.trace {
                 let ty = f.get_new(obj, "type")?;
                 f.print(&[
-                    Print::Str("[portal-gun] tick "), Print::Val(tick), Print::Str(" "), Print::Val(ty),
-                    Print::Str(&format!(" through {} -> {} at (", COLORS[k], COLORS[other])), Print::Val(ex),
-                    Print::Str(", "), Print::Val(ey), Print::Str(")"),
+                    Print::Str("[portal-gun] tick "),
+                    Print::Val(tick),
+                    Print::Str(" "),
+                    Print::Val(ty),
+                    Print::Str(&format!(" through {} -> {} at (", COLORS[k], COLORS[other])),
+                    Print::Val(ex),
+                    Print::Str(", "),
+                    Print::Val(ey),
+                    Print::Str(")"),
                 ])?;
             }
             f.jmp(next);

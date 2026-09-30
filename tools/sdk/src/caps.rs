@@ -96,7 +96,9 @@ fn sensitive(code: &Code, f: RefFun) -> Option<&'static str> {
             "sys_delete" | "sys_rename" | "sys_create_dir" | "sys_remove_dir" | "sys_read_dir" => Some("files"),
             _ if name.starts_with("process_") => Some("programs"),
             "sys_command" | "sys_put_env" | "sys_set_cwd" => Some("programs"),
-            _ if name.starts_with("socket_") || name.starts_with("host_") || name.starts_with("ssl_") => Some("network"),
+            _ if name.starts_with("socket_") || name.starts_with("host_") || name.starts_with("ssl_") => {
+                Some("network")
+            }
             _ => None,
         };
     }
@@ -107,7 +109,9 @@ fn sensitive(code: &Code, f: RefFun) -> Option<&'static str> {
     if prefix("sys.io.File") || class.starts_with("sys.io.File") || prefix("sys.FileSystem") || prefix("sys.db") {
         return Some("files");
     }
-    if prefix("sys.io.Process") || (class == "Sys" && ["command", "putEnv", "setCwd", "getEnv", "environment", "programPath"].contains(&method)) {
+    if prefix("sys.io.Process")
+        || (class == "Sys" && ["command", "putEnv", "setCwd", "getEnv", "environment", "programPath"].contains(&method))
+    {
         return Some("programs");
     }
     if prefix("sys.net") || prefix("sys.ssl") || prefix("sys.Http") || prefix("haxe.Http") {
@@ -117,7 +121,8 @@ fn sensitive(code: &Code, f: RefFun) -> Option<&'static str> {
         return Some("steam");
     }
     if (class == "Reflect" && ["callMethod", "field", "setField", "getProperty", "setProperty"].contains(&method))
-        || (class == "Type" && ["resolveClass", "resolveEnum", "createInstance", "createEmptyInstance", "createEnum"].contains(&method))
+        || (class == "Type"
+            && ["resolveClass", "resolveEnum", "createInstance", "createEmptyInstance", "createEnum"].contains(&method))
     {
         return Some("reflection");
     }
@@ -180,7 +185,10 @@ pub fn diff(before: &Snapshot, before_code: &Code, after: &Code) -> Vec<Finding>
     for (i, s) in after.bc.strings.iter().enumerate().take(before.strings.len()) {
         if s.as_str() != before.strings[i] {
             let short = |x: &str| x.chars().take(40).collect::<String>();
-            push("constants", format!("changes the game's string constant {:?} to {:?}", short(&before.strings[i]), short(s)));
+            push(
+                "constants",
+                format!("changes the game's string constant {:?} to {:?}", short(&before.strings[i]), short(s)),
+            );
         }
     }
     for (i, t) in after.bc.types.iter().enumerate().take(before.types.len()) {
@@ -198,7 +206,13 @@ pub fn diff(before: &Snapshot, before_code: &Code, after: &Code) -> Vec<Finding>
         }
         let name = after.func_name(f.findex);
         let had: Vec<(&'static str, RefFun)> = match old {
-            Some(_) => before_code.bc.functions.iter().find(|x| x.findex == f.findex).map(|x| uses(before_code, x)).unwrap_or_default(),
+            Some(_) => before_code
+                .bc
+                .functions
+                .iter()
+                .find(|x| x.findex == f.findex)
+                .map(|x| uses(before_code, x))
+                .unwrap_or_default(),
             None => Vec::new(),
         };
         for (c, t) in uses(after, f) {
