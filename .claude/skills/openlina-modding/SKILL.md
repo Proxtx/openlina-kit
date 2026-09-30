@@ -5,10 +5,10 @@ description: Make, change, test and share mods for the game Mosa Lina with openl
 
 # OpenLina modding
 
-Work in the `openlina-kit` checkout. If this skill is installed user-wide (a symlink in `~/.claude/skills/`), the
-checkout is three levels above the link's target: `cd "$(readlink -f ~/.claude/skills/openlina-modding)/../../.."`.
-If there is no checkout, ask the user where it is (or whether to clone it). The full playbook is
-[AGENTS.md](../../../AGENTS.md): read it before patching game code. Game knowledge: `docs/game-internals.md`; existing mods: `docs/mods.md`; project state: `docs/PLAN.md`.
+Work in an `openlina-kit` checkout (a directory with `AGENTS.md` and `tools/lina/`). If the current directory isn't
+one, look for it (`find ~ -maxdepth 6 -type d -name openlina-kit`) or ask the user; if there is none, offer to
+clone https://github.com/Proxtx/openlina-kit (ask first). The full playbook is `AGENTS.md` in the checkout: read it
+before patching game code. Game knowledge: `docs/game-internals.md`; existing mods: `docs/mods.md`; project state: `docs/PLAN.md`.
 
 ## Setup (once per machine and game version)
 
