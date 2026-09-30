@@ -112,6 +112,18 @@ coordinates.
 - Item types come from `OClass_item` objects (`NAME`, `ammo`, `aim_type`) via `ItemManager.initBaseItems`; aim
   types: shoot 0, short 1, short2 2, mid 3, mid2 4, long 5, long2 6, remote 7. The HUD icon is the `item_icon`
   object's animation named after the item; the HUD label is the text `TOOL_<NAME>` (from `loc.dat`, an xlsx).
+- **Aiming** (found by the swap mod, long aim, greendemo 1): the crosshair is a fixed offset from Lina per held
+  direction, not a rotating reticle. Nothing held: forward, about 10° up (≈ (97, -16) from Lina); `up` (also
+  `up+right`): about 76° up (≈ (24, -97)); `down`: nearly straight down. Releasing the key returns to forward, so
+  scripted inputs must hold the direction on the shoot tick (`"36-52:up", "50:shoot"`).
+- **Ray casts**: the native `world_ray_cast(world: b2World, callback, from, to)` (Box2D `RayCast`) takes
+  `hxmath.math.Vector2Default` points in physics units (layout units × `layout.worldScale`) and calls
+  `callback(fixture: b2Fixture, point, normal, fraction: F64) -> F64` for every fixture on the segment, in no
+  particular order (return -1 to ignore, the fraction to clip the ray there, 1 to go on). `fixture_get_user_data`
+  gives the fixture's `ObjectClass`. The game uses it in `fish.system.beh.LOS` (Line of Sight) and in
+  `EvSheet_gameplay.prepare_boss`. A static closure (`StaticClosure` op) of a new function with exactly that
+  signature works as the callback; keep state in globals.
+- Static level geometry has `physics.immovable = true` (tiles such as `tile_short`); boxes, fruits and vines don't.
 - The roll draws 3 items and the 4th slot copies the 2nd (`rollItemsRaw` crashes if the pool has fewer than 2).
 - Randomness: the run's RNGs are `hxd.Rand` fields of the manager (`mainSeed`, `levelSeed`, `toolSeed`, …), seeded
   randomly at startup; the harness seeds them all from its `seed` option.

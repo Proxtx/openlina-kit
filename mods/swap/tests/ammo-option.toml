@@ -1,0 +1,17 @@
+name = "swap: the ammo option sets the starting shots"
+mods = ["swap"]
+timeout = 30
+
+[options.swap]
+ammo = 5
+
+[harness]
+level = "greendemo 1"
+seed = 3
+items = ["swap", "box"]
+end_tick = 3
+
+[[expect]]
+contains = ": swap ammo 5"
+[[expect]]
+not_contains = ": swap ammo 3"

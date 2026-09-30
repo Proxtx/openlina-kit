@@ -49,6 +49,36 @@ Options: `ammo`, `radius`, `range`, `preset` (`"ax,ay,bx,by"`: place both portal
 showcases), `trace`. Tests: in the pool; firing places blue then orange along the aim; a box loops through
 the portals (showcase `media/loop.gif`).
 
+## swap (items)
+
+A new item, **Swap** (`swap`, 3 ammo, long aim): each shot casts a ray from Lina along her aim, `range` (400) units
+long. The first object the ray hits trades places with her: Lina goes where the object was, the object goes where
+Lina was (velocities kept). If nothing is hit, nothing happens, and the shot is still used. With `walls_block`
+(default) static level geometry stops the ray, so a wall in between means no swap; without it the ray passes
+through walls and only movable objects count. Anything with a Box2D fixture can be swapped: boxes, fruits, frogs,
+vines, enemies, the other player in co-op.
+
+The ray is the game's own Box2D ray cast (native `world_ray_cast`, as used by the Line of Sight behavior
+`fish.system.beh.LOS`) with an injected callback that keeps the nearest hit and skips Lina herself. Pool entry, HUD
+icon and label via `openlina_sdk::items`; icon drawn from `art/icon.toml`.
+
+Source: `mods/swap/src/main.rs`. Requires `core`.
+
+| option | default | |
+|---|---|---|
+| `ammo` | `3` | Shots per level (0 to 99). |
+| `aim` | `"long"` | Aim type: `shoot`, `short`, `short2`, `mid`, `mid2`, `long`, `long2`, `remote`. Only the direction counts. |
+| `range` | `400` | Ray length in layout units (the play field is 600 × 338). |
+| `walls_block` | `true` | Static bodies (tiles, walls) stop the ray; nothing is swapped when one is hit first. |
+| `check_ticks` | `12` | With `trace`: ticks after a swap at which both positions are read back and compared. |
+| `trace` | `false` | Print every shot (`[swap] tick T: ray …`, `player (x, y) <-> box (x, y)`, `nothing in line of sight`, `blocked by <type>`, with the ammo left) and the check after each swap (`[swap] check: … near the object's old spot: true`). |
+
+Tests (`mods/swap/tests/`, 7 scenarios): in the pool with 3 shots; `ammo` option; a box right of Lina is swapped
+and both positions hold 12 ticks later (read back from the game); aiming up at a box in the air swaps Lina up and
+the box down (showcase `media/swap-up.gif`, also `media/swap-box.gif`); firing into the empty sky swaps nothing but
+uses the shot; `walls_block` in both directions (the platform under Lina blocks a downward shot at a box below it;
+with `walls_block = false` the same shot swaps).
+
 ## tumble (levels)
 
 A level pack, **Tumble**, built in code with `openlina_sdk::levels`. "Tumble 1" is a drum: a ring of `segments`

@@ -1,0 +1,32 @@
+name = "swap: firing into the empty sky swaps nothing, but uses the shot"
+mods = ["swap"]
+fixtures = ["debug-spawn"]
+timeout = 60
+
+[options.swap]
+trace = true
+
+# the same box as in swap-box.toml: there is something to swap with, just not in the aim
+[options.debug-spawn]
+object = "box"
+tick = 10
+x = 170.0
+y = 185.0
+
+[harness]
+level = "greendemo 1"
+seed = 3
+items = ["swap", "box"]
+inputs = ["30-62:up", "60:shoot"]   # aim up (nothing up there up to the top of the screen)
+end_tick = 100
+
+[[expect]]
+contains = "[swap] tick 61: ray ("
+[[expect]]
+contains = "[swap] tick 61: nothing in line of sight (ammo left 2)"
+[[expect]]
+not_contains = " <-> "
+[[expect]]
+not_contains = "blocked by"
+[[expect]]
+not_contains = "[swap] check:"

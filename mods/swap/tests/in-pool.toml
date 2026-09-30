@@ -1,0 +1,12 @@
+name = "swap: the item is in the pool, can be rolled and starts with 3 shots"
+mods = ["swap"]
+timeout = 30
+
+[harness]
+level = "greendemo 1"
+seed = 3
+items = ["swap", "box"]
+end_tick = 3
+
+[[expect]]
+contains = ": swap ammo 3"

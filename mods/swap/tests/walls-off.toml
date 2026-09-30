@@ -1,0 +1,33 @@
+name = "swap: with walls_block = false the ray passes through the platform and swaps with the box below"
+mods = ["swap"]
+fixtures = ["debug-spawn"]
+timeout = 60
+
+[options.swap]
+trace = true
+walls_block = false
+
+# the same scene as walls.toml
+[options.debug-spawn]
+object = "box"
+tick = 118
+x = 130.0
+y = 280.0
+
+[harness]
+level = "greendemo 1"
+seed = 3
+items = ["swap", "box"]
+inputs = ["90-122:down", "120:shoot"]
+end_tick = 140
+
+[[expect]]
+contains = "[swap] tick 121: player ("
+[[expect]]
+contains = ") <-> box ("
+[[expect]]
+not_contains = "blocked by"
+[[expect]]
+contains = "near the object's old spot: true"
+[[expect]]
+contains = "near the player's old spot: true"

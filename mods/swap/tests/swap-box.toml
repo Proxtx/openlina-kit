@@ -1,0 +1,46 @@
+name = "swap: firing at a box right of Lina swaps her with the box, and both stay swapped"
+mods = ["swap"]
+fixtures = ["debug-spawn"]
+timeout = 60
+
+[options.swap]
+trace = true
+
+# a box on the platform to the right of Lina (she starts at about 122, 194, aiming right)
+[options.debug-spawn]
+object = "box"
+tick = 10
+x = 170.0
+y = 185.0
+
+[harness]
+level = "greendemo 1"
+seed = 3
+items = ["swap", "box"]
+inputs = ["60:shoot"]
+end_tick = 150
+
+# the ray hit the box, not something else, and the shot was used
+[[expect]]
+contains = ") <-> box ("
+min = 1
+max = 1
+[[expect]]
+contains = "(ammo left 2)"
+[[expect]]
+not_contains = "nothing in line of sight"
+# read back from the game 12 ticks later, after the physics ran: both really moved
+[[expect]]
+contains = "[swap] check: player at"
+[[expect]]
+contains = "near the object's old spot: true"
+[[expect]]
+contains = "[swap] check: object box at"
+[[expect]]
+contains = "near the player's old spot: true"
+[[expect]]
+not_contains = "old spot: false"
+
+[gif]
+capture = "30-150/2"
+out = "media/swap-box.gif"

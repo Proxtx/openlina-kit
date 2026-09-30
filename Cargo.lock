@@ -1218,6 +1218,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "openlina-mod-swap"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "openlina-sdk",
+]
+
+[[package]]
 name = "openlina-mod-trace-calls"
 version = "0.1.0"
 dependencies = [

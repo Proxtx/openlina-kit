@@ -1,0 +1,46 @@
+[mod]
+id = "swap"
+name = "Swap"
+version = "0.1.0"
+section = "items"
+description = "A new item: fire a ray along your aim and trade places with the first object it hits. Lina goes where the object was, the object goes where Lina was."
+authors = ["openlina-kit"]
+game_builds = ["22056877"]
+requires = ["core"]
+
+[options.ammo]
+type = "int"
+default = 3
+description = "Swap shots per level (0 to 99)."
+
+[options.aim]
+type = "string"
+default = "long"
+description = "How the item is aimed (the game's aim types): shoot, short, short2, mid, mid2, long, long2 or remote. Only the direction counts; the ray is `range` long."
+
+[options.range]
+type = "float"
+default = 400.0
+description = "How far the ray reaches from Lina, in layout units (the play field is 600 x 338)."
+
+[options.walls_block]
+type = "bool"
+default = true
+description = "Static level geometry (tiles, walls) stops the ray: nothing is swapped when the ray hits a wall first. Off: the ray passes through walls and only movable objects count."
+
+[options.check_ticks]
+type = "int"
+default = 12
+description = "With trace: how many ticks after a swap to print where both objects really are (a check for tests)."
+
+[options.trace]
+type = "bool"
+default = false
+description = "Print every shot (what the ray hit, positions, ammo left) and the check after each swap to stdout."
+
+[stats]
+ammo = 3
+aim = "long"
+range = 400
+swaps_with = "first object in line of sight"
+walls_block = "yes"

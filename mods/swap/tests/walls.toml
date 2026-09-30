@@ -1,0 +1,28 @@
+name = "swap: a wall between Lina and the box stops the ray (walls_block, default)"
+mods = ["swap"]
+fixtures = ["debug-spawn"]
+timeout = 60
+
+[options.swap]
+trace = true
+
+# a box below the platform Lina stands on, right where her downward ray passes
+[options.debug-spawn]
+object = "box"
+tick = 118
+x = 130.0
+y = 280.0
+
+[harness]
+level = "greendemo 1"
+seed = 3
+items = ["swap", "box"]
+inputs = ["90-122:down", "120:shoot"]   # aim down, through the platform
+end_tick = 140
+
+[[expect]]
+contains = "[swap] tick 121: blocked by tile_short (ammo left 2)"
+[[expect]]
+not_contains = " <-> "
+[[expect]]
+not_contains = "nothing in line of sight"

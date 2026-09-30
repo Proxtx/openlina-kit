@@ -1,0 +1,36 @@
+name = "swap: aiming up at a falling box swaps Lina up into the air and the box down onto the platform"
+mods = ["swap"]
+fixtures = ["debug-spawn"]
+timeout = 60
+
+[options.swap]
+trace = true
+
+# a box dropped high above Lina, on her upward aim line (she aims up at about 76 degrees)
+[options.debug-spawn]
+object = "box"
+tick = 40
+x = 147.0
+y = 90.0
+
+[harness]
+level = "greendemo 1"
+seed = 3
+items = ["swap", "box"]
+inputs = ["36-52:up", "50:shoot"]
+end_tick = 200
+
+[[expect]]
+contains = "[swap] tick 51: player ("
+[[expect]]
+contains = ") <-> box ("
+[[expect]]
+contains = "near the object's old spot: true"
+[[expect]]
+contains = "near the player's old spot: true"
+[[expect]]
+not_contains = "old spot: false"
+
+[gif]
+capture = "20-200/2"
+out = "media/swap-up.gif"
