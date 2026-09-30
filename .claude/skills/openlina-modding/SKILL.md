@@ -5,8 +5,10 @@ description: Make, change, test and share mods for the game Mosa Lina with openl
 
 # OpenLina modding
 
-You are in `openlina-kit`. The full playbook is [AGENTS.md](../../../AGENTS.md): read it before patching game
-code. Game knowledge: `docs/game-internals.md`; existing mods: `docs/mods.md`; project state: `docs/PLAN.md`.
+Work in the `openlina-kit` checkout. If this skill is installed user-wide (a symlink in `~/.claude/skills/`), the
+checkout is three levels above the link's target: `cd "$(readlink -f ~/.claude/skills/openlina-modding)/../../.."`.
+If there is no checkout, ask the user where it is (or whether to clone it). The full playbook is
+[AGENTS.md](../../../AGENTS.md): read it before patching game code. Game knowledge: `docs/game-internals.md`; existing mods: `docs/mods.md`; project state: `docs/PLAN.md`.
 
 ## Setup (once per machine and game version)
 
@@ -45,6 +47,8 @@ A user gives you a pack link (`https://<site>/api/packs/<id>`) or JSON from the 
    - Otherwise change the mod's code, **bump its version** in `mod.toml`, add a scenario proving the change, run
      `lina test --mod <id>` and `--wasm`, refresh the gif if the behavior it shows changed.
    - Section requests ("all items: …") apply to every mod of that section in the pack.
+   - Conflicts ("Make A and B work together"): the user wants both. Change the mods so they coexist and drop the
+     `conflicts` entry; refuse only the option combinations that truly can't work, with a clear build error.
    - A request you can't do safely (or that contradicts the mod's purpose): tell the user instead of guessing.
 3. Check the pack as a whole: `lina build --pack work/pull/<pack>/modpack.toml` (and `lina run` if the user
    wants to play right away).

@@ -236,7 +236,11 @@ pub fn resolve_order(mods: &[ModManifest]) -> Result<Vec<usize>> {
         }
         for c in &m.info.conflicts {
             if index.contains_key(c.as_str()) {
-                bail!("`{}` conflicts with `{c}`", m.info.id);
+                bail!(
+                    "`{}` conflicts with `{c}` (its mod.toml says so): remove one, or change them to work together \
+                     (AGENTS.md, \"Load order\")",
+                    m.info.id
+                );
             }
         }
     }

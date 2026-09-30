@@ -60,7 +60,10 @@ lina new items portal-gun         # mods/portal-gun/: Cargo.toml, mod.toml, src/
   Format: `openlina_sdk::manifest`.
   - **Load order**: a mod runs after everything in its `requires` (must be present) and `after` (if present);
     the `core` section goes first; otherwise mods run in id order. `conflicts = [...]` refuses to build with the
-    listed mods. The order matters when mods patch the same code; prefer hooks, where order doesn't matter much.
+    listed mods: only for combinations that can never work. Mods that can't meet don't conflict (a level has one
+    modifier); a conflict that depends on options is checked in code (`runner::pack_info`, see `solid-edges`).
+    Website packs may contain conflicting mods; `lina pull` turns them into tasks. The order matters when mods
+    patch the same code; prefer hooks, where order doesn't matter much.
   - Read options with `cfg.bool` / `cfg.i64` (for `int`) / `cfg.f64` / `cfg.str` / `cfg.list`.
 - `src/main.rs`: `openlina_sdk::run_mod(|code, cfg| { ... })`. Read options with `cfg.bool/i64/f64/str`; the host
   always passes every declared option (defaults filled in), and rejects unknown or mistyped ones.

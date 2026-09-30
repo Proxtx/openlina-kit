@@ -1,0 +1,23 @@
+name = "solid-edges: with always = true it applies without the modifier"
+mods = ["solid-edges"]
+fixtures = ["debug-spawn"]
+timeout = 60
+
+[options.debug-spawn]
+object = "box"
+tick = 30
+x = 540.0
+y = 60.0
+
+[options.solid-edges]
+trace = true
+always = true
+
+[harness]
+level = "greendemo 1"
+modifier = 0
+seed = 1
+end_tick = 600
+
+[[expect]]
+contains = "[solid-edges] tick 362 box at (540, 305)"

@@ -91,12 +91,15 @@ The pack shows up with the custom level packs (a "downloaded" pack named Tumble,
 written to `userdata`. Tests: loads and turns; turn count and timing with short periods (showcase
 `media/turn.gif`); other levels don't turn.
 
-## solid-edges (modifiers, always on)
+## solid-edges (modifiers)
 
-The screen border is a wall: every tick, objects crossing the visible play field are pushed back inside and
+A modifier (key `solid-edges`, HUD icon from `art/modifier.toml`); with `always = true` it applies in every level.
+In levels that roll it, the screen border is a wall: every tick, objects crossing the visible play field are pushed back inside and
 bounce (`bounce` 0.5 of the speed kept; slower than `rest_speed` 40 they stop; `friction` 0.9 of the speed along
 the border kept per tick of contact). Player, frogs and fruits (unless `coins`) stay vanilla; long levels keep x
-open; objects far off-screen stay vanilla. Conflicts with screen-wrap. Idea by a friend of the project.
+open; objects far off-screen stay vanilla. With screen-wrap in the pack: two rolled modifiers never meet; an
+`always` one steps aside in levels that roll the other; both `always` refuses to build. Tests: 6 scenarios, 3 of
+them with screen-wrap. Idea by a friend of the project.
 
 ## mod-menu (general)
 

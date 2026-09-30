@@ -1,5 +1,14 @@
-//! `solid-edges`: the screen border is a wall. Objects bounce off it instead of leaving the
-//! screen and being deleted. Always on (idea by a friend of the project).
+//! `solid-edges`: a modifier. In levels that roll it, the screen border is a wall: objects bounce
+//! off it instead of leaving the screen and being deleted (idea by a friend of the project).
+//!
+//! It registers a modifier (`openlina_sdk::modifiers`, key `solid-edges`) with its own HUD icon
+//! (`assets/images/openlina/solid-edges.png`, from `art/modifier.toml`), rolled like the vanilla
+//! modifiers. With the option `always`, it applies in every level instead.
+//!
+//! With `screen-wrap` in the same pack (the other border rule): a level has one modifier, so two
+//! rolled ones never meet. An `always` one steps aside in levels that roll the other (a rolled
+//! solid-edges pushes objects back before screen-wrap sees them leave; an `always` solid-edges
+//! skips levels that rolled screen-wrap). Both `always` is contradictory and refuses to build.
 //!
 //! Vanilla deletes objects once they are well past the border (`EvSheet_gameplay.update`, see
 //! `mods/core`). This mod never lets them get there: on every `tick`, each object of
@@ -17,9 +26,10 @@
 //! - x in long levels and boss arenas (`bossMode`): they scroll horizontally, and vanilla only
 //!   tests top and bottom there too
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use openlina_sdk::asm::{FnBuilder, Label, Print};
 use openlina_sdk::hlbc::types::{RefType, Reg};
+use openlina_sdk::modifiers::{self, Modifier};
 use openlina_sdk::{hooks, Code, ModConfig};
 
 const SCREEN_W: f64 = 600.0;
@@ -49,6 +59,27 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
         rest_speed: cfg.f64("rest_speed", 40.0)?,
         coins: cfg.bool("coins", false)?,
         trace: cfg.bool("trace", false)?,
+    };
+    let always = cfg.bool("always", false)?;
+    // screen-wrap in the same pack: rolled (Some(false)), always on (Some(true)) or absent.
+    let wrap_always = openlina_sdk::runner::pack_info()?
+        .mods
+        .iter()
+        .find(|m| m.id == "screen-wrap")
+        .map(|m| m.options.get("always").and_then(|v| v.as_bool()).unwrap_or(false));
+    if always && wrap_always == Some(true) {
+        bail!(
+            "solid-edges and screen-wrap both have `always = true`: the border can't be a wall and a portal in every \
+             level. Set `always = false` on one of them; it then applies in the levels that roll it."
+        );
+    }
+    let modifier = if always {
+        None
+    } else {
+        Some(modifiers::register(
+            code,
+            &Modifier { key: "solid-edges", icon: "images/openlina/solid-edges.png", size: (16.0, 16.0), in_dx: true },
+        )?)
     };
 
     // Element types of the two pickers, as vanilla's update uses them.
@@ -80,6 +111,19 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     let mut f = hooks::handler(code, "tick", "solid-edges/tick")?;
     let (sheet, layout) = (f.arg(0), f.arg(1));
     let end = f.label();
+    match modifier {
+        // Only in levels that rolled the modifier.
+        Some(id) => {
+            let active = modifiers::is_active(&mut f, id)?;
+            f.jfalse(active, end);
+        }
+        // Always on, but not in levels that rolled screen-wrap.
+        None if wrap_always == Some(false) => {
+            let wrap = modifiers::is_active(&mut f, modifiers::id_of("screen-wrap"))?;
+            f.jtrue(wrap, end);
+        }
+        None => {}
+    }
     let tick = f.get_new(layout, "currentTick")?;
     let min = f.const_i32(MIN_TICK);
     f.jlt(tick, min, end);

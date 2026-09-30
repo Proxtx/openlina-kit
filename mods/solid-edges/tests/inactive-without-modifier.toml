@@ -1,0 +1,32 @@
+name = "solid-edges: without the modifier, the box falls out and is deleted as usual"
+mods = ["solid-edges"]
+fixtures = ["debug-spawn", "trace-calls"]
+timeout = 60
+
+[options.debug-spawn]
+object = "box"
+tick = 30
+x = 540.0
+y = 60.0
+
+[options.solid-edges]
+trace = true
+
+[options.trace-calls]
+functions = ["hook:edge_exit"]
+first = 1
+every = 0
+
+[harness]
+level = "greendemo 1"
+modifier = 0
+seed = 1
+end_tick = 600
+
+# the box reached the edge...
+[[expect]]
+contains = "[trace-calls] hook/edge_exit call #1"
+
+# ...without bouncing first
+[[expect]]
+not_contains = "[solid-edges] tick"

@@ -1,0 +1,29 @@
+name = "solid-edges always on + screen-wrap rolled: solid-edges steps aside in levels that rolled screen-wrap"
+mods = ["solid-edges", "screen-wrap"]
+fixtures = ["debug-spawn"]
+timeout = 60
+
+[options.debug-spawn]
+object = "box"
+tick = 30
+x = 540.0
+y = 60.0
+
+[options.solid-edges]
+trace = true
+always = true
+
+[options.screen-wrap]
+trace = true
+
+[harness]
+level = "greendemo 1"
+modifier_key = "screen-wrap"
+seed = 1
+end_tick = 600
+
+[[expect]]
+contains = "[screen-wrap] tick"
+
+[[expect]]
+not_contains = "[solid-edges] tick"

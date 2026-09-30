@@ -1,0 +1,28 @@
+name = "solid-edges + screen-wrap: in a level that rolled solid-edges, the box bounces and does not wrap"
+mods = ["solid-edges", "screen-wrap"]
+fixtures = ["debug-spawn"]
+timeout = 60
+
+[options.debug-spawn]
+object = "box"
+tick = 30
+x = 540.0
+y = 60.0
+
+[options.solid-edges]
+trace = true
+
+[options.screen-wrap]
+trace = true
+
+[harness]
+level = "greendemo 1"
+modifier_key = "solid-edges"
+seed = 1
+end_tick = 600
+
+[[expect]]
+contains = "[solid-edges] tick 362 box at (540, 305)"
+
+[[expect]]
+not_contains = "[screen-wrap] tick"

@@ -148,6 +148,9 @@ struct Pack {
     mods: Vec<PackMod>,
     #[serde(default)]
     section_requests: std::collections::BTreeMap<String, String>,
+    /// Pairs of mods that declare a conflict: the user wants them together, so make them fit.
+    #[serde(default)]
+    conflicts: Vec<[String; 2]>,
 }
 
 #[derive(Deserialize)]
@@ -287,7 +290,8 @@ pub fn pull(pack: &str, mods_dir: &Path, force: bool) -> Result<()> {
     modpack.save(&work.join("modpack.toml"))?;
     std::fs::write(work.join("REQUESTS.md"), requests_md(&pack, mods_dir, &notes)?)?;
 
-    let n = pack.mods.iter().filter(|m| m.request.is_some()).count() + pack.section_requests.len();
+    let n =
+        pack.mods.iter().filter(|m| m.request.is_some()).count() + pack.section_requests.len() + pack.conflicts.len();
     println!("\nwrote {}/{{pack.json, modpack.toml, REQUESTS.md}}", work.display());
     if n == 0 {
         println!("no change requests: build it with `lina build --pack {}/modpack.toml`", work.display());
@@ -325,6 +329,21 @@ fn requests_md(pack: &Pack, mods_dir: &Path, notes: &[String]) -> Result<String>
             .as_str(),
     );
     let mut any = false;
+    for [a, b] in &pack.conflicts {
+        any = true;
+        s.push_str(&format!("### Make {a} and {b} work together\n\n"));
+        s.push_str(&format!(
+            "The user put both into the pack, but one declares `conflicts` with the other, so the pack won't build.\n\
+             1. Find out why: the design notes of both (`mods/<id>/src/main.rs`) and what each patches. Often the\n   \
+                conflict only holds in some configurations (e.g. two modifiers never meet: a level has one).\n\
+             2. Change one or both so they coexist (precedence, stepping aside, an option), then remove the\n   \
+                `conflicts` entry and bump the version. If some option combination still can't work, refuse just\n   \
+                that at build time with a clear message (e.g. `openlina_sdk::runner::pack_info`).\n\
+             3. Add a scenario with both mods (`mods = [\"{a}\", \"{b}\"]`) that shows them working together.\n\
+             \nExample: `mods/solid-edges` (a modifier that combines with screen-wrap).\n\n"
+        ));
+        s.push_str("- [ ] done\n\n");
+    }
     for m in &pack.mods {
         let Some(req) = &m.request else { continue };
         any = true;
