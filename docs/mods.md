@@ -177,8 +177,9 @@ command line.
 
 ## trace-calls (debug)
 
-Prints `[trace-calls] <function> call #N  (fn@<findex> <file:line>)` to stdout: the first `first` calls, then every
-`every`-th. Functions are `pkg.Class.method`, `Class.method`, a findex, an injected function (`swap/use`) or
+Prints `[trace-calls] <function> call #N (<arguments>)  (fn@<findex> <file:line>)` to stdout: the first `first`
+calls, then every `every`-th. Arguments (`args`, default on): numbers and booleans as values, strings as text,
+objects as their static type; dynamic values, closures and refs as `_`. Functions are `pkg.Class.method`, `Class.method`, a findex, an injected function (`swap/use`) or
 `hook:<name>` for a core hook.
 
 ```toml
@@ -224,9 +225,12 @@ Drives the game for tests and recordings without input (source: `mods/harness/sr
 | `pause_tick` / `dump_menu` / `menu_open` | 0 / false / "" | open the pause menu at a level tick, print its items, press the item with this text |
 | `capture_ui` | false | also draw the UI layer (pause menu) into captured frames |
 | `new_run` | false | a returning player's run from the hub (tutorial done, RNGs seeded): the game's own run start with the MANAGER tool selection follows (`inputs` like `"30-700:right"` walk off the hub's right edge, `jump` confirms). The selection runs no gameplay ticks, so `capture`/`end_tick` also count layout ticks there |
+| `chaos` | false | from tick 60 of every screen but the title, when no scripted input is active: seeded random input (soak tests) |
+| `end_total` | 0 | exit after this many game steps on any screen |
+| `heartbeat` | 1200 | print `[harness] layout <name> tick <t>` on every screen change and every this many ticks |
 | `turbo` | 16 | extra game steps per rendered frame (0 = real time); results don't change, only the wall-clock time |
 | `new_run_items` | [] | with `new_run`: force these items into the first slots of the run start's tool roll |
 
 It prints `[harness] …` lines (`title skipped`, `loading level …`, `level tick 1: <name> modifier <m> frameTime <dt>`,
 `end at tick N`, `ERROR …`), which `lina test` checks. Use it through scenarios (`lina test`, `lina gif`), see
-AGENTS.md.
+AGENTS.md and docs/testing.md.

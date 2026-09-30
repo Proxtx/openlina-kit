@@ -1,0 +1,30 @@
+name = "all showcase mods together: new runs with random play (no crash, no hang)"
+mods = ["portal-gun", "swap", "screen-wrap", "solid-edges", "tumble", "mod-menu", "ammo-boost"]
+fixtures = ["trace-calls"]
+timeout = 240
+
+[options.trace-calls]
+functions = ["LevelManager.loadCurrentLevel", "ItemManager.reroll"]
+first = 50
+every = 0
+args = false
+
+# A returning player's run with both mod items in the tool roll: walk off the hub, confirm the
+# selection, then random input in every level (dying brings new runs and new rolls).
+[harness]
+new_run = true
+new_run_items = ["swap", "portal"]
+inputs = ["30-700:right", "1000-1010:jump", "1200-1210:jump", "1400-1410:shoot", "1600-1700:jump"]
+chaos = true
+end_total = 60000
+seed = 3
+
+[[expect]]
+contains = "[harness] run start: tool 0 forced to `swap`"
+
+# the selection led into a level, and play went on to more
+[[expect]]
+contains = "[trace-calls] fish.system.LevelManager.loadCurrentLevel call #2"
+
+[[expect]]
+contains = "[harness] end after 60000 steps"

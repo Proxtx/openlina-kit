@@ -106,3 +106,18 @@ description = "With new_run: put these items (by name) into the first slots of t
 type = "int"
 default = 16
 description = "Extra game steps per rendered frame (0 = real time). Steps keep their fixed length, so results don't change, only the wall-clock time."
+
+[options.heartbeat]
+type = "int"
+default = 1200
+description = "Print `[harness] layout <name> tick <t>` when the main layout changes and every this many of its ticks (0 = off), so a hang's log shows where it stopped."
+
+[options.chaos]
+type = "bool"
+default = false
+description = "From tick 60 of every layout but the title, when no scripted input is active: random inputs (seeded, new every 15 ticks; never restart). Random play in levels, wandering into new runs in the hub. For soak tests."
+
+[options.end_total]
+type = "int"
+default = 0
+description = "Exit after this many game steps in total, on any screen (0 = off). For soak runs through deaths and new runs."

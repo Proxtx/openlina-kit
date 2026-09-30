@@ -1,4 +1,4 @@
-//! `lina fn`, `lina callers`, `lina strings`: quick queries without a full dump.
+//! `lina fn`, `lina callers`, `lina strings`, `lina refs`, `lina class`: quick queries without a full dump.
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::Path;
@@ -108,6 +108,134 @@ pub fn strings(input: &Path, pattern: &str) -> Result<()> {
     }
     if hits.len() > 200 {
         println!("... {} more matches", hits.len() - 200);
+    }
+    Ok(())
+}
+
+/// `lina refs <name>`: every function that reads or writes a field called `name`, or uses the
+/// string `name` (as a `String` op or through a global holding the constant, which is how the
+/// game keeps most of its strings: object types, animation names, `ani_block` types).
+pub fn refs(input: &Path, name: &str) -> Result<()> {
+    let code = Code::load(input)?;
+    let mut rows = Vec::new();
+    for fun in &code.bc.functions {
+        let reads = openlina_sdk::edit::find_field_access(&code, fun, name, false);
+        let writes = openlina_sdk::edit::find_field_access(&code, fun, name, true);
+        let mut dyn_ops = Vec::new();
+        let mut strings = Vec::new();
+        for (i, op) in fun.ops.iter().enumerate() {
+            match op {
+                Opcode::DynGet { field, .. } | Opcode::DynSet { field, .. } if code.str(*field) == name => {
+                    dyn_ops.push(i)
+                }
+                Opcode::String { ptr, .. } if code.str(*ptr) == name => strings.push(i),
+                Opcode::GetGlobal { global, .. } if code.global_string(*global) == Some(name) => strings.push(i),
+                _ => {}
+            }
+        }
+        if reads.is_empty() && writes.is_empty() && dyn_ops.is_empty() && strings.is_empty() {
+            continue;
+        }
+        let list = |kind: &str, v: &[usize]| -> Option<String> {
+            (!v.is_empty()).then(|| {
+                let ops: Vec<String> = v.iter().take(6).map(|i| i.to_string()).collect();
+                format!("{kind} ×{} (op {}{})", v.len(), ops.join(","), if v.len() > 6 { ",…" } else { "" })
+            })
+        };
+        let what: Vec<String> =
+            [list("reads", &reads), list("writes", &writes), list("dynamic", &dyn_ops), list("string", &strings)]
+                .into_iter()
+                .flatten()
+                .collect();
+        let loc = code.func_location(fun).unwrap_or_default();
+        rows.push(format!("fn@{} {}  // {loc}\n    {}", fun.findex.0, code.func_name(fun.findex), what.join(", ")));
+    }
+    if rows.is_empty() {
+        let like: Vec<&str> = code
+            .bc
+            .strings
+            .iter()
+            .map(|s| s.as_str())
+            .filter(|s| s.to_lowercase().contains(&name.to_lowercase()) && s.len() < 80)
+            .take(15)
+            .collect();
+        bail!("nothing reads, writes or uses `{name}` (exact match). Similar strings: {like:?}");
+    }
+    rows.sort();
+    for r in rows.iter().take(150) {
+        println!("{r}");
+    }
+    if rows.len() > 150 {
+        println!("... {} more functions", rows.len() - 150);
+    }
+    Ok(())
+}
+
+/// `lina class <name>`: a class's fields (inherited ones marked), methods and static fields. The
+/// name may leave out the package (`OClass_item`).
+pub fn class(input: &Path, name: &str) -> Result<()> {
+    use hlbc::types::{RefType, Type};
+    let code = Code::load(input)?;
+    let t = match code.class(name) {
+        Ok(t) => t,
+        Err(_) => {
+            let suffix = format!(".{name}");
+            let found: Vec<RefType> = (0..code.bc.types.len())
+                .map(RefType)
+                .filter(|&t| matches!(code.bc.types[t.0], Type::Obj(_)))
+                .filter(|&t| {
+                    let n = code.type_name(t);
+                    n == name || n.ends_with(&suffix)
+                })
+                .filter(|&t| !code.type_name(t).contains('$'))
+                .collect();
+            match found.as_slice() {
+                [one] => *one,
+                [] => bail!("no class `{name}` (see work/dump/classes.tsv)"),
+                many => bail!(
+                    "`{name}` is ambiguous: {}",
+                    many.iter().map(|t| code.type_name(*t)).collect::<Vec<_>>().join(", ")
+                ),
+            }
+        }
+    };
+    let Type::Obj(o) = &code.bc.types[t.0] else { bail!("{name} is not a class") };
+    let mut chain = vec![];
+    let mut sup = o.super_;
+    while let Some(s) = sup {
+        chain.push(code.type_name(s));
+        sup = match &code.bc.types[s.0] {
+            Type::Obj(p) => p.super_,
+            _ => None,
+        };
+    }
+    println!(
+        "class {}{}",
+        code.type_name(t),
+        if chain.is_empty() { String::new() } else { format!(" extends {}", chain.join(" < ")) }
+    );
+    let own: std::collections::HashSet<String> = o.own_fields.iter().map(|f| code.str(f.name).to_string()).collect();
+    println!("fields:");
+    for f in &o.fields {
+        let n = code.str(f.name);
+        let mark = if own.contains(n) { "" } else { "  (inherited)" };
+        println!("  {n}: {}{mark}", code.type_name(f.t));
+    }
+    println!("methods:");
+    for p in &o.protos {
+        println!("  {}  fn@{}", code.str(p.name), p.findex.0);
+    }
+    if o.global.0 > 0 {
+        if let Some(Type::Obj(st)) = code.bc.globals.get(o.global.0 - 1).map(|g| &code.bc.types[g.0]) {
+            println!("statics (`$` object):");
+            let mut seen = std::collections::HashSet::new();
+            for f in st.fields.iter().chain(&st.own_fields) {
+                let n = code.str(f.name);
+                if seen.insert(n.to_string()) && !n.starts_with("__") {
+                    println!("  {n}: {}", code.type_name(f.t));
+                }
+            }
+        }
     }
     Ok(())
 }

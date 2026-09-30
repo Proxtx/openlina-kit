@@ -48,6 +48,9 @@ struct Opts {
     new_run: bool,
     new_run_items: Vec<String>,
     turbo: i32,
+    heartbeat: i32,
+    chaos: bool,
+    end_total: i32,
 }
 
 fn list(cfg: &ModConfig, key: &str) -> Result<Vec<String>> {
@@ -125,6 +128,9 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
         new_run: cfg.bool("new_run", false)?,
         new_run_items: list(cfg, "new_run_items")?,
         turbo: cfg.i64("turbo", 16)? as i32,
+        heartbeat: cfg.i64("heartbeat", 1200)? as i32,
+        chaos: cfg.bool("chaos", false)?,
+        end_total: cfg.i64("end_total", 0)? as i32,
     };
 
     let i32_t = code.ty_i32();
@@ -136,6 +142,9 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     if o.turbo > 0 {
         turbo(code, o.turbo)?;
     }
+    if o.heartbeat > 0 {
+        heartbeat(code, o.heartbeat)?;
+    }
     let capture = if o.capture.is_some() { Some(build_capture(code, &o.capture_dir, o.capture_ui)?) } else { None };
     if o.new_run {
         run_start_clock(code, &o, capture)?;
@@ -145,8 +154,11 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     }
     let tick = build_tick(code, &o, state, capture)?;
     hooks::subscribe(code, "tick", tick)?;
-    if !o.inputs.is_empty() {
+    if !o.inputs.is_empty() || o.chaos {
         script_inputs(code, &o, state)?;
+    }
+    if o.end_total > 0 {
+        end_total(code, o.end_total)?;
     }
     Ok(())
 }
@@ -238,6 +250,107 @@ fn turbo(code: &mut Code, steps: i32) -> Result<()> {
     let acc = f.get_new(main, "accum")?;
     f.add(acc, acc, extra);
     f.set(main, "accum", acc)?;
+    f.ret_void();
+    let h = f.finish()?;
+    prepend_call(code, main_loop, h, &[Reg(0)])
+}
+
+/// `chaos`: from tick 60 of every layout but the title screen, when no scripted input is active,
+/// random input bits (up down left right jump shoot switch; never restart), new every 15 ticks.
+/// In levels that is random play; in the hub it wanders off (a new run), on the tool selection it
+/// confirms. The generator is seeded once, so a scenario replays the same way.
+fn chaos_bits(f: &mut FnBuilder, layout: Reg, t: Reg, bits: Reg) -> Result<()> {
+    let i32_t = f.code().ty_i32();
+    let state = f.code().add_global(i32_t);
+    let current = f.code().add_global(i32_t);
+    let skip = f.label();
+    let zero = f.const_i32(0);
+    f.jne(bits, zero, skip); // scripted input wins
+    let name = f.get_new(layout, "name")?;
+    let title = f.string_obj("first_screen")?;
+    f.jeq(name, title, skip);
+    let sixty = f.const_i32(60);
+    f.jlt(t, sixty, skip);
+    // every 15 ticks: state = state * 1103515245 + 12345; current = (state >> 16) & 0x7f
+    let (fifteen, m) = (f.const_i32(15), f.reg_i32());
+    f.op(Opcode::SMod { dst: m, a: t, b: fifteen });
+    let keep = f.label();
+    f.jne(m, zero, keep);
+    let st = f.get_global(state);
+    let (mul, add) = (f.const_i32(1103515245), f.const_i32(12345));
+    f.op(Opcode::Mul { dst: st, a: st, b: mul });
+    f.op(Opcode::Add { dst: st, a: st, b: add });
+    f.set_global(state, st);
+    let (sh, mask, v) = (f.const_i32(16), f.const_i32(0x7f), f.reg_i32());
+    f.op(Opcode::UShr { dst: v, a: st, b: sh });
+    f.op(Opcode::And { dst: v, a: v, b: mask });
+    f.set_global(current, v);
+    f.place(keep);
+    let v = f.get_global(current);
+    f.mov(bits, v);
+    f.place(skip);
+    Ok(())
+}
+
+/// `end_total`: exit (code 0) after this many game steps in total, whatever the screen
+/// (`fish.system.Game.update` runs once per step everywhere): for soak runs that die, restart
+/// and roll new runs.
+fn end_total(code: &mut Code, steps: i32) -> Result<()> {
+    let update = code.method("fish.system.Game", "update")?;
+    let args = code.func_type(update)?.args.clone();
+    let (void, i32_t) = (code.ty_void(), code.ty_i32());
+    let count = code.add_global(i32_t);
+    let mut f = FnBuilder::new(code, "harness/end_total", &args[..1], void);
+    let end = f.label();
+    let n = f.get_global(count);
+    f.op(Opcode::Incr { dst: n });
+    f.set_global(count, n);
+    let lim = f.const_i32(steps);
+    f.jlt(n, lim, end);
+    f.print(&[Print::Str("[harness] end after "), Print::Val(n), Print::Str(" steps")])?;
+    f.exit(0)?;
+    f.place(end);
+    f.ret_void();
+    let h = f.finish()?;
+    prepend_call(code, update, h, &[Reg(0)])
+}
+
+/// A sign of life from `Main.mainLoop`, which runs on every screen: `[harness] layout <name>
+/// tick <t>` whenever the main layout changes and every `every` ticks of it. When a run hangs or
+/// waits, the log's last lines say where (`lina test` shows them).
+fn heartbeat(code: &mut Code, every: i32) -> Result<()> {
+    let main_loop = code.method("fish.system.Main", "mainLoop")?;
+    let main_t = code.class("fish.system.Main")?;
+    let layout_t = code.class("fish.system.Layout")?;
+    let (void, i32_t) = (code.ty_void(), code.ty_i32());
+    let last_layout = code.add_global(layout_t);
+    let last_bucket = code.add_global(i32_t);
+    let mut f = FnBuilder::new(code, "harness/heartbeat", &[main_t], void);
+    let main = f.arg(0);
+    let end = f.label();
+    let game = f.get_new(main, "game")?;
+    f.jnull(game, end);
+    let layouts = f.get_new(game, "layouts")?;
+    f.jnull(layouts, end);
+    let layout = f.get_new(layouts, "mainLayout")?;
+    f.jnull(layout, end);
+    let t = f.get_new(layout, "currentTick")?;
+    let n = f.const_i32(every);
+    let bucket = f.reg_i32();
+    f.op(Opcode::SDiv { dst: bucket, a: t, b: n });
+    let (report, same_layout) = (f.label(), f.label());
+    let prev = f.get_global(last_layout);
+    f.jeq(prev, layout, same_layout);
+    f.set_global(last_layout, layout);
+    f.jmp(report);
+    f.place(same_layout);
+    let pb = f.get_global(last_bucket);
+    f.jeq(pb, bucket, end);
+    f.place(report);
+    f.set_global(last_bucket, bucket);
+    let name = f.get_new(layout, "name")?;
+    f.print(&[Print::Str("[harness] layout "), Print::Val(name), Print::Str(" tick "), Print::Val(t)])?;
+    f.place(end);
     f.ret_void();
     let h = f.finish()?;
     prepend_call(code, main_loop, h, &[Reg(0)])
@@ -749,6 +862,9 @@ fn script_inputs(code: &mut Code, o: &Opts, state: RefGlobal) -> Result<()> {
         let br = f.const_i32(b);
         f.op(Opcode::Or { dst: bits, a: bits, b: br });
         f.place(skip);
+    }
+    if o.chaos {
+        chaos_bits(&mut f, layout, t, bits)?;
     }
     f.call_new(read_bin, &[pi, bits])?;
     let yes = f.reg(bool_t);

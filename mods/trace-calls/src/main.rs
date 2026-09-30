@@ -2,7 +2,9 @@
 //!
 //! The quickest way to answer "does this code run, and how often?" without a debugger.
 //! Each function gets its own call counter (a new global); the first `first` calls are
-//! printed, then every `every`-th call.
+//! printed, then every `every`-th call. With `args` (default), each line also shows the call's
+//! arguments: numbers and booleans as values, strings as text, objects as their static type, anything
+//! else (dynamic values, closures, refs, bytes) as `_`.
 
 use anyhow::{bail, Result};
 use openlina_sdk::asm::{FnBuilder, Print};
@@ -17,6 +19,7 @@ fn main() {
 fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     let first = cfg.i64("first", 3)? as i32;
     let every = cfg.i64("every", 600)? as i32;
+    let show_args = cfg.bool("args", true)?;
     let names: Vec<String> = match cfg.table.get("functions") {
         None => vec![],
         Some(toml::Value::Array(a)) => a
@@ -37,7 +40,10 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
         let void = code.ty_void();
         let counter = code.add_global(i32_t);
 
-        let mut f = FnBuilder::new(code, "trace-calls/trace", &[], void);
+        let arg_types = if show_args { code.func_type(target)?.args.clone() } else { vec![] };
+        // Per argument: print its value, or this fixed text (objects: their static type).
+        let shown: Vec<Option<String>> = arg_types.iter().map(|&t| shown(code, t)).collect();
+        let mut f = FnBuilder::new(code, "trace-calls/trace", &arg_types, void);
         let (n, lim, rem, zero) = (f.reg(i32_t), f.const_i32(first), f.reg(i32_t), f.const_i32(0));
         let (print, done) = (f.label(), f.label());
         f.op(Opcode::GetGlobal { dst: n, global: counter });
@@ -51,17 +57,43 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
         }
         f.jmp(done);
         f.place(print);
-        f.print(&[
-            Print::Str("[trace-calls] "),
-            Print::Str(&label),
-            Print::Str(" call #"),
-            Print::Val(n),
-            Print::Str(&place),
-        ])?;
+        let mut line = vec![Print::Str("[trace-calls] "), Print::Str(&label), Print::Str(" call #"), Print::Val(n)];
+        if show_args {
+            line.push(Print::Str(" ("));
+            for (i, fixed) in shown.iter().enumerate() {
+                if i > 0 {
+                    line.push(Print::Str(", "));
+                }
+                line.push(match fixed {
+                    None => Print::Val(f.arg(i)),
+                    Some(text) => Print::Str(text),
+                });
+            }
+            line.push(Print::Str(")"));
+        }
+        line.push(Print::Str(&place));
+        f.print(&line)?;
         f.place(done);
         f.ret_void();
         let hook = f.finish()?;
-        prepend_call(code, target, hook, &[])?;
+        let regs: Vec<_> = (0..arg_types.len() as u32).map(openlina_sdk::hlbc::types::Reg).collect();
+        prepend_call(code, target, hook, &regs)?;
     }
     Ok(())
+}
+
+/// How an argument of this type is shown: `None` = its value (numbers, booleans, strings), else a
+/// fixed text. Objects show their static type: turning arbitrary objects into text (`Std.string`)
+/// can crash the game.
+fn shown(code: &Code, t: openlina_sdk::hlbc::types::RefType) -> Option<String> {
+    use openlina_sdk::hlbc::types::Type;
+    match &code.bc.types[t.0] {
+        Type::UI8 | Type::UI16 | Type::I32 | Type::I64 | Type::F32 | Type::F64 | Type::Bool => None,
+        Type::Obj(_) if code.type_name(t) == "String" => None,
+        Type::Obj(_) | Type::Struct(_) => {
+            let n = code.type_name(t);
+            Some(n.rsplit('.').next().unwrap_or(&n).to_string())
+        }
+        _ => Some("_".into()),
+    }
 }

@@ -26,16 +26,23 @@ installing or updating anything, including rustup targets or toolchains. The gam
 
 1. Pick the section: `items` (a tool Lina fires), `modifiers` (a rule rolled per level), `levels` (level packs),
    `general` (anything else). Look at the showcase mod of that section first:
-   `portal-gun`, `screen-wrap`/`solid-edges`, `tumble`, `mod-menu`.
-2. `lina new <section> <id>`, then write `src/main.rs` with the SDK (AGENTS.md "Library map"): prefer core hooks
+   `portal-gun`, `screen-wrap`/`solid-edges`, `tumble`, `mod-menu`. Find out how the game does the thing by
+   looking at it running (`lina probe … --at tick:30 <paths>`) and searching (`lina refs`, `lina class`).
+2. `lina new <section> <id>`, then write `src/main.rs` with the SDK (docs/sdk.md): prefer core hooks
    (`lina hooks`) and the registries (`items`, `modifiers`, `levels`, `text`, `anims`) over raw patches.
 3. Options for every tunable, a `trace` option, `[stats]` in `mod.toml` for the website, the design notes as the
    module doc comment.
 4. Graphics as text grids: `art/*.toml` → `lina sprite … --out assets/images/…` (game) and `media/icon.png` (site).
-   To find out how the game behaves, look at it running: `lina probe … --at tick:30 <paths>` (AGENTS.md §1).
-5. Tests: scenarios in `tests/*.toml` that can fail (`lina test --mod <id>`, then `--wasm`; `-k`, `--failed`), a showcase gif
+5. Tests (docs/testing.md): scenarios in `tests/*.toml` that can fail (`lina test --mod <id>`, then `lina test`
+   and `--wasm`; `-k`, `--failed`), a showcase gif
    (`lina gif mods/<id>/tests/<x>.toml`); look at the frames in `work/gif/frames/` before keeping it.
 6. Add it to `docs/mods.md`; commit.
+
+## Bugs (a mod hangs, crashes or misbehaves)
+
+Follow docs/debugging.md: reproduce it as a failing scenario first (`new_run` + `new_run_items` for real play,
+`chaos` for "sometimes"), look with `lina probe` and `trace-calls` (with arguments), explain with `lina refs`, fix
+in the SDK when a registry misses a place the game lists things, keep the scenario as a test, run everything.
 
 ## B. A pack from the website (change requests)
 

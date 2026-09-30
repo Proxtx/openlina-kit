@@ -1,201 +1,111 @@
 # Writing Mosa Lina mods: playbook
 
-For AI agents and humans. Read [README.md](README.md) for the overview, [docs/game-internals.md](docs/game-internals.md)
-for what's known about the game, and [docs/PLAN.md](docs/PLAN.md) for where the project stands.
+For AI agents and humans. Mods are Rust programs that patch the game's HashLink bytecode; `lina` builds, tests and
+shares them, `openlina` installs them for players. This file is the workflow and the rules. Details:
 
-## Setup (once per game version)
+| read | when |
+|---|---|
+| [docs/testing.md](docs/testing.md) | writing scenarios, gifs, sprites; running tests |
+| [docs/sdk.md](docs/sdk.md) | using the SDK: library map, registry checklists, HashLink pitfalls |
+| [docs/debugging.md](docs/debugging.md) | something hangs, crashes or behaves wrong |
+| [docs/game-internals.md](docs/game-internals.md) | what is known about the game's code |
+| [docs/mods.md](docs/mods.md) | the existing mods and dev fixtures, with their options |
+| [docs/PLAN.md](docs/PLAN.md) | where the project stands |
+
+## Setup (once per machine and game version)
 
 ```bash
 nix develop                       # optional: Rust + wasm32-wasip1, imagemagick, gifsicle. Without nix: rustup +
                                   # `rustup target add wasm32-wasip1` + imagemagick (ask the user before installing)
 lina() { ./lina "$@"; }           # the wrapper builds the tools when needed
 lina doctor                       # checks all of the above and the game; fix what it reports
-lina setup                        # work/hlboot.orig.dat (+ version check)
-lina dump                         # work/dump/: hx/ (pseudo-Haxe), asm/ (exact), classes.tsv, functions.tsv
-lina check                        # must report 0 validator problems
+lina setup && lina dump && lina check   # pristine bytecode, searchable dump, 0 validator problems
 ```
 
 `work/` and `dist/` are git-ignored. They hold game-derived files; never commit them.
 
-## 1. Find the code
+## 1. Find out how the game does it
 
-- **Grep the dump.** `work/dump/hx/<pkg>/<Class>.hx` is readable but lossy: the decompiler gets loops, closures
-  and some control flow wrong, and prints `// decompilation failed` for about 200 functions (including
-  `EvSheet_gameplay.update`, the main game loop). `work/dump/asm/<pkg>/<Class>.asm` is exact. Every function
-  header shows `fn@<findex>` and its source `file:line`, and every op its source line (`L1234`).
-- Game logic lives in `fish.game.evsheet.EvSheet_*` (event sheets, per-tick `update`), object types in
-  `fish.game.oclass.OClass_*`, engine code in `fish.system.*`. See docs/game-internals.md.
-- Queries: `lina fn <Class.method|findex> [--hx] [--ops a..b]` (`Class.method` works without the package;
-  `--hx` falls back to the disassembly when the decompiler fails, which is common for closures and big functions),
-  `lina callers <fn>`, `lina strings <text>`, `lina hooks`,
-  `grep -rn "\.fieldName$" work/dump/asm` (readers of a field), `classes.tsv` / `functions.tsv`.
-- Many callbacks are anonymous closures in `asm/_global.asm`, attributed by their source line.
-- **Look at the running game** instead of guessing from the code: `lina probe` prints any part of the game's
-  state at a moment you pick, in about 7 seconds, no mod or scenario to write:
-  `lina probe --mod swap --level "greendemo 1" --at tick:30 game.itemManager.itemPool.length "@item[].NAME"`
-  (`--new-run` for the run start, `--at layout:manager@200` for screens without gameplay, `--input`, `--capture`).
-  Paths start at `Main.i`, `@<type>` (the layout's objects of a type) or `$<class>.<static>`; `[]` walks arrays.
-  It writes `work/probe.toml`, a normal scenario (fixture `inspect`) you can extend and turn into a test.
+- **Look at it running** first: `lina probe` prints any part of the game's state at a moment you pick (~7 s):
+  `lina probe --mod swap --level "greendemo 1" --at tick:30 game.itemManager.itemPool.length "@item[].NAME"`.
+  `--new-run` plays the run start, `--at layout:manager@200` works on screens without gameplay, `--input`,
+  `--capture`. It writes `work/probe.toml`, a scenario you can grow into a test.
+- **Search the code**: `lina refs <field|string>` (who reads, writes or uses it), `lina class <Class>`,
+  `lina fn <Class.method|findex> [--hx] [--ops a..b]`, `lina callers <fn>`, `lina hooks`. The package can be left
+  out of names.
+- **The dump** (`work/dump/`): `hx/` is readable pseudo-Haxe but lossy (loops, closures; ~200 functions fail,
+  including `EvSheet_gameplay.update`); `asm/` is exact, with `fn@<findex>`, source `file:line` and per-op `L1234`.
+  Closures live in `asm/_global.asm`. Game logic: `fish.game.evsheet.EvSheet_*` (per-tick `update`); objects:
+  `fish.game.oclass.OClass_*`; engine: `fish.system.*`.
 
 ## 2. Plan the patch
 
 Prefer, in order:
 
-1. **Subscribe to a hook** (`hooks::handler` + `hooks::subscribe`). Hooks are provided by the `core` mod, listed
-   in `openlina_sdk::hooks::CORE_HOOKS`. Several mods can use the same hook without knowing about each other.
-2. **Add a hook to `core`** when the game point you need will interest other mods too: define it in
-   `mods/core` (`hooks::define` + wiring into the game code) and document it in `CORE_HOOKS`.
-3. Patch game code directly, only for mod-specific points:
-   - **guard an existing call** (`edit::guard_op`): `if (myFn(args)) skip op;`, vanilla stays as fallback
-   - **hook a function's entry** (`edit::prepend_call`)
-   - **replace a single op** (`edit::replace_op`)
-   - **insert ops** (`edit::insert_ops`, `insert_ops_with_exits`); every jump is relocated for you
+1. **A registry or hook of the SDK** (`items`, `modifiers`, `levels`, `text`, `anims`; `hooks::handler` +
+   `hooks::subscribe` on the `core` hooks, `lina hooks`). Several mods can use the same hook without knowing about
+   each other. A registry must cover every place the game lists that kind of thing: see the checklists in
+   docs/sdk.md.
+2. **A new `core` hook** when the game point will interest other mods too (`hooks::define` in `mods/core`, document
+   it in `CORE_HOOKS`).
+3. **A direct patch** for mod-specific points: guard a call (`edit::guard_op`), hook an entry
+   (`edit::prepend_call`), replace an op (`edit::replace_op`), insert ops (`edit::insert_ops*`, jumps are
+   relocated).
 
-Write new logic as new functions with `asm::FnBuilder` (or `hooks::handler`, which gives you one with the hook's
-signature) instead of long inline op sequences: easier to read, validate, and trace (`openlina/<name>:<op>` in
-stack traces).
+Write new logic as new functions (`asm::FnBuilder`, or `hooks::handler`, which has the hook's signature) instead of
+long inline op sequences: easier to read, validate and trace (`openlina/<name>:<op>` in stack traces).
 
 ## 3. Write the mod
 
-```bash
-lina new items portal-gun         # mods/portal-gun/: Cargo.toml, mod.toml, src/main.rs (tick hook example)
-```
+`lina new <section> <id>` creates `mods/<id>/` (sections: `items|modifiers|levels|general|dev`). Look at the
+showcase mod of the section first: `portal-gun`/`swap`, `screen-wrap`/`solid-edges`, `tumble`, `mod-menu`.
 
-- `mod.toml`: id (= directory name), name, version, section (`items|modifiers|levels|general|dev`),
-  description, `requires = ["core"]`, options with type (`bool|int|float|string|list`)/default/description.
-  Format: `openlina_sdk::manifest`.
-  - **Load order**: a mod runs after everything in its `requires` (must be present) and `after` (if present);
-    the `core` section goes first; otherwise mods run in id order. `conflicts = [...]` refuses to build with the
-    listed mods: only for combinations that can never work. Mods that can't meet don't conflict (a level has one
-    modifier); a conflict that depends on options is checked in code (`runner::pack_info`, see `solid-edges`).
-    Website packs may contain conflicting mods; `lina pull` turns them into tasks. The order matters when mods
-    patch the same code; prefer hooks, where order doesn't matter much.
-  - Read options with `cfg.bool` / `cfg.i64` (for `int`) / `cfg.f64` / `cfg.str` / `cfg.list`.
-- `src/main.rs`: `openlina_sdk::run_mod(|code, cfg| { ... })`. Read options with `cfg.bool/i64/f64/str`; the host
-  always passes every declared option (defaults filled in), and rejects unknown or mistyped ones.
-- `assets/` (optional): files overlaid onto `fish/game/res/` (e.g. `assets/images/my-sheet.png`).
-- `media/` (optional): icon and showcase gifs for the website.
-- `modpack.toml` is the development pack `lina build` / `lina run` use without `--mod`; add your mod there if you
-  want it in those runs. Tests (`lina test`), `lina build --mod <id>` and publishing don't need it.
-- `[mod] showcase = ["best.gif", …]`: the order of the gifs on the website (the first leads).
+- `mod.toml` (format: `openlina_sdk::manifest`): id (= directory), name, version, section, description,
+  `requires = ["core"]`, options (`bool|int|float|string|list`, default, description), `[stats]` for the website,
+  `showcase` gif order.
+- **Load order**: a mod runs after its `requires` (must be present) and `after` (if present); `core` first;
+  otherwise by id. `conflicts = [...]` refuses to build with the listed mods: only for combinations that can
+  never work. Mods that can't meet don't conflict (a level has one modifier); a conflict that depends on options is
+  checked in code (`runner::pack_info`, see `solid-edges`). Website packs may hold conflicting mods; `lina pull`
+  turns them into tasks.
+- `src/main.rs`: `openlina_sdk::run_mod(|code, cfg| { … })`; options via `cfg.bool/i64/f64/str/list` (every
+  declared option is passed, unknown ones are rejected). Its module doc comment is the design document: what
+  vanilla does, what the mod changes, what it leaves alone.
+- `assets/` overlays `fish/game/res/`; `media/` holds the website icon and gifs; `art/*.toml` pixel art.
+- `modpack.toml` is the development pack for `lina build` / `lina run` without `--mod`.
 
 Rules:
 
-- **Find anchors by meaning, not by index.** Look ops up through field names (`edit::find_field_access`), calls
-  (`edit::find_calls`, `call_target`) and nearby ops (`next_match`, `prev_match`). Pin each anchor down with
-  `edit::expect_one` / `ensure!`, so a game update fails the build instead of patching the wrong op.
-- Registers: take them from the anchors (`Field { dst, obj, .. }`) and check their types before relying on them.
-- When patching several places in one function, go from the **last index to the first**: inserting ops shifts
-  later indices.
-- Expose tunables as options, and add a `trace` option that prints what the mod does (`FnBuilder::print`).
-- The module doc comment of `src/main.rs` is the mod's design document: what vanilla does, what the mod changes,
-  what it leaves alone. Add the mod to `docs/mods.md` and new findings to `docs/game-internals.md`.
+- **Anchors by meaning, not by index**: find ops through field names (`edit::find_field_access`), calls
+  (`edit::find_calls`) and neighbors (`next_match`, `prev_match`); pin each with `edit::expect_one` / `ensure!`, so
+  a game update fails the build instead of patching the wrong op. Take registers from the anchors and check their
+  types. Patch several places in one function from the last index to the first.
+- Every tunable is an option; add a `trace` option that prints what the mod does (`FnBuilder::print`).
+- Add the mod to `docs/mods.md` and what you learned to `docs/game-internals.md`.
 
 ## 4. Verify
 
-Everything runs headless (SDL offscreen driver): no window, no human. The harness runs 16 extra game steps per
-rendered frame (`turbo`), and `lina test` runs half the cores' worth of scenarios at once: the whole suite takes
-about a minute. Steps keep their fixed length, so results are the same as in real time.
+1. `lina build --mod <id>` (`--wasm` for what players run): each mod validates what it touched and the result must
+   parse. `lina fn <fn> --input work/hlboot.modded.dat` shows a patched or injected function (`swap/use`).
+2. Scenarios in `mods/<id>/tests/*.toml` that **can fail** (docs/testing.md); `lina test --mod <id>`, then
+   `lina test` (all, <1 min) and `lina test --wasm`. `-k <text>`, `--failed`.
+3. A showcase gif (`lina gif`); look at the frames before keeping it.
+4. `cargo test --release`, `cargo clippy --release`, `cargo fmt`.
 
-1. `lina build --mod <id>` (natively; `--wasm` for exactly what players run). Each mod validates the functions
-   it touched (register bounds, jumps, call arity and value kinds, fields, returns) and the result must parse.
-2. `lina fn <patched fn> --input work/hlboot.modded.dat --ops a..b` to eyeball the patch; functions you added are
-   found by the name you gave `FnBuilder::new` (`lina fn swap/use --input work/hlboot.modded.dat`).
-3. **Write scenarios** in `mods/<id>/tests/*.toml` (`lina new` creates `tests/smoke.toml`; format:
-   `tools/lina/src/scenario.rs`) and run them with `lina test --mod <id>` (`--wasm` too before publishing):
-   - `[harness]`: `level` (names: run a scenario with `list_levels = true` and read its log), `seed`, `items`
-     (item names, same listing), `modifier`, `inputs` (`"60-90:right+jump"`), `end_tick`; `new_run` plays the
-     game's own run start instead (hub, MANAGER tool selection; `new_run_items` forces items into its roll), see
-     `mods/swap/tests/run-start-selection.toml`
-   - `fixtures`: `debug-spawn` (spawn objects: `object`/`tick`/`x`/`y`, or `spawns = ["box@60:300,60", …]`),
-     `trace-positions` (prints `[pos] tick T <type> x y` for `types` at `ticks`), `trace-calls` (log calls to any
-     function), or a fixture mod of your own subscribing to `tick`
-   - `[[expect]]`: `contains` (+ `min`/`max`) and `not_contains` on log lines; `position = { tick, type, x, y,
-     within, away }` on `trace-positions` output (where things are, independent of your mod's own trace). A run
-     also fails on a crash, a `[harness] ERROR`, a non-zero exit or the timeout.
-   - Aiming in scenarios: see "Aiming" in docs/game-internals.md (hold the direction on the shoot tick).
-   - **Make every test able to fail.** Assert that the situation happened (e.g. `trace-calls` shows vanilla's
-     function ran), not just that nothing bad was printed; test options in both directions.
-   - Runs are deterministic: the harness seeds every RNG of the run from `seed`, so the same build and scenario give
-     the same items, ticks and coordinates. The harness prints `[harness] slot k: <item> ammo <n>` at level tick 1.
-   - `items` rolls from a temporary pool of just those items with the game's own code (so ammo mods apply); slot
-     order follows the seed.
-   - Scenario files can live anywhere (`lina test path/to/x.toml`), e.g. throwaway probes with `list_levels`.
-   - Logs: `work/test/<n>/log.txt` (build lines first), numbered by position in the run. A run fails on a crash, a
-     logged Haxe exception (`Null access`, `Called from …`), a `[harness] ERROR`, a non-zero exit or the timeout;
-     the failure report shows the log's last lines (where a hang stopped) and keeps the patched game in
-     `work/test/<n>/game/` (`lina fn … --input work/test/<n>/game/hlboot.dat`).
-   - `lina test -k <text>` (name or file contains), `--failed` (the failures of the last run), `-j <n>` (parallel
-     runs, default half the cores). Captured frames also land in one contact sheet, `work/test/<n>/frames.png`.
-4. **Showcase gifs** (the scenario's expectations are checked too): add a `[gif]` section (`capture = "from-to/step"` in level ticks, 120 ticks per second;
-   `out = "media/x.gif"`) and run `lina gif mods/<id>/tests/<scenario>.toml` (`--out <file>` writes elsewhere,
-   e.g. for a probe). Frames come from the game's own renderer at 600×338. Look at them before publishing
-   (`work/gif/frames/*.png`). `capture` in a plain `lina test` also works (frames in `work/test/<n>/frames/`).
-5. **Graphics**: pixel art as text grids in `mods/<id>/art/*.toml`, rendered with
-   `lina sprite mods/<id>/art/x.toml --out mods/<id>/assets/images/x.png` (game sprites; paths are relative to
-   where you run it) or `--out mods/<id>/media/icon.png` (website icon).
-   `lina sprite --palette` lists the game palette; `--scale 16` writes a preview you can look at.
-6. `cargo test --release` (relocation, validator and manifest tests), `cargo clippy --release`, `cargo fmt`
-   (`rustfmt.toml`: 120 columns).
-7. `lina pack <id>` produces `dist/<id>-<version>.zip`. To test the player flow, bundle it (required mods such as
-   `core` are added automatically) and install into a throwaway data dir:
-   `lina pack <id> --bundle try && OPENLINA_HOME=$PWD/work/home ./openlina install dist/try.zip`
-   (a single mod zip can only be installed on top of its requirements).
+When something hangs, crashes or misbehaves: docs/debugging.md (reproduce as a scenario, `lina probe`,
+`trace-calls` with arguments, `lina refs`, fix, keep the test).
 
 ## 5. Share (OpenLina website)
 
-- `lina login <site>`: asks for the token from the site's maintainer (or reads it from stdin); there is no
-  default site, so ask the user for it (the skill has the details); saved in
-  `~/.config/openlina/lina.toml` (600), or the file in `$OPENLINA_CONFIG`.
-- `lina pull <pack link>`: packages + source of mods you don't have into `mods/<id>/`; `work/pull/<pack>/` gets
-  `modpack.toml` (options, change requests) and `REQUESTS.md` (a to-do list: option or code change, bump the
-  version, test, bundle for the player).
-- `lina publish <id>`: scenarios on wasm, package with source (`source/` in the zip), dry-run summary; uploads
-  only with `--yes`, **after the user agreed**. The skill `.claude/skills/openlina-modding` has the full workflow.
-- **Safety**: after every mod, lina and the player's `openlina` compare the bytecode (`openlina_sdk::caps`) and
-  report new uses of files, programs, network, Steam, reflection, new natives, changed constants or types. lina
-  warns; `openlina` refuses the mod until the player runs `openlina allow <id>`. Mods from `lina pull` are marked
-  (`.openlina-pulled`), build and run only as wasm, and are refused outright when they reach outside the game;
-  sources with build scripts, hidden files or foreign dependencies are quarantined instead of extracted.
-
-## HashLink pitfalls (learned the hard way)
-
-- The **`String` opcode yields raw UTF-16 `hl.Bytes`**, not a `String` object. Use `FnBuilder::string_obj`.
-- **String pool index 0 is `"String"`**, but hlbc's `Resolve` prints index 0 as `<none>`. Use `Code::str`.
-- Jumps are relative: `target = pos + 1 + offset`. Backward jump targets must be `Label` ops. `Switch.end` marks
-  the end of the switch block and may equal `ops.len()`; the default case falls through.
-- Free functions have no name in the bytecode. Injected ones are recognized by their debug file
-  (`openlina/<name>`); hooks by `openlina/hook/<name>`.
-- A call's `dst` register must match the callee's return kind, or be `Void` to discard the result.
-- hlbc's private findex tables are only rebuilt on load. After adding functions, use `Code::func`/`func_type`
-  (linear search), not hlbc's `code.get(RefFun)`.
-- Only `Mosa Lina_jit` runs bytecode. It needs its resources relative to the working directory and the game dir on
-  `LD_LIBRARY_PATH` (`lina run` / `openlina run` do this).
-- Setting `sprite.position` teleports physics objects (`Physics.syncPosWithSprite`).
-- The game parks objects off-screen and deletes objects placed off-screen in the first ticks of a layout.
-  Anything that changes edge or destroy behavior needs to account for that.
-- `Layout.createObject(layout, type, …)` only creates types registered in `ObjectClasses.createInstance`
-  (not plain `Sprite`; `Sprite15`/`Sprite21` are plain decorative types that work).
-- An object class's animation map (`$OClass_x._animData`) is built when its first instance is created; adding to
-  it earlier makes the game skip its own animations. `anims::ensure` waits for it.
-- Mods run as separate processes on the whole bytecode: a mod cannot see another mod's Rust state, only what the
-  previous mods left in the bytecode (hooks, debug file names).
-
-## Library map (`tools/sdk`, crate `openlina_sdk`)
-
-| module | purpose |
-|---|---|
-| `Code` (lib.rs) | load/save, `class`, `field`, `field_type`, `method`, `find_fn` (any name people write), `native`, `func(_mut)`, `func_type`, `func_name`, `op_location`, interning (`string`, `float`, `int`, `intern_type`, `ty_*`), `add_global` |
-| `asm::FnBuilder` | new functions: registers (`reg`, `reg_f64`/`reg_i32`/`reg_bool`), labels, jumps, constants, `get`/`set` fields, `call`, `static_obj`, `new_obj`, `cast`, `string_obj`, `string_of`, `print`, arrays (`array_len`, `array_get`, `new_array_obj`, `empty_f64_array`, `for_range`), `jstr_ne`, `exit`, globals (`get_global`, `set_global`, `clear_global`), `static_closure` |
-| `edit` | `find*`, `expect_one`, `next_match`/`prev_match`, `replace_op`, `insert_ops`, `insert_ops_with_exits`, `guard_op`, `prepend_call`, `remove_ops`, `add_reg` |
-| `hooks` | `CORE_HOOKS`, `find`, `signature`, `handler`, `subscribe`, `define` |
-| `modifiers` | `register` a modifier (pool + HUD icon), `is_active`, `id_of`, `current_modifier` |
-| `items` | `register` an item (pool entry, item object for the tool selection and editor, HUD + large icon, label), `is_item`, `crosshair_pos`; behavior in an `item_use` handler |
-| `levels` | `LevelPack::from_toml` + `register`: level packs built in code (core `packs` hook); `current_level_name`, `jump_unless_in_pack` |
-| `text` | `set(key, value)`: texts the game looks up (`Localisation.loc`), e.g. `TOOL_<NAME>` item labels |
-| `anims` | `ensure` / `ensure_frames`: an animation from mod images in an object class's animation map |
-| `runner` | `run_mod`: the `main` of every mod |
-| `manifest` | `ModManifest` (mod.toml), `ModPack` (modpack.toml), `resolve_order` |
-| `validate` | `check_function`, `check_touched`, `kind` |
-| `physics` | `RayCast`: the nearest object on a line (Box2D `world_ray_cast`), e.g. line of sight |
-| `caps` | `Snapshot`, `diff`: what a patch makes the game able to do outside the game (see Safety above) |
+- `lina login <site>`: the user logs in with a token from the site's maintainer; there is no default site, so ask.
+  Saved in `~/.config/openlina/lina.toml` (600) or `$OPENLINA_CONFIG`. Never print, pass on the command line or
+  commit a token.
+- `lina pull <pack link>`: mods you don't have into `mods/<id>/`, and `work/pull/<pack>/` with `modpack.toml` and
+  `REQUESTS.md` (the change requests as a to-do list).
+- `lina publish <id>`: wasm scenarios, package with source, dry-run summary; uploads only with `--yes`, **after the
+  user agreed**. The skill `.claude/skills/openlina-modding` has the full workflow.
+- **Safety**: after every mod, `lina` and the player's `openlina` compare the bytecode (`openlina_sdk::caps`) and
+  report new uses of files, programs, network, Steam, reflection, new natives, changed constants or types. `lina`
+  warns; `openlina` refuses the mod until the player runs `openlina allow <id>`. Pulled mods (`.openlina-pulled`)
+  build and run only as wasm and are refused when they reach outside the game; sources with build scripts, hidden
+  files or foreign dependencies are quarantined.

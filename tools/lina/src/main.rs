@@ -65,6 +65,19 @@ enum Cmd {
         #[arg(long, default_value = ORIG)]
         input: PathBuf,
     },
+    /// Every function that reads or writes a field of this name or uses this string (also the
+    /// game's string globals, which `strings` misses).
+    Refs {
+        name: String,
+        #[arg(long, default_value = ORIG)]
+        input: PathBuf,
+    },
+    /// A class's fields (with types), methods and statics; the package may be left out.
+    Class {
+        name: String,
+        #[arg(long, default_value = ORIG)]
+        input: PathBuf,
+    },
     /// List the mods in mods/ and their options.
     Mods,
     /// List the hooks the `core` mod provides (subscribe with `openlina_sdk::hooks`).
@@ -232,6 +245,8 @@ fn main() -> Result<()> {
         Cmd::Fn { func, hx, ops, input } => inspect::show_fn(&input, &func, hx, ops.as_deref()),
         Cmd::Callers { func, input } => inspect::callers(&input, &func),
         Cmd::Strings { pattern, input } => inspect::strings(&input, &pattern),
+        Cmd::Refs { name, input } => inspect::refs(&input, &name),
+        Cmd::Class { name, input } => inspect::class(&input, &name),
         Cmd::Mods => build::list_mods(),
         Cmd::Hooks => {
             for h in openlina_sdk::hooks::CORE_HOOKS {

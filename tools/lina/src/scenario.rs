@@ -261,7 +261,17 @@ fn check(sc: &Scenario, code: Option<i32>, log: &str) -> Vec<String> {
     let mut fails = Vec::new();
     match code {
         Some(0) => {}
-        Some(124) => fails.push(format!("timed out after {}s (set harness.end_tick?)", sc.timeout)),
+        Some(124) => {
+            let last = log.lines().rev().find(|l| l.starts_with("[harness] layout "));
+            fails.push(match last {
+                Some(l) => format!(
+                    "timed out after {}s; last seen: {} (a hang or a screen waiting for input there? else set harness.end_tick)",
+                    sc.timeout,
+                    l.trim_start_matches("[harness] ")
+                ),
+                None => format!("timed out after {}s (set harness.end_tick?)", sc.timeout),
+            })
+        }
         c => fails.push(format!("game exited with {c:?}")),
     }
     // Haxe exceptions the game catches and logs still mean the mod broke something.
@@ -297,7 +307,8 @@ fn check(sc: &Scenario, code: Option<i32>, log: &str) -> Vec<String> {
     fails
 }
 
-/// Scenario files: the given paths, or every `mods/*/tests/*.toml` (optionally of one mod).
+/// Scenario files: the given paths, or every `mods/*/tests/*.toml` (optionally of one mod) plus
+/// `tests/*.toml`.
 pub fn find(paths: &[PathBuf], only_mod: Option<&str>) -> Result<Vec<PathBuf>> {
     if !paths.is_empty() {
         return Ok(paths.to_vec());
@@ -315,6 +326,15 @@ pub fn find(paths: &[PathBuf], only_mod: Option<&str>) -> Result<Vec<PathBuf>> {
                 if p.extension().is_some_and(|x| x == "toml") {
                     out.push(p);
                 }
+            }
+        }
+    }
+    // Scenarios across mods (packs of several mods, soak runs) live in tests/.
+    if only_mod.is_none() && Path::new("tests").is_dir() {
+        for t in std::fs::read_dir("tests")? {
+            let p = t?.path();
+            if p.extension().is_some_and(|x| x == "toml") {
+                out.push(p);
             }
         }
     }
