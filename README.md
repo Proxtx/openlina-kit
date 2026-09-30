@@ -1,7 +1,7 @@
 # openlina-kit
 
 Everything to create, test and package mods for [Mosa Lina](https://store.steampowered.com/app/2477090/Mosa_Lina/),
-the toolkit behind OpenLina (the mod hub in `../openlina-web`). Written in Rust; agents are first-class users
+the toolkit behind OpenLina (the mod hub, [openlina-web](https://github.com/Proxtx/openlina-web), checked out next to this repo). Written in Rust; agents are first-class users
 (see [AGENTS.md](AGENTS.md)).
 
 Mods patch the game's HashLink bytecode (`hlboot.dat`). The game install is never modified: the patched game runs
