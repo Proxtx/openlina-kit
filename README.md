@@ -90,7 +90,7 @@ run `openlina allow <id>`; the allowance ends when the mod changes. Gameplay mod
 [openlina-web](../openlina-web) is the mod hub: people pick mods, add change requests and export a pack.
 
 ```bash
-lina login https://<site> <token>   # token from the site's maintainer; stored in ~/.config/openlina/lina.toml
+lina login https://<site>           # asks for the token from the site's maintainer; stored in ~/.config/openlina/lina.toml
 lina pull <pack link>               # packages, source into mods/<id>/, work/pull/<pack>/REQUESTS.md
 lina publish <id>                   # tests (wasm), package, dry run; `--yes` uploads (agents ask the user first)
 ```

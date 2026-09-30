@@ -130,7 +130,8 @@ Everything runs headless (SDL offscreen driver): no window, no human, faster tha
 
 ## 5. Share (OpenLina website)
 
-- `lina login <site> <token>`: token from the site's maintainer (or on stdin); saved in
+- `lina login <site>`: asks for the token from the site's maintainer (or reads it from stdin); there is no
+  default site, so ask the user for it (the skill has the details); saved in
   `~/.config/openlina/lina.toml` (600), or the file in `$OPENLINA_CONFIG`.
 - `lina pull <pack link>`: packages + source of mods you don't have into `mods/<id>/`; `work/pull/<pack>/` gets
   `modpack.toml` (options, change requests) and `REQUESTS.md` (a to-do list: option or code change, bump the

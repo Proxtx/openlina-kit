@@ -1,6 +1,6 @@
 ---
 name: openlina-modding
-description: Make, change, test and share mods for the game Mosa Lina with openlina-kit (HashLink bytecode patches in Rust). Use for any Mosa Lina mod work - a new item, modifier, level or general mod, applying the change requests of an OpenLina pack (`lina pull <pack link>`), recording showcase gifs, installing a pack for the player, or uploading a mod to an OpenLina site (`lina publish`, only after the user agreed).
+description: Make, change, test and share mods for the game Mosa Lina with openlina-kit (HashLink bytecode patches in Rust). Use for any Mosa Lina mod work - a new item, modifier, level or general mod, applying the change requests of an OpenLina pack (`lina pull` with the pack link), recording showcase gifs, installing a pack for the player, or uploading a mod to an OpenLina site (`lina publish`, only after the user agreed).
 ---
 
 # OpenLina modding
@@ -59,8 +59,12 @@ A user gives you a pack link (`https://<site>/api/packs/<id>`) or JSON from the 
 
 ## C. Uploading (only with the user's OK)
 
-- Log in once with the token the user got from the site's maintainer: `lina login <site> <token>` (or pipe the
-  token on stdin so it stays out of the shell history). Never print or commit the token.
+- There is no default site. `lina doctor` shows whether (and where) lina is logged in. If it isn't, **ask the
+  user** for the site's URL (e.g. `https://openlina.example`) and whether they have an upload token (it comes from
+  the site's maintainer). Best: the user logs in themselves in a terminal, `./lina login <site>`, and pastes the
+  token at the prompt, so it never passes through you. Otherwise pipe it on stdin (`lina login <site> < file`);
+  never put it on the command line, print it or commit it.
+- Pulling needs no login: a full pack link names its site. Only a bare pack id needs the site from `lina login`.
 - `lina publish <id>` runs the mod's scenarios on the wasm build, packages it with its source, and shows what
   would be uploaded (dry run). **Show that summary to the user and ask** whether to upload.
 - Only after a clear yes: `lina publish <id> --yes`. New uploads are `unreviewed` until a maintainer approves them.
