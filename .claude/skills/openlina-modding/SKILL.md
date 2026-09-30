@@ -8,7 +8,7 @@ description: Make, change, test and share mods for the game Mosa Lina with openl
 Work in an `openlina-kit` checkout (a directory with `AGENTS.md` and `tools/lina/`). If the current directory isn't
 one, look for it (`find ~ -maxdepth 6 -type d -name openlina-kit`) or ask the user; if there is none, offer to
 clone https://github.com/Proxtx/openlina-kit (ask first). The full playbook is `AGENTS.md` in the checkout: read it
-before patching game code. Game knowledge: `docs/game-internals.md`; existing mods: `docs/mods.md`; project state: `docs/PLAN.md`.
+before patching game code. Game knowledge: `docs/game-internals.md` (index of `docs/game/*.md`); existing mods: `docs/mods.md`; project state: `docs/PLAN.md`.
 
 ## Setup (once per machine and game version)
 

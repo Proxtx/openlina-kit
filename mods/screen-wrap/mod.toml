@@ -26,7 +26,7 @@ description = "Also wrap secondary physics objects."
 [options.max_overshoot]
 type = "float"
 default = 200.0
-description = "Only wrap objects at most this far past the edge. Physics objects move at most 100 units per tick; the game parks objects it wants deleted about 1000 units out."
+description = "Only wrap objects at most this far past the edge. Physics objects move at most 100 units per tick (the Box2D speed cap, observed in game), so keep this above 100. Parked objects sit about 1000 out."
 
 [options.min_tick]
 type = "int"
@@ -36,7 +36,7 @@ description = "Don't wrap during the first ticks of a layout, when levels delete
 [options.trace]
 type = "bool"
 default = false
-description = "Print every wrap to stdout."
+description = "Print `[screen-wrap] tick T kind K (x, y) -> (x', y')` for every wrap."
 
 [stats]
 kind = "modifier"

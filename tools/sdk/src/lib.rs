@@ -396,8 +396,8 @@ impl Code {
     }
 
     /// A function by name, as people and scenarios write it: a findex (`2816`), `hook:<name>` (a
-    /// core hook), an injected function (`swap/use`), `pkg.Class.method`, or `Class.method` without
-    /// the package when that is unique.
+    /// core hook), an injected function (`swap/use`), `pkg.Class.method`, `Class.method` without
+    /// the package when that is unique, or a native (`world_set_gravity`, `lib.name`).
     pub fn find_fn(&self, spec: &str) -> Result<RefFun> {
         if let Ok(i) = spec.parse::<usize>() {
             return Ok(RefFun(i));
@@ -416,6 +416,20 @@ impl Code {
                 n == spec || (!spec.contains('/') && n.ends_with(&suffix))
             })
             .collect();
+        // Natives (`world_set_gravity`, `std.sys_time`): by name or `lib.name`.
+        let found = if found.is_empty() {
+            self.bc
+                .natives
+                .iter()
+                .filter(|n| {
+                    let (lib, name) = (self.str(n.lib), self.str(n.name));
+                    spec == name || spec == format!("{lib}.{name}")
+                })
+                .map(|n| n.findex)
+                .collect()
+        } else {
+            found
+        };
         match found.as_slice() {
             [one] => Ok(*one),
             [] if spec.contains('/') => {

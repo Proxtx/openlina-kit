@@ -49,6 +49,18 @@ Options: `ammo`, `radius`, `range`, `preset` (`"ax,ay,bx,by"`: place both portal
 showcases), `trace`. Tests: in the pool; firing places blue then orange along the aim; a box loops through
 the portals (showcase `media/loop.gif`).
 
+Options:
+
+<!-- options:portal-gun -->
+| option | type | default | description |
+|---|---|---|---|
+| `ammo` | int | `4` | Portal shots per level. |
+| `radius` | float | `14.0` | How close to a portal's center an object must get to go through. |
+| `range` | float | `160.0` | How far from Lina, along the aim, a portal lands (kept inside the play field). |
+| `preset` | string | `""` | Place both portals when a level starts: "ax,ay,bx,by" (tests, showcases). |
+| `trace` | bool | `false` | Print portal placements and teleports to stdout. |
+<!-- /options -->
+
 ## swap (items)
 
 A new item, **Swap** (`swap`, 3 ammo, long aim): each shot casts a ray from Lina along her aim, `range` (400) units
@@ -66,14 +78,16 @@ icon and label via `openlina_sdk::items`; icon drawn from `art/icon.toml` (`asse
 Source: `mods/swap/src/main.rs`. Requires `core`. `tests/run-start-selection.toml` checks that a run start whose tool
 roll drew swap goes on into the first level.
 
-| option | default | |
-|---|---|---|
-| `ammo` | `3` | Shots per level (0 to 99). |
-| `aim` | `"long"` | Aim type: `shoot`, `short`, `short2`, `mid`, `mid2`, `long`, `long2`, `remote`. Only the direction counts. |
-| `range` | `400` | Ray length in layout units (the play field is 600 × 338). |
-| `walls_block` | `true` | Static bodies (tiles, walls) stop the ray; nothing is swapped when one is hit first. |
-| `check_ticks` | `12` | With `trace`: ticks after a swap at which both positions are read back and compared. |
-| `trace` | `false` | Print every shot (`[swap] tick T: ray …`, `player (x, y) <-> box (x, y)`, `nothing in line of sight`, `blocked by <type>`, with the ammo left) and the check after each swap (`[swap] check: … near the object's old spot: true`). |
+<!-- options:swap -->
+| option | type | default | description |
+|---|---|---|---|
+| `ammo` | int | `3` | Swap shots per level (0 to 99). |
+| `aim` | string | `"long"` | How the item is aimed (the game's aim types): shoot, short, short2, mid, mid2, long, long2 or remote. Only the direction counts; the ray is `range` long. |
+| `range` | float | `400.0` | How far the ray reaches from Lina, in layout units (the play field is 600 x 338). |
+| `walls_block` | bool | `true` | Static level geometry (tiles, walls) stops the ray: nothing is swapped when the ray hits a wall first. Off: the ray passes through walls and only movable objects count. |
+| `check_ticks` | int | `12` | With trace: how many ticks after a swap to print where both objects really are (a check for tests). |
+| `trace` | bool | `false` | Print every shot (`[swap] tick T: ray …`, `player (x, y) <-> box (x, y)`, `nothing in line of sight`, `blocked by <type>`, with the ammo left) and the check after each swap (`[swap] check: … near the object's old spot: true`). |
+<!-- /options -->
 
 Tests (`mods/swap/tests/`, 8 scenarios): in the pool with 3 shots; `ammo` option; a box right of Lina is swapped
 and both positions hold 12 ticks later (read back from the game); aiming up at a box in the air swaps Lina up and
@@ -93,6 +107,18 @@ The pack shows up with the custom level packs (a "downloaded" pack named Tumble,
 written to `userdata`. Tests: loads and turns; turn count and timing with short periods (showcase
 `media/turn.gif`); other levels don't turn.
 
+Options:
+
+<!-- options:tumble -->
+| option | type | default | description |
+|---|---|---|---|
+| `trace` | bool | `false` | Print what the mod does to stdout. |
+| `period` | int | `1200` | Ticks between quarter turns (120 ticks per second). |
+| `turn_ticks` | int | `180` | How long a quarter turn takes, in ticks. |
+| `segments` | int | `14` | Tiles in the ring (one of them is left out as the gap). |
+| `radius` | float | `130.0` | Radius of the ring. |
+<!-- /options -->
+
 ## solid-edges (modifiers)
 
 A modifier (key `solid-edges`, HUD icon from `art/modifier.toml`); with `always = true` it applies in every level.
@@ -103,23 +129,38 @@ open; objects far off-screen stay vanilla. With screen-wrap in the pack: two rol
 `always` one steps aside in levels that roll the other; both `always` refuses to build. Tests: 6 scenarios, 3 of
 them with screen-wrap. Idea by a friend of the project.
 
+Options:
+
+<!-- options:solid-edges -->
+| option | type | default | description |
+|---|---|---|---|
+| `always` | bool | `false` | Apply in every level instead of as a rolled modifier (then it steps aside in levels that roll screen-wrap). |
+| `bounce` | float | `0.5` | Share of the speed kept when bouncing off the border (0 = stop dead, 1 = perfectly elastic). |
+| `friction` | float | `0.9` | Speed along the border kept per tick of contact (1 = frictionless sliding). |
+| `rest_speed` | float | `40.0` | Impacts slower than this stop instead of bouncing (avoids jitter while resting on the border). |
+| `coins` | bool | `false` | Fruits bounce too. Pushing fruits out is how levels are won, so this makes levels unwinnable. |
+| `trace` | bool | `false` | Print every real bounce (not resting contact) to stdout. |
+<!-- /options -->
+
 ## moon-gravity (modifiers)
 
 A modifier (key `moon-gravity`, id 4779, HUD icon from `art/modifier.toml`, also in "dx" runs); with `always = true`
 it applies in every level instead (no icon then). In levels that roll it, gravity is `factor` (0.5) of vanilla:
 boxes, fruits and Lina fall slower, and Lina's jump goes about twice as high (45 instead of 22 units) and lasts twice
 as long. It scales the game's own gravity strength (`g` in the "gravity" group of `EvSheet_gameplay.update`, see
-[game-internals.md](game-internals.md#gravity)) once per tick, so vanilla's low-gravity objects, flipped gravity and
+[game/world.md](game/world.md#gravity)) once per tick, so vanilla's low-gravity objects, flipped gravity and
 no-gravity zones keep working on top of it. Left alone: water and `z_up` lift, Lina while digging, `secondary_physics`
 objects. Combines with every other modifier mod (a level has one modifier; an `always` moon gravity stacks with any).
 
 Source: `mods/moon-gravity/src/main.rs`. Requires `core`.
 
-| option | default | |
-|---|---|---|
-| `factor` | `0.5` | Gravity as a share of vanilla's (0 = floating, 1 = vanilla; 0 to 4). |
-| `always` | `false` | Apply in every level instead of as a rolled modifier (also on other screens with gameplay physics, e.g. the tutorial). |
-| `trace` | `false` | Print `[moon-gravity] <layout> tick 1: gravity x<factor>` when a layout with moon gravity starts. |
+<!-- options:moon-gravity -->
+| option | type | default | description |
+|---|---|---|---|
+| `factor` | float | `0.5` | Gravity in moon levels, as a share of vanilla gravity (0 = floating, 1 = vanilla; up to 4). |
+| `always` | bool | `false` | Apply in every level instead of as a rolled modifier (and on other screens with gameplay physics, e.g. the tutorial; no HUD icon then). |
+| `trace` | bool | `false` | Print `[moon-gravity] <layout> tick 1: gravity x<factor>` when a layout with moon gravity starts. |
+<!-- /options -->
 
 Tests (`mods/moon-gravity/tests/`, 6 scenarios, positions read by `trace-positions`): a box falls 32 units in 170
 ticks instead of vanilla's 65; without the modifier the box and a jump match vanilla exactly and nothing is printed;
@@ -132,6 +173,15 @@ Adds `OPENLINA MODS (n)` to the pause menu, after the game's MODDING MENU: a sub
 (except dev mods) with its version and, with `show_options`, its option values. It learns the pack from
 `openlina_sdk::runner::pack_info` (the host passes every mod the resolved pack).
 
+Options:
+
+<!-- options:mod-menu -->
+| option | type | default | description |
+|---|---|---|---|
+| `show_options` | bool | `true` | List each mod's option values under it. |
+| `trace` | bool | `false` | Print the entries it adds to stdout. |
+<!-- /options -->
+
 ## screen-wrap
 
 A **modifier**: in levels that roll it, objects that leave the screen reappear on the opposite side, keeping their
@@ -143,14 +193,16 @@ the same way vanilla only tests those edges there.
 
 Source: `mods/screen-wrap/src/main.rs`. Requires `core`. Tests: `mods/screen-wrap/tests/` (6 scenarios).
 
-| option | default | |
-|---|---|---|
-| `always` | `false` | Apply in every level instead of as a rolled modifier. |
-| `coins` | `false` | Also wrap coins (fruits). Pushing fruits out is how levels are won, so this makes levels unwinnable. |
-| `secondary` | `true` | Also wrap "secondary physics" objects. |
-| `max_overshoot` | `200` | Only wrap objects at most this far past the edge. Physics objects move at most 100 units per tick (the Box2D speed cap, observed in game), so keep this above 100. Parked objects sit about 1000 out. |
-| `min_tick` | `5` | Don't wrap during the first ticks of a layout. |
-| `trace` | `false` | Print `[screen-wrap] tick T kind K (x, y) -> (x', y')` for every wrap. |
+<!-- options:screen-wrap -->
+| option | type | default | description |
+|---|---|---|---|
+| `always` | bool | `false` | Apply in every level instead of as a rolled modifier. |
+| `coins` | bool | `false` | Also wrap fruits. Pushing fruits out is how levels are won, so this makes levels unwinnable. |
+| `secondary` | bool | `true` | Also wrap secondary physics objects. |
+| `max_overshoot` | float | `200.0` | Only wrap objects at most this far past the edge. Physics objects move at most 100 units per tick (the Box2D speed cap, observed in game), so keep this above 100. Parked objects sit about 1000 out. |
+| `min_tick` | int | `5` | Don't wrap during the first ticks of a layout, when levels delete objects placed off-screen. |
+| `trace` | bool | `false` | Print `[screen-wrap] tick T kind K (x, y) -> (x', y')` for every wrap. |
+<!-- /options -->
 
 What stays vanilla:
 - The player still dies at the edge.
@@ -161,7 +213,7 @@ What stays vanilla:
 
 How it works: it subscribes a handler to the core `edge_exit` hook. The handler moves the object by exactly one
 play-field size and returns true, so an object that just crossed the bottom limit reappears just past the top
-limit and keeps falling into view. See [game-internals.md](game-internals.md#screen-and-edges) for the vanilla
+limit and keeps falling into view. See [game/world.md](game/world.md#screen-and-edges) for the vanilla
 edge test.
 
 Verified in game (all by `lina test`): the game's roll draws it (seed 11); with the modifier a spawned box keeps
@@ -176,10 +228,12 @@ Every item the player gets starts with `factor` times its vanilla ammo (`baseAmm
 
 Source: `mods/ammo-boost/src/main.rs`. Requires `core`.
 
-| option | default | |
-|---|---|---|
-| `factor` | `2` | Multiplier for the starting ammo (0 to 1000). Items without ammo stay empty. |
-| `trace` | `false` | Print every boosted value (`[ammo-boost] <item>: ammo 2 -> 4`) and, on tick 1 of every gameplay layout, the slots' real ammo compared with `baseAmmo` (`level start slot 0: frog ammo 6 = 2 x 3`). |
+<!-- options:ammo-boost -->
+| option | type | default | description |
+|---|---|---|---|
+| `factor` | int | `2` | Multiply the starting ammo of every item by this (0 to 1000). Items without ammo stay empty. |
+| `trace` | bool | `false` | Print every boosted value (`[ammo-boost] <item>: ammo 2 -> 4`) and, on tick 1 of every gameplay layout, the slots' real ammo compared with `baseAmmo` (`level start slot 0: frog ammo 6 = 2 x 3`). |
+<!-- /options -->
 
 How it works: the game always copies ammo as `Field r = type.baseAmmo; SetField holder.ammo = r`
 (11 places in build 22056877); the mod inserts `r = boost(r, type)` between the two ops.
@@ -198,6 +252,28 @@ read typed where the type is known (a superclass is cast to the one subclass tha
 otherwise; a field no known type has fails the build. `lina probe` writes and runs such a scenario from the
 command line.
 
+Options:
+
+<!-- options:inspect -->
+| option | type | default | description |
+|---|---|---|---|
+| `at` | list | `["tick:1"]` | When: `tick:N` (level tick N), `layout:<name>@N` (the first frame of layout <name> at or after its tick N; `layout:<name>` for its start). |
+| `print` | list | `[]` | What: paths from `Main.i` (`game.levelManager.currentLevel.type.name`), `@<type>` for a layout's objects of that type (`@item_icon[].sprite.anim`) or `$<class>.<static>` (`$fish.game.oclass.OClass_item_icon._animData`). `[]` goes through every element of an array, `[3]` picks one. |
+<!-- /options -->
+
+## record (dev)
+
+Prints `[record] level <name> modifier <m>` and `[record] slot k <item> <ammo>` at tick 1 of every gameplay
+layout and `[record] tick T bits B` whenever player 1's input changes. `lina run --record` plays with it and
+turns every level attempt into a replay scenario (`work/recordings/`: `level`, `modifier`, harness `slots`,
+`inputs`); `lina recordings <log>` does the same for any log with those lines. A recorded and replayed harness run
+gives identical positions; a human session replays as long as the level has no random elements (the harness seeds
+the run itself).
+
+<!-- options:record -->
+No options.
+<!-- /options -->
+
 ## trace-calls (debug)
 
 Prints `[trace-calls] <function> call #N (<arguments>)  (fn@<findex> <file:line>)` to stdout: the first `first`
@@ -211,6 +287,17 @@ id = "trace-calls"
 options = { functions = ["fish.game.evsheet.EvSheet_gameplay.update", "3751"], first = 3, every = 600 }
 ```
 
+Options:
+
+<!-- options:trace-calls -->
+| option | type | default | description |
+|---|---|---|---|
+| `functions` | list | `[]` | Functions to trace: `pkg.Class.method`, `Class.method`, a findex, an injected function (`swap/use`), or `hook:<name>` for a core hook. |
+| `first` | int | `3` | Print the first N calls of each function. |
+| `every` | int | `600` | Then print every N-th call (0 = never). |
+| `args` | bool | `true` | Also print each call's arguments (numbers, strings, objects as their class). |
+<!-- /options -->
+
 ## debug-spawn (debug)
 
 Subscribes to `tick`. Spawns an object at layout tick `tick` of every gameplay layout: `object` (default `"box"`) at (`x`, `y`)
@@ -220,6 +307,19 @@ and wraps forever.
 Several objects: `spawns = ["box@60:300,60", "s_ball@90:420,40"]` (`<type>@<tick>:<x>,<y>`, layer 0) instead of
 the single-object options.
 
+Options:
+
+<!-- options:debug-spawn -->
+| option | type | default | description |
+|---|---|---|---|
+| `object` | string | `"box"` | Object type to create (see fish.game.oclass.OClass_*). |
+| `tick` | int | `60` | Layout tick at which to spawn. |
+| `x` | float | `300.0` | x position (the play field is 600 x 338). |
+| `y` | float | `60.0` | y position. |
+| `layer` | int | `0` | Layer index. |
+| `spawns` | list | `[]` | Several objects instead: ["<type>@<tick>:<x>,<y>", ...] (layer 0). Overrides object/tick/x/y/layer. |
+<!-- /options -->
+
 ## trace-positions (dev)
 
 Test fixture: at every tick in `ticks` (`"60-600/60"`, `"130"`, `"59,72,200-260/20"`), prints
@@ -227,32 +327,48 @@ Test fixture: at every tick in `ticks` (`"60-600/60"`, `"130"`, `"59,72,200-260/
 `["*"]` for all). Scenarios check it with `[[expect]] position = { tick, type, x, y, within, away }`, so a test
 can see where things are without relying on the mod under test to print it (see `mods/swap/tests/swap-positions.toml`).
 
+Options:
+
+<!-- options:trace-positions -->
+| option | type | default | description |
+|---|---|---|---|
+| `types` | list | `["player"]` | Object types to report (the `type` of physics objects: player, box, coin, frog, …); ["*"] for all. |
+| `ticks` | string | `"60-600/60"` | Layout ticks: `from-to/step`, a single tick, or several separated by commas (e.g. "118,130,200-260/20"). |
+<!-- /options -->
+
 ## harness (dev)
 
 Drives the game for tests and recordings without input (source: `mods/harness/src/main.rs`):
 
-| option | default | |
-|---|---|---|
-| `start_tick` | 5 | title-screen tick at which to skip to the game (like a key press) |
-| `level` | "" | level to load by name, e.g. `"greendemo 1"`; empty keeps the run's first level (the tutorial) |
-| `level_n` | -1 | level number within the pack (-1: any) |
-| `seed` | 1 | seeds the level roll and every RNG of the run (items, modifier, colors, …) |
-| `roll_modifier` | false | let the game draw a modifier (as in runs) |
-| `modifier_key` | "" | force the modifier registered with this key, e.g. `"screen-wrap"` |
-| `modifier` | -1 | force a modifier id |
-| `items` | [] | items to roll from, e.g. `["box", "bomb"]` (up to 3, repeated if fewer): the game assigns them with its own code, slot order follows the seed |
-| `inputs` | [] | scripted inputs in level ticks: `"60-90:right+jump"`, `"120:shoot"` (up down left right jump shoot switch restart); the keyboard is ignored while set |
-| `end_tick` | 0 | exit the game (code 0) at this level tick |
-| `capture` / `capture_dir` | "" / "frames" | save 600×338 PNG frames `from-to/step` |
-| `list_levels` | false | print every level and item name, then exit |
-| `pause_tick` / `dump_menu` / `menu_open` | 0 / false / "" | open the pause menu at a level tick, print its items, press the item with this text |
-| `capture_ui` | false | also draw the UI layer (pause menu) into captured frames |
-| `new_run` | false | a returning player's run from the hub (tutorial done, RNGs seeded): the game's own run start with the MANAGER tool selection follows (`inputs` like `"30-700:right"` walk off the hub's right edge, `jump` confirms). The selection runs no gameplay ticks, so `capture`/`end_tick` also count layout ticks there |
-| `chaos` | false | from tick 60 of every screen but the title, when no scripted input is active: seeded random input (soak tests) |
-| `end_total` | 0 | exit after this many game steps on any screen |
-| `heartbeat` | 1200 | print `[harness] layout <name> tick <t>` on every screen change and every this many ticks |
-| `turbo` | 16 | extra game steps per rendered frame (0 = real time); results don't change, only the wall-clock time |
-| `new_run_items` | [] | with `new_run`: force these items into the first slots of the run start's tool roll |
+<!-- options:harness -->
+| option | type | default | description |
+|---|---|---|---|
+| `start_tick` | int | `5` | title-screen tick at which to skip to the game (like a key press) |
+| `level` | string | `""` | Level to load, by name (see list_levels). Empty: keep the run's first level (the tutorial). |
+| `level_n` | int | `-1` | Level number within `level`'s pack (-1: any). |
+| `seed` | int | `1` | Seed for the level roll and every RNG of the run (items, modifiers, colors, ...), so runs are reproducible. |
+| `modifier` | int | `-1` | Force this modifier id (-1: rolled). |
+| `roll_modifier` | bool | `false` | Let the game draw a random modifier for the level (seeded), as it does in runs. |
+| `modifier_key` | string | `""` | Force the modifier registered with this key (e.g. "screen-wrap"); overrides `modifier`. |
+| `items` | list | `[]` | Items to roll from (up to 3, repeated if fewer; names from list_levels). The game assigns them with its own code (ammo included, so ammo mods apply); slot order follows the seed. Items marked secondLayer only appear in second-layer runs. |
+| `inputs` | list | `[]` | Scripted inputs in level ticks: "60-90:right+jump" or "120:shoot". Actions: up down left right jump shoot switch restart. While set, the keyboard is ignored. |
+| `end_tick` | int | `0` | Exit the game (code 0) at this level tick. 0: never. |
+| `capture` | string | `""` | Capture frames "from-to/step" in level ticks, e.g. "60-300/2". |
+| `capture_dir` | string | `"frames"` | Directory for captured frames (absolute, or relative to the overlay game dir). |
+| `pause_tick` | int | `0` | Open the pause menu at this level tick (0: never). |
+| `dump_menu` | bool | `false` | With pause_tick: print every pause menu item (including hidden submenu items). |
+| `menu_open` | string | `""` | With pause_tick: two ticks later, select the pause menu item with exactly this text and press it (e.g. to open a submenu). |
+| `capture_ui` | bool | `false` | Also draw the UI layer (pause menu, ...) into captured frames. |
+| `list_levels` | bool | `false` | Print all levels in the pool and all items in the item pool, then exit. |
+| `new_run` | bool | `false` | a returning player's run from the hub (tutorial done, RNGs seeded): the game's own run start with the MANAGER tool selection follows (`inputs` like `"30-700:right"` walk off the hub's right edge, `jump` confirms). The selection runs no gameplay ticks, so `capture`/`end_tick` also count layout ticks there |
+| `new_run_items` | list | `[]` | With new_run: put these items (by name) into the first slots of the run start's tool roll. |
+| `turbo` | int | `16` | Extra game steps per rendered frame (0 = real time). Steps keep their fixed length, so results don't change, only the wall-clock time. |
+| `heartbeat` | int | `1200` | Print `[harness] layout <name> tick <t>` when the main layout changes and every this many of its ticks (0 = off), so a hang's log shows where it stopped. |
+| `chaos` | bool | `false` | From tick 60 of every layout but the title, when no scripted input is active: random inputs (seeded, new every 15 ticks; never restart). Random play in levels, wandering into new runs in the hub. For soak tests. |
+| `end_total` | int | `0` | Exit after this many game steps in total, on any screen (0 = off). For soak runs through deaths and new runs. |
+| `roll_until_modifier` | string | `""` | Roll with the game's own code (up to 500 seeds) until it draws this modifier (key or id); prints `[harness] modifier <id> drawn by the game's roll after N roll(s)`. Tests a modifier is in the pool without a fixed seed. |
+| `slots` | list | `[]` | Exactly these tools in the slots at level tick 1: `["box", "swap:2"]` (name, optional ammo). Replays of recordings use it; `items` rolls instead. |
+<!-- /options -->
 
 It prints `[harness] …` lines (`title skipped`, `loading level …`, `level tick 1: <name> modifier <m> frameTime <dt>`,
 `end at tick N`, `ERROR …`), which `lina test` checks. Use it through scenarios (`lina test`, `lina gif`), see

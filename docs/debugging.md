@@ -11,6 +11,11 @@ regression test.
 - Something in real play (run start, tool selection, menus, several levels): `new_run = true` with `inputs`, and
   `new_run_items` to force the item into the roll. For "sometimes": `chaos = true` + `end_total` and a few seeds.
 - The whole pack: `tests/all-mods-soak.toml` plays new runs with all showcase mods and random input.
+- From a player: ask for `openlina report` (a zip: installed mods with versions and options, game version, the
+  last modded runs' output, the game's `crash_stackdump.txt`). Build the same pack and look for the crash there.
+- From your own play: `lina run --record` writes one replay scenario per level attempt (`work/recordings/`: level,
+  modifier, tool slots, inputs). Replays are exact for harness runs; a human session replays as long as the level
+  has no random elements.
 
 Read the failure report: a crash names the exception and stack (`Called from … (openlina/<fn> line <op>)` points
 into injected code: `lina fn <fn> --input work/test/<n>/game/hlboot.dat --ops <op-5>..<op+5>`). A timeout names
@@ -45,7 +50,7 @@ mod using it gets the fix. Bump the versions of the mods that change.
 
 The scenario from step 1 goes into `mods/<id>/tests/` (or `tests/` for several mods). Check it fails without the
 fix. Run `lina test` (all) and `lina test --wasm` before committing. Write what you learned about the game into
-`docs/game-internals.md`.
+the topic file in `docs/game/` (index: `docs/game-internals.md`).
 
 ## Case study: the frozen tool selection
 

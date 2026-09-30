@@ -118,6 +118,7 @@ mosa-mod/                 (plain folder)
   showcase mods); `lina test` in parallel with `-k`/`--failed` (suite < 1 min instead of > 10); `inspect` fixture +
   `lina probe` (runtime state without writing a mod); `trace-calls` prints arguments; `lina refs` / `lina class`;
   `Code::find_fn`. Docs split: AGENTS.md is the short core; docs/testing.md, docs/sdk.md (with registry
-  checklists), docs/debugging.md (recipe + case study). Next ideas: record play as a scenario (`openlina run
-  --record` via the game's replay system), `openlina report` for players, generate option tables from mod.toml,
-  split game-internals by topic, repeat the blind agent test.
+  checklists), docs/debugging.md (recipe + case study). Then (after the moon-gravity blind test, docs/blind-test.md): `lina run --record` + `lina recordings`
+  (play → replay scenarios; harness `slots`), `openlina report` (players' problem bundle; modded runs are logged),
+  `lina docs` (option tables generated from mod.toml), `docs/game/` by topic, `lina new` templates per section,
+  position bounds, `roll_until_modifier`, `lina probe --harness/--set`, natives in `lina refs`/`callers`/`find_fn`.

@@ -34,5 +34,6 @@ position = { tick = 35, type = "box", x = 540, y = 60, within = 1 }
 # (vanilla: 540, 124.7; see inactive-without-modifier.toml)
 [[expect]]
 position = { tick = 200, type = "box", x = 540, y = 92.3, within = 2 }
+# well above where vanilla has it (y grows downwards)
 [[expect]]
-position = { tick = 200, type = "box", x = 540, y = 124.7, within = 15, away = true }
+position = { tick = 200, type = "box", y_lt = 110 }

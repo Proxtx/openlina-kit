@@ -1219,6 +1219,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "openlina-mod-record"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "openlina-sdk",
+ "toml",
+]
+
+[[package]]
 name = "openlina-mod-screen-wrap"
 version = "0.1.0"
 dependencies = [

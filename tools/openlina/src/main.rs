@@ -59,6 +59,13 @@ enum Cmd {
     },
     /// Print the Steam launch option.
     LaunchOption,
+    /// Bundle what a mod author (or their agent) needs to look into a problem: installed mods,
+    /// versions and options, the game version, the last runs' output and the game's crash report.
+    Report {
+        /// Where to write the zip (default: ./openlina-report-<date>.zip).
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -139,15 +146,30 @@ fn main() -> Result<()> {
             if !overlay.join("hlboot.dat").is_file() {
                 bail!("nothing built yet: run `openlina install <pack>` first");
             }
-            game::launch(&game, &overlay, Some(&overlay.join("hlboot.dat")), timeout, headless)?;
+            game::launch_logged(
+                &game,
+                &overlay,
+                Some(&overlay.join("hlboot.dat")),
+                timeout,
+                headless,
+                &data.join("last-run.log"),
+            )?;
             Ok(())
         }
+        Cmd::Report { out } => report(&data, game_dir().ok(), out),
         Cmd::Steam { command } => {
             let overlay = data.join("game");
             let modded = overlay.join("hlboot.dat").is_file() && std::env::var_os("MOSA_VANILLA").is_none();
             match (modded, game_dir()) {
                 (true, Ok(game)) => {
-                    let status = game::launch(&game, &overlay, Some(&overlay.join("hlboot.dat")), None, false)?;
+                    let status = game::launch_logged(
+                        &game,
+                        &overlay,
+                        Some(&overlay.join("hlboot.dat")),
+                        None,
+                        false,
+                        &data.join("last-run.log"),
+                    )?;
                     std::process::exit(status.code().unwrap_or(1));
                 }
                 _ => {
@@ -367,5 +389,85 @@ fn build(data: &Path, game: &Path) -> Result<()> {
     }
     overlay::create(game, &data.join("game"), &bytes, &assets)?;
     println!("ready: {} ({} asset file(s))", data.join("game").display(), assets.len());
+    Ok(())
+}
+
+/// `openlina report`: a zip with everything needed to look into a problem.
+fn report(data: &Path, game: Option<PathBuf>, out: Option<PathBuf>) -> Result<()> {
+    use std::io::Write;
+    let date = std::process::Command::new("date")
+        .arg("+%Y%m%d-%H%M%S")
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_else(|| "now".into());
+    let out = out.unwrap_or_else(|| PathBuf::from(format!("openlina-report-{date}.zip")));
+    let mut info = format!("openlina {}\ndate {date}\n", env!("CARGO_PKG_VERSION"));
+    if let Ok(o) = std::process::Command::new("uname").arg("-a").output() {
+        info.push_str(&format!("system {}", String::from_utf8_lossy(&o.stdout)));
+    }
+    if let Some(g) = &game {
+        match std::fs::read(g.join("hlboot.dat")) {
+            Ok(b) => {
+                let h = game::sha256(&b);
+                let build = game::known_version(&h).unwrap_or("unknown");
+                info.push_str(&format!("game {} (hlboot.dat sha256 {h}, Steam build {build})\n", g.display()));
+            }
+            Err(e) => info.push_str(&format!("game {}: {e}\n", g.display())),
+        }
+    }
+    // Installed mods with versions and resolved options.
+    let mut mods = String::new();
+    if let Ok(pack) = load_state(data) {
+        for e in &pack.mods {
+            match Package::load(&data.join("mods").join(&e.id)) {
+                Ok(p) => {
+                    mods.push_str(&format!("{} {}  {}\n", e.id, p.manifest.info.version, p.manifest.info.name));
+                    if let Ok(opts) = p.manifest.resolve_options(&e.options) {
+                        for (k, v) in opts {
+                            mods.push_str(&format!("    {k} = {v}\n"));
+                        }
+                    }
+                }
+                Err(err) => mods.push_str(&format!("{}: {err:#}\n", e.id)),
+            }
+        }
+    }
+    let file = std::fs::File::create(&out).with_context(|| format!("creating {}", out.display()))?;
+    let mut zip = zip::ZipWriter::new(file);
+    let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    let mut add = |name: &str, bytes: &[u8]| -> Result<()> {
+        zip.start_file(name, opts)?;
+        zip.write_all(bytes)?;
+        Ok(())
+    };
+    add("info.txt", info.as_bytes())?;
+    add("mods.txt", mods.as_bytes())?;
+    let mut included = vec!["info.txt", "mods.txt"];
+    for (name, path) in [
+        ("modpack.toml", data.join("modpack.toml")),
+        ("trust.toml", data.join("trust.toml")),
+        ("last-run.log", data.join("last-run.log")),
+        ("last-run.log.prev", data.join("last-run.log.prev")),
+    ] {
+        if let Ok(b) = std::fs::read(&path) {
+            add(name, &b)?;
+            included.push(name);
+        }
+    }
+    if let Some(g) = &game {
+        if let Ok(b) = std::fs::read(g.join("crash_stackdump.txt")) {
+            add("crash_stackdump.txt", &b)?;
+            included.push("crash_stackdump.txt");
+        }
+    }
+    zip.finish()?;
+    println!("wrote {} ({})", out.display(), included.join(", "));
+    if !included.contains(&"last-run.log") {
+        println!("no log of a modded run yet: play once with the Steam launch option (or `openlina run`), then report");
+    }
+    println!(
+        "It holds file paths of this computer (your user name) and the game's output; nothing else is sent anywhere."
+    );
     Ok(())
 }

@@ -33,13 +33,21 @@ pub fn doctor(game_dir: Option<PathBuf>) -> Result<()> {
     let nix = std::env::var_os("IN_NIX_SHELL").is_some();
     println!("toolchain ({})", if nix { "nix dev shell" } else { "no nix: rustup" });
     match run("cargo", &["--version"]) {
-        Some(v) => r.ok(
-            "cargo",
-            &format!(
-                "{v}{}",
-                run("rustup", &["show", "active-toolchain"]).map(|t| format!(" (rustup: {t})")).unwrap_or_default()
-            ),
-        ),
+        Some(v) => {
+            // Which cargo runs here: the nix shell's, or a rustup proxy (then name its toolchain).
+            let path = std::env::var_os("PATH")
+                .and_then(|p| std::env::split_paths(&p).map(|d| d.join("cargo")).find(|c| c.is_file()))
+                .map(|c| c.display().to_string())
+                .unwrap_or_default();
+            let from = if path.starts_with("/nix/store") {
+                " from nix".to_string()
+            } else {
+                run("rustup", &["show", "active-toolchain"])
+                    .map(|t| format!(" from rustup ({t})"))
+                    .unwrap_or_else(|| format!(" ({path})"))
+            };
+            r.ok("cargo", &format!("{v}{from}"))
+        }
         None => r.fail("cargo", "install Rust with rustup (https://rustup.rs), or use `nix develop`"),
     }
     let wasm = run("rustc", &["--print", "sysroot"]).map(|s| Path::new(&s).join("lib/rustlib/wasm32-wasip1").is_dir());

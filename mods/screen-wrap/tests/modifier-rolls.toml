@@ -1,12 +1,21 @@
-name = "screen-wrap: the game's own modifier roll can draw it"
+name = "screen-wrap: the game's own modifier roll can draw it, and the HUD shows its icon"
 mods = ["screen-wrap"]
+fixtures = ["inspect"]
 timeout = 30
+
+# the HUD modifier icon (an OClass_optionthingos) plays the mod's animation
+[options.inspect]
+at = ["tick:30"]
+print = ["@optionthingos[].sprite.anim"]
 
 [harness]
 level = "greendemo 1"
-roll_modifier = true
-seed = 11            # this seed draws screen-wrap (id 8900 = modifiers::id_of("screen-wrap"))
-end_tick = 3
+roll_until_modifier = "screen-wrap"   # the game's own roll, until it draws it (no seed to keep in sync)
+end_tick = 40
 
 [[expect]]
+contains = "[harness] modifier 8900 drawn by the game's roll after"
+[[expect]]
 contains = "[harness] level tick 1: greendemo 1 modifier 8900"
+[[expect]]
+contains = ".sprite.anim = openlina_mod_8900"

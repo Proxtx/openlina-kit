@@ -166,10 +166,7 @@ pub fn disassemble_range(code: &Code, f: &Function, range: Option<std::ops::Rang
         code.type_name(f.t),
         code.func_location(f).unwrap_or_default()
     );
-    for (i, r) in f.regs.iter().enumerate() {
-        let name = f.var_name(bc, i).map(|s| format!(" ({s})")).unwrap_or_default();
-        let _ = writeln!(out, "    reg{i}: {}{name}", code.type_name(*r));
-    }
+    let mut lines = Vec::new();
     for (i, op) in f.ops.iter().enumerate() {
         if range.as_ref().is_some_and(|r| !r.contains(&i)) {
             continue;
@@ -196,9 +193,34 @@ pub fn disassemble_range(code: &Code, f: &Function, range: Option<std::ops::Rang
             }
             _ => String::new(),
         };
-        let _ = writeln!(out, "  {i:>5} {line:>6}  {text}{note}");
+        lines.push(format!("  {i:>5} {line:>6}  {text}{note}"));
+    }
+    // With a range, only the registers its ops use (big functions have hundreds).
+    let used: std::collections::BTreeSet<usize> =
+        if range.is_some() { lines.iter().flat_map(|l| reg_numbers(l)).collect() } else { (0..f.regs.len()).collect() };
+    for &i in &used {
+        let Some(r) = f.regs.get(i) else { continue };
+        let name = f.var_name(bc, i).map(|s| format!(" ({s})")).unwrap_or_default();
+        let _ = writeln!(out, "    reg{i}: {}{name}", code.type_name(*r));
+    }
+    for l in lines {
+        let _ = writeln!(out, "{l}");
     }
     out.push('\n');
+}
+
+/// The `regN` numbers in a line of disassembly.
+fn reg_numbers(line: &str) -> Vec<usize> {
+    let mut out = Vec::new();
+    let mut rest = line;
+    while let Some(p) = rest.find("reg") {
+        let digits: String = rest[p + 3..].chars().take_while(|c| c.is_ascii_digit()).collect();
+        if let Ok(n) = digits.parse() {
+            out.push(n);
+        }
+        rest = &rest[p + 3..];
+    }
+    out
 }
 
 /// hlbc prints calls to unnamed functions as `<none>@N`; use our names (e.g. injected

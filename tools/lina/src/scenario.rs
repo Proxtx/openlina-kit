@@ -21,6 +21,8 @@
 //! not_contains = "Uncaught"
 //! [[expect]]                        # needs the fixture `trace-positions` (prints `[pos]` lines)
 //! position = { tick = 130, type = "player", x = 412, y = 150, within = 6 }   # `away = true` inverts
+//! [[expect]]                        # bounds: some box above y 110 (y grows downwards)
+//! position = { tick = 200, type = "box", y_lt = 110 }
 //!
 //! [gif]                             # used by `lina gif`
 //! capture = "60-420/2"              # level ticks from-to/step (120 ticks per second)
@@ -93,6 +95,13 @@ pub struct PositionExpect {
     /// Invert: no such object may be within `within` (e.g. "it left its spot").
     #[serde(default)]
     pub away: bool,
+    /// Bounds (strict): some object of the type must be left of / right of / above / below them
+    /// (y grows downwards: `y_lt` = higher on screen). E.g. "the box is still above 110 at tick
+    /// 200", where vanilla has it lower. Combine with x/y, or use alone.
+    pub x_lt: Option<f64>,
+    pub x_gt: Option<f64>,
+    pub y_lt: Option<f64>,
+    pub y_gt: Option<f64>,
 }
 
 fn eight() -> f64 {
@@ -113,9 +122,55 @@ impl PositionExpect {
             .collect();
         if found.is_empty() {
             return Some(format!(
-                "no `{prefix}…` line: add the fixture `trace-positions` with `types` including {:?} and `ticks` including {}",
+                "no `{prefix}…` line: the fixture `trace-positions` needs `types` including {:?} and `ticks` including \
+                 {}; an object shows up from the tick after it was created (debug-spawn at tick T: trace T+1 or later)",
                 self.kind, self.tick
             ));
+        }
+        let bounded = |&(x, y): &(f64, f64)| {
+            self.x_lt.is_none_or(|b| x < b)
+                && self.x_gt.is_none_or(|b| x > b)
+                && self.y_lt.is_none_or(|b| y < b)
+                && self.y_gt.is_none_or(|b| y > b)
+        };
+        let bounds_text = || {
+            [("x <", self.x_lt), ("x >", self.x_gt), ("y <", self.y_lt), ("y >", self.y_gt)]
+                .iter()
+                .filter_map(|(k, v)| v.map(|v| format!("{k} {v}")))
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        let all_found: Vec<String> = found.iter().take(5).map(|(x, y)| format!("({x}, {y})")).collect();
+        let found: Vec<(f64, f64)> = found.iter().copied().filter(bounded).collect();
+        if self.x.is_none() && self.y.is_none() {
+            return match (found.is_empty(), self.away) {
+                (true, false) => Some(format!(
+                    "{} at tick {}: expected one with {}, found at {}",
+                    self.kind,
+                    self.tick,
+                    bounds_text(),
+                    all_found.join(" ")
+                )),
+                (false, true) => Some(format!(
+                    "{} at tick {}: expected none with {}, found at {}",
+                    self.kind,
+                    self.tick,
+                    bounds_text(),
+                    all_found.join(" ")
+                )),
+                _ => None,
+            };
+        }
+        if found.is_empty() {
+            return (!self.away).then(|| {
+                format!(
+                    "{} at tick {}: none with {} (found at {})",
+                    self.kind,
+                    self.tick,
+                    bounds_text(),
+                    all_found.join(" ")
+                )
+            });
         }
         let dist = |(x, y): (f64, f64)| {
             let dx = self.x.map_or(0.0, |w| x - w);
@@ -164,7 +219,18 @@ fn one() -> u32 {
 impl Scenario {
     pub fn load(path: &Path) -> Result<Self> {
         let s = std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
-        toml::from_str(&s).with_context(|| format!("parsing {}", path.display()))
+        let sc: Scenario = toml::from_str(&s).with_context(|| format!("parsing {}", path.display()))?;
+        for e in &sc.expect {
+            if let Some(p) = &e.position {
+                let bounds = p.x_lt.is_some() || p.x_gt.is_some() || p.y_lt.is_some() || p.y_gt.is_some();
+                ensure!(
+                    p.x.is_some() || p.y.is_some() || bounds,
+                    "{}: a `position` expectation needs x, y or a bound (x_lt, x_gt, y_lt, y_gt)",
+                    path.display()
+                );
+            }
+        }
+        Ok(sc)
     }
 
     /// The modpack for this scenario: core, harness (+ extra harness options), fixtures, mods.
@@ -575,6 +641,18 @@ pub struct ProbeSpec {
     pub capture: Option<String>,
     pub end: Option<u32>,
     pub seed: i64,
+    /// `key=value` harness options.
+    pub harness: Vec<String>,
+    /// `mod.key=value` mod options.
+    pub set: Vec<String>,
+}
+
+/// A command-line value: TOML if it parses (`0.25`, `true`, `[1, 2]`), else a string.
+fn cli_value(v: &str) -> toml::Value {
+    toml::from_str::<toml::Table>(&format!("v = {v}"))
+        .ok()
+        .and_then(|mut t| t.remove("v"))
+        .unwrap_or_else(|| toml::Value::String(v.to_string()))
 }
 
 /// `lina probe`: a throwaway scenario with the `inspect` fixture (written to work/probe.toml, so it
@@ -598,11 +676,21 @@ pub fn probe(game: &Path, p: &ProbeSpec) -> Result<()> {
     if let Some(c) = &p.capture {
         harness.insert("capture".into(), c.clone().into());
     }
+    for kv in &p.harness {
+        let (k, v) = kv.split_once('=').with_context(|| format!("--harness {kv}: expected key=value"))?;
+        harness.insert(k.trim().to_string(), cli_value(v.trim()));
+    }
     let mut inspect = toml::Table::new();
     inspect.insert("at".into(), p.at.clone().into());
     inspect.insert("print".into(), p.paths.clone().into());
     let mut options = toml::Table::new();
     options.insert("inspect".into(), inspect.into());
+    for kv in &p.set {
+        let (k, v) = kv.split_once('=').with_context(|| format!("--set {kv}: expected mod.key=value"))?;
+        let (m, key) = k.trim().split_once('.').with_context(|| format!("--set {kv}: expected mod.key=value"))?;
+        let entry = options.entry(m.to_string()).or_insert_with(|| toml::Value::Table(toml::Table::new()));
+        entry.as_table_mut().context("option table")?.insert(key.to_string(), cli_value(v.trim()));
+    }
     let mut sc = toml::Table::new();
     sc.insert("name".into(), "probe".into());
     sc.insert("mods".into(), p.mods.clone().into());
@@ -633,5 +721,139 @@ pub fn probe(game: &Path, p: &ProbeSpec) -> Result<()> {
         println!("frames: {}", work.join("frames.png").display());
     }
     println!("scenario: {} (edit and rerun with `lina test {}`)", file.display(), file.display());
+    Ok(())
+}
+
+/// The non-dev mods of a modpack (what a recording's replays load).
+pub fn pack_mods(pack: &Path) -> Result<Vec<String>> {
+    let p = ModPack::load(pack)?;
+    let dev = ["core", "harness", "record", "inspect", "trace-calls", "trace-positions", "debug-spawn"];
+    Ok(p.mods.into_iter().map(|e| e.id).filter(|id| !dev.contains(&id.as_str())).collect())
+}
+
+/// One level attempt from `[record]` lines.
+struct Attempt {
+    level: String,
+    modifier: i64,
+    slots: Vec<(String, i64)>,
+    /// (tick, bits) whenever the input changed.
+    changes: Vec<(i64, i64)>,
+}
+
+/// Turn the `[record]` lines of a log into replay scenarios (`work/recordings/<n>-<level>.toml`):
+/// the level, its modifier and tool slots, and the inputs as `from-to:keys` ranges. The harness
+/// seeds the run from `seed`, not the recorded run's seeds: levels with random elements may play
+/// out differently, so check a replay before relying on it.
+pub fn recordings(log: &str, mods: &[String]) -> Result<Vec<PathBuf>> {
+    let mut attempts: Vec<Attempt> = Vec::new();
+    for l in log.lines() {
+        let Some(rest) = l.strip_prefix("[record] ") else { continue };
+        if let Some(r) = rest.strip_prefix("level ") {
+            let (level, m) = r.rsplit_once(" modifier ").context("bad [record] level line")?;
+            attempts.push(Attempt { level: level.into(), modifier: m.trim().parse()?, slots: vec![], changes: vec![] });
+        } else if let Some(r) = rest.strip_prefix("slot ") {
+            let parts: Vec<&str> = r.split_whitespace().collect();
+            if let (Some(a), [_, name, ammo]) = (attempts.last_mut(), parts.as_slice()) {
+                a.slots.push((name.to_string(), ammo.parse().unwrap_or(0)));
+            }
+        } else if let Some(r) = rest.strip_prefix("tick ") {
+            let (t, b) = r.split_once(" bits ").context("bad [record] tick line")?;
+            if let Some(a) = attempts.last_mut() {
+                a.changes.push((t.trim().parse()?, b.trim().parse()?));
+            }
+        }
+    }
+    let dir = PathBuf::from("work/recordings");
+    std::fs::create_dir_all(&dir)?;
+    let mut out = Vec::new();
+    let keys = ["up", "down", "left", "right", "jump", "shoot", "switch", "restart"];
+    for (n, a) in attempts.iter().enumerate() {
+        // Only attempts with input (skips the title screen and levels the harness passed through).
+        if !a.changes.iter().any(|&(_, b)| b != 0) {
+            continue;
+        }
+        // Recorded at tick t = fed by the harness at tick t-1; a range lasts until the next change.
+        let mut inputs = Vec::new();
+        for (i, &(t, bits)) in a.changes.iter().enumerate() {
+            if bits == 0 {
+                continue;
+            }
+            let end = a.changes.get(i + 1).map(|&(t2, _)| t2 - 1).unwrap_or(t + 1);
+            let names: Vec<&str> = (0..8).filter(|k| bits & (1 << k) != 0).map(|k| keys[k]).collect();
+            inputs.push(format!("{}-{}:{}", t - 1, end, names.join("+")));
+        }
+        let last = a.changes.last().map(|c| c.0).unwrap_or(0);
+        let end_tick = last + 240;
+        let slots: Vec<String> = a.slots.iter().map(|(s, am)| format!("{s}:{am}")).collect();
+        let slug: String =
+            a.level.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '-' }).collect();
+        let path = dir.join(format!("{n}-{slug}.toml"));
+        let text = format!(
+            "# Replay of a recorded level attempt (lina run --record). The harness seeds the run itself:\n\
+             # levels with random elements may differ from what was played. Add expectations, then move it to\n\
+             # mods/<id>/tests/ (see docs/testing.md).\n\
+             name = {name:?}\n\
+             mods = {mods:?}\n\
+             fixtures = [\"trace-positions\"]\n\
+             timeout = 120\n\n\
+             [options.trace-positions]\n\
+             types = [\"player\"]\n\
+             ticks = \"60-{end_tick}/60\"\n\n\
+             [harness]\n\
+             level = {level:?}\n\
+             modifier = {modifier}\n\
+             slots = {slots:?}\n\
+             inputs = {inputs:?}\n\
+             end_tick = {end_tick}\n\n\
+             [[expect]]\n\
+             contains = {expect:?}\n",
+            name = format!("recording: {} (attempt {n})", a.level),
+            level = a.level,
+            modifier = a.modifier,
+            expect = format!("[harness] level tick 1: {}", a.level),
+        );
+        std::fs::write(&path, text)?;
+        out.push(path);
+    }
+    ensure!(!out.is_empty(), "no level attempt with input in the log (were there `[record]` lines?)");
+    Ok(out)
+}
+
+/// `lina run --record`: build the pack plus `record`, play (output shown and kept), then write
+/// replay scenarios.
+pub fn run_recording(game: &Path, pack_path: &Path, timeout: Option<u64>, headless: bool) -> Result<()> {
+    let mut pack = ModPack::load(pack_path)?;
+    if !pack.mods.iter().any(|e| e.id == "record") {
+        pack.mods.push(PackEntry { id: "record".into(), ..Default::default() });
+    }
+    build::add_requirements(&mut pack)?;
+    let overlay = PathBuf::from("work/record/game");
+    build::build_pack(game, &pack, false, &overlay, false, &mut |l| println!("{l}"))?;
+    let mut cmd = openlina::game::command(
+        game,
+        &std::fs::canonicalize(&overlay)?,
+        Some(&overlay.join("hlboot.dat")),
+        timeout,
+        headless,
+    )?;
+    cmd.stdout(std::process::Stdio::piped());
+    let mut child = cmd.spawn().context("launching the game")?;
+    let mut log = String::new();
+    if let Some(out) = child.stdout.take() {
+        use std::io::BufRead;
+        for line in std::io::BufReader::new(out).lines().map_while(|l| l.ok()) {
+            if !line.starts_with("[record]") {
+                println!("{line}");
+            }
+            log.push_str(&line);
+            log.push('\n');
+        }
+    }
+    child.wait()?;
+    std::fs::write("work/record/log.txt", &log)?;
+    let mods = pack_mods(pack_path)?;
+    for p in recordings(&log, &mods)? {
+        println!("wrote {} (replay: lina test {})", p.display(), p.display());
+    }
     Ok(())
 }

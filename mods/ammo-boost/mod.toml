@@ -16,7 +16,7 @@ description = "Multiply the starting ammo of every item by this (0 to 1000). Ite
 [options.trace]
 type = "bool"
 default = false
-description = "Print every boosted ammo value: `[ammo-boost] <item>: ammo <vanilla> -> <boosted>`."
+description = "Print every boosted value (`[ammo-boost] <item>: ammo 2 -> 4`) and, on tick 1 of every gameplay layout, the slots' real ammo compared with `baseAmmo` (`level start slot 0: frog ammo 6 = 2 x 3`)."
 
 [stats]
 ammo = "×2"

@@ -8,9 +8,10 @@ shares them, `openlina` installs them for players. This file is the workflow and
 | [docs/testing.md](docs/testing.md) | writing scenarios, gifs, sprites; running tests |
 | [docs/sdk.md](docs/sdk.md) | using the SDK: library map, registry checklists, HashLink pitfalls |
 | [docs/debugging.md](docs/debugging.md) | something hangs, crashes or behaves wrong |
-| [docs/game-internals.md](docs/game-internals.md) | what is known about the game's code |
+| [docs/game-internals.md](docs/game-internals.md) | what is known about the game's code: an index of `docs/game/*.md` by topic |
 | [docs/mods.md](docs/mods.md) | the existing mods and dev fixtures, with their options |
 | [docs/PLAN.md](docs/PLAN.md) | where the project stands |
+| [docs/blind-test.md](docs/blind-test.md) | after big changes: let a fresh agent build a mod and fix what it stumbles on |
 
 ## Setup (once per machine and game version)
 
@@ -21,6 +22,9 @@ lina() { ./lina "$@"; }           # the wrapper builds the tools when needed
 lina doctor                       # checks all of the above and the game; fix what it reports
 lina setup && lina dump && lina check   # pristine bytecode, searchable dump, 0 validator problems
 ```
+
+With nix, `nix develop --no-warn-dirty -c <command>` runs one command in the shell without the "Git tree is dirty"
+warning on every call.
 
 `work/` and `dist/` are git-ignored. They hold game-derived files; never commit them.
 
@@ -57,8 +61,9 @@ long inline op sequences: easier to read, validate and trace (`openlina/<name>:<
 
 ## 3. Write the mod
 
-`lina new <section> <id>` creates `mods/<id>/` (sections: `items|modifiers|levels|general|dev`). Look at the
-showcase mod of the section first: `portal-gun`/`swap`, `screen-wrap`/`solid-edges`, `tumble`, `mod-menu`.
+`lina new <section> <id>` creates `mods/<id>/` from a template for the section (`items` and `modifiers` come with
+the registry call, placeholder icons and a smoke test that runs; `levels|general|dev` with a tick hook). Look at
+the showcase mod of the section first: `portal-gun`/`swap`, `screen-wrap`/`solid-edges`, `tumble`, `mod-menu`.
 
 - `mod.toml` (format: `openlina_sdk::manifest`): id (= directory), name, version, section, description,
   `requires = ["core"]`, options (`bool|int|float|string|list`, default, description), `[stats]` for the website,
@@ -81,7 +86,8 @@ Rules:
   a game update fails the build instead of patching the wrong op. Take registers from the anchors and check their
   types. Patch several places in one function from the last index to the first.
 - Every tunable is an option; add a `trace` option that prints what the mod does (`FnBuilder::print`).
-- Add the mod to `docs/mods.md` and what you learned to `docs/game-internals.md`.
+- Add the mod to `docs/mods.md` (option tables are generated: `lina docs` after changing options) and what you
+  learned about the game to the topic file in `docs/game/`.
 
 ## 4. Verify
 
@@ -90,10 +96,12 @@ Rules:
 2. Scenarios in `mods/<id>/tests/*.toml` that **can fail** (docs/testing.md); `lina test --mod <id>`, then
    `lina test` (all, <1 min) and `lina test --wasm`. `-k <text>`, `--failed`.
 3. A showcase gif (`lina gif`); look at the frames before keeping it.
-4. `cargo test --release`, `cargo clippy --release`, `cargo fmt`.
+4. `cargo test --release`, `cargo clippy --release`, `cargo fmt`, `lina docs --check`.
 
 When something hangs, crashes or misbehaves: docs/debugging.md (reproduce as a scenario, `lina probe`,
-`trace-calls` with arguments, `lina refs`, fix, keep the test).
+`trace-calls` with arguments, `lina refs`, fix, keep the test). A player's problem arrives as an `openlina report`
+zip (installed mods, versions, options, game version, the last runs' output, the game's crash report); your own
+play becomes replay scenarios with `lina run --record`.
 
 ## 5. Share (OpenLina website)
 

@@ -37,7 +37,7 @@ so; confirm them with `lina probe` and update this list.
       editor); `big_icon`
 - [x] label `TOOL_<NAME>`
 - [x] firing: `item_use` hook in `EvSheet_gameplay.shoot`
-- [x] ammo: `baseAmmo`, copied in 11 places (see game-internals "Ammo")
+- [x] ammo: `baseAmmo`, copied in 11 places (docs/game/items.md, "Ammo")
 - [ ] item blocks in levels (`mld.objects.ItemBlock.createInstance`, `findItem`): should work through the pool,
       untested
 - [ ] level tool overrides (`mld.Level.createLayout`, `findItem`): should work, untested

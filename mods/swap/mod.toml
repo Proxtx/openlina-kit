@@ -37,7 +37,7 @@ description = "With trace: how many ticks after a swap to print where both objec
 [options.trace]
 type = "bool"
 default = false
-description = "Print every shot (what the ray hit, positions, ammo left) and the check after each swap to stdout."
+description = "Print every shot (`[swap] tick T: ray …`, `player (x, y) <-> box (x, y)`, `nothing in line of sight`, `blocked by <type>`, with the ammo left) and the check after each swap (`[swap] check: … near the object's old spot: true`)."
 
 [stats]
 ammo = 3

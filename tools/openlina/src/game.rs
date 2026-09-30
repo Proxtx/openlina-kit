@@ -95,6 +95,49 @@ pub fn command(
 }
 
 /// Run the game (see [`command`]) with inherited stdio.
+/// Like [`launch`], but the game's output also goes to `log` (the previous log is kept as
+/// `<log>.prev`), for `openlina report`.
+pub fn launch_logged(
+    game: &Path,
+    run_dir: &Path,
+    bytecode: Option<&Path>,
+    timeout: Option<u64>,
+    headless: bool,
+    log: &Path,
+) -> Result<ExitStatus> {
+    use std::io::{Read, Write};
+    if log.exists() {
+        let _ = std::fs::rename(log, log.with_extension("log.prev"));
+    }
+    let file = std::sync::Arc::new(std::sync::Mutex::new(std::fs::File::create(log)?));
+    let mut cmd = command(game, run_dir, bytecode, timeout, headless)?;
+    cmd.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
+    let mut child = cmd.spawn().context("launching the game")?;
+    let copy = |mut from: Box<dyn Read + Send>, to_err: bool, file: std::sync::Arc<std::sync::Mutex<std::fs::File>>| {
+        std::thread::spawn(move || {
+            let mut buf = [0u8; 8192];
+            while let Ok(n) = from.read(&mut buf) {
+                if n == 0 {
+                    break;
+                }
+                if to_err {
+                    let _ = std::io::stderr().write_all(&buf[..n]);
+                } else {
+                    let _ = std::io::stdout().write_all(&buf[..n]);
+                }
+                let _ = file.lock().map(|mut f| f.write_all(&buf[..n]));
+            }
+        })
+    };
+    let out = child.stdout.take().map(|o| copy(Box::new(o), false, file.clone()));
+    let err = child.stderr.take().map(|e| copy(Box::new(e), true, file.clone()));
+    let status = child.wait()?;
+    for t in [out, err].into_iter().flatten() {
+        let _ = t.join();
+    }
+    Ok(status)
+}
+
 pub fn launch(
     game: &Path,
     run_dir: &Path,

@@ -41,6 +41,8 @@ struct Opts {
     capture_dir: String,
     list_levels: bool,
     roll_modifier: bool,
+    roll_until: Option<i32>,
+    slots: Vec<(String, Option<i32>)>,
     pause_tick: i32,
     dump_menu: bool,
     capture_ui: bool,
@@ -121,6 +123,17 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
         capture_dir: cfg.str("capture_dir", "frames")?.to_string(),
         list_levels: cfg.bool("list_levels", false)?,
         roll_modifier: cfg.bool("roll_modifier", false)?,
+        slots: list(cfg, "slots")?
+            .iter()
+            .map(|s| match s.split_once(':') {
+                Some((n, a)) => a.trim().parse().map(|a| (n.trim().to_string(), Some(a))).context("slots: `name:ammo`"),
+                None => Ok((s.trim().to_string(), None)),
+            })
+            .collect::<Result<_>>()?,
+        roll_until: match cfg.str("roll_until_modifier", "")? {
+            "" => None,
+            k => Some(k.parse::<i32>().unwrap_or_else(|_| openlina_sdk::modifiers::id_of(k))),
+        },
         pause_tick: cfg.i64("pause_tick", 0)? as i32,
         dump_menu: cfg.bool("dump_menu", false)?,
         capture_ui: cfg.bool("capture_ui", false)?,
@@ -390,7 +403,12 @@ fn build_tick(code: &mut Code, o: &Opts, state: RefGlobal, capture: Option<RefFu
     let load = code.method("fish.system.LevelManager", "loadCurrentLevel")?;
     let push = code.method("hl.types.ArrayObj", "push")?;
     let (bool_t, dyn_t) = (code.ty_bool(), code.ty_dyn());
-    let reload = !o.level.is_empty() || o.modifier >= 0 || !o.items.is_empty() || o.list_levels || o.roll_modifier;
+    let reload = !o.level.is_empty()
+        || o.modifier >= 0
+        || !o.items.is_empty()
+        || o.list_levels
+        || o.roll_modifier
+        || o.roll_until.is_some();
 
     let mut f = hooks::handler(code, "tick", "harness/tick")?;
     let layout = f.arg(1);
@@ -500,6 +518,41 @@ fn build_tick(code: &mut Code, o: &Opts, state: RefGlobal, capture: Option<RefFu
         let has_mod = f.reg(bool_t);
         f.bool(has_mod, o.roll_modifier);
         f.call_new(roll, &[lm, rand, has_mod, no, no])?;
+        if let Some(want) = o.roll_until {
+            // Roll with the game's own code (seeds seed*1000+k) until it draws the modifier: tests
+            // that it is in the pool without depending on which seed draws it (that changes with
+            // every modifier added to the pool).
+            let yes = f.reg_bool();
+            f.bool(yes, true);
+            let (k, limit, base) = (f.reg_i32(), f.const_i32(500), f.const_i32(o.seed.wrapping_mul(1000)));
+            f.int(k, 0);
+            let (top, found, missing, done) = (f.label(), f.label(), f.label(), f.label());
+            let want_r = f.const_i32(want);
+            f.place(top);
+            f.jge(k, limit, missing);
+            let s = f.reg_i32();
+            f.add(s, base, k);
+            f.call_new(rand_init, &[rand, s])?;
+            f.call_new(roll, &[lm, rand, yes, no, no])?;
+            let cur = f.get_new(lm, "currentLevel")?;
+            let m = f.get_new(cur, "modifier")?;
+            f.op(Opcode::Incr { dst: k });
+            f.jeq(m, want_r, found);
+            f.jmp(top);
+            f.place(found);
+            f.print(&[
+                Print::Str(&format!("[harness] modifier {want} drawn by the game's roll after ")),
+                Print::Val(k),
+                Print::Str(" roll(s)"),
+            ])?;
+            f.jmp(done);
+            f.place(missing);
+            f.print(&[Print::Str(&format!(
+                "[harness] ERROR modifier {want} not drawn in 500 rolls (is it in the pool?)"
+            ))])?;
+            f.exit(3)?;
+            f.place(done);
+        }
         if o.modifier >= 0 {
             let cur = f.get_new(lm, "currentLevel")?;
             let m = f.const_i32(o.modifier);
@@ -574,10 +627,32 @@ fn build_tick(code: &mut Code, o: &Opts, state: RefGlobal, capture: Option<RefFu
             Print::Str(" frameTime "),
             Print::Val(dt),
         ])?;
-        // [harness] slot k: <item> ammo <n>
         let mgr = f.get_new(game, "ev_manager_ev")?;
         let picker = f.get_new(mgr, "b_item")?;
         let slots = f.get_new(picker, "insts")?;
+        if !o.slots.is_empty() {
+            // `slots`: exactly these tools (and ammo) in the slots, e.g. to replay a recording.
+            let find_item = f.code().method("fish.system.ItemManager", "findItem")?;
+            let im = f.get_new(game, "itemManager")?;
+            let n = f.array_len(slots)?;
+            for (k, (name, ammo)) in o.slots.iter().enumerate() {
+                let skip = f.label();
+                let kr = f.const_i32(k as i32);
+                f.jge(kr, n, skip);
+                let slot = f.array_get(slots, kr, b_item_t)?;
+                let item = f.get_new(slot, "item")?;
+                let nm = f.string_obj(name)?;
+                let ty = f.call_new(find_item, &[im, nm])?;
+                f.set(item, "type", ty)?;
+                let a = match ammo {
+                    Some(a) => f.const_i32(*a),
+                    None => f.get_new(ty, "baseAmmo")?,
+                };
+                f.set(slot, "ammo", a)?;
+                f.place(skip);
+            }
+        }
+        // [harness] slot k: <item> ammo <n>
         let n = f.array_len(slots)?;
         f.for_range(n, |f, k| {
             let slot = f.array_get(slots, k, b_item_t)?;

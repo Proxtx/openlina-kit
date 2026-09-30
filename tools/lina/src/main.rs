@@ -4,6 +4,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 mod build;
+mod docs;
 mod doctor;
 mod dump;
 mod hub;
@@ -78,6 +79,12 @@ enum Cmd {
         #[arg(long, default_value = ORIG)]
         input: PathBuf,
     },
+    /// Regenerate the option tables in docs/mods.md from the mods' mod.toml (`--check`: fail if
+    /// one is out of date).
+    Docs {
+        #[arg(long)]
+        check: bool,
+    },
     /// List the mods in mods/ and their options.
     Mods,
     /// List the hooks the `core` mod provides (subscribe with `openlina_sdk::hooks`).
@@ -111,6 +118,18 @@ enum Cmd {
         /// level without input.
         #[arg(long)]
         headless: bool,
+        /// Record your play (mod `record`) and turn every level attempt into a scenario that
+        /// replays it, in work/recordings/ (implies --build).
+        #[arg(long)]
+        record: bool,
+    },
+    /// Turn a log with `[record]` lines (from `lina run --record` or a test with the fixture
+    /// `record`) into replay scenarios in work/recordings/.
+    Recordings {
+        log: PathBuf,
+        /// Mods the scenarios load (default: the non-dev mods of modpack.toml).
+        #[arg(long = "mod")]
+        mods: Vec<String>,
     },
     /// Build wasm packages into dist/: one `<id>-<version>.zip` per mod, and with --bundle a
     /// pack zip (helper + modpack.toml + mods) ready for players.
@@ -177,6 +196,12 @@ enum Cmd {
         /// Seed.
         #[arg(long, default_value_t = 1)]
         seed: i64,
+        /// Any harness option (repeatable), e.g. `--harness modifier_key=moon-gravity`.
+        #[arg(long = "harness")]
+        harness: Vec<String>,
+        /// A mod option (repeatable), e.g. `--set moon-gravity.factor=0.25`.
+        #[arg(long = "set")]
+        set: Vec<String>,
     },
     /// Record a scenario's [gif] section: capture frames headless, write the gif (default: the
     /// scenario's gif.out, relative to its mod directory).
@@ -247,6 +272,7 @@ fn main() -> Result<()> {
         Cmd::Strings { pattern, input } => inspect::strings(&input, &pattern),
         Cmd::Refs { name, input } => inspect::refs(&input, &name),
         Cmd::Class { name, input } => inspect::class(&input, &name),
+        Cmd::Docs { check } => docs::docs(check),
         Cmd::Mods => build::list_mods(),
         Cmd::Hooks => {
             for h in openlina_sdk::hooks::CORE_HOOKS {
@@ -262,12 +288,23 @@ fn main() -> Result<()> {
         }
         Cmd::New { section, id } => scaffold::new_mod(&section, &id),
         Cmd::Build { pack, only, wasm, out } => build::build(&game_dir()?, &pack, &only, wasm, &out),
-        Cmd::Run { build, pack, timeout, headless } => {
+        Cmd::Run { build, pack, timeout, headless, record } => {
             let game = game_dir()?;
+            if record {
+                return scenario::run_recording(&game, &pack, timeout, headless);
+            }
             if build {
                 build::build(&game, &pack, &[], false, &PathBuf::from(MODDED))?;
             }
             build::run(&game, timeout, headless)
+        }
+        Cmd::Recordings { log, mods } => {
+            let text = std::fs::read_to_string(&log)?;
+            let mods = if mods.is_empty() { scenario::pack_mods(&PathBuf::from("modpack.toml"))? } else { mods };
+            for p in scenario::recordings(&text, &mods)? {
+                println!("wrote {}", p.display());
+            }
+            Ok(())
         }
         Cmd::Pack { ids, bundle, from, out } => {
             let from = from.map(|p| openlina_sdk::manifest::ModPack::load(&p)).transpose()?;
@@ -289,9 +326,9 @@ fn main() -> Result<()> {
             let opts = scenario::TestOpts { wasm, jobs: jobs.unwrap_or_else(scenario::default_jobs) };
             scenario::test(&game_dir()?, &files, &opts)
         }
-        Cmd::Probe { paths, mods, level, at, new_run, input, capture, end, seed } => scenario::probe(
+        Cmd::Probe { paths, mods, level, at, new_run, input, capture, end, seed, harness, set } => scenario::probe(
             &game_dir()?,
-            &scenario::ProbeSpec { paths, mods, level, at, new_run, inputs: input, capture, end, seed },
+            &scenario::ProbeSpec { paths, mods, level, at, new_run, inputs: input, capture, end, seed, harness, set },
         ),
         Cmd::Gif { scenario, out } => scenario::gif(&game_dir()?, &scenario, out.as_deref()),
         Cmd::Sprite { file, out, scale, palette } => {

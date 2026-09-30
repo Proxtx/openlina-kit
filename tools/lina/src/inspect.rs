@@ -96,7 +96,16 @@ pub fn strings(input: &Path, pattern: &str) -> Result<()> {
             .bc
             .functions
             .iter()
-            .filter(|f| f.ops.iter().any(|op| matches!(op, Opcode::String { ptr, .. } if ptr.0 == *i)))
+            .filter(|f| {
+                f.ops.iter().any(|op| match op {
+                    Opcode::String { ptr, .. } => ptr.0 == *i,
+                    // The game keeps most literals in globals initialized with the constant.
+                    Opcode::GetGlobal { global, .. } => {
+                        code.global_string(*global) == Some(code.bc.strings[*i].as_str())
+                    }
+                    _ => false,
+                })
+            })
             .collect();
         println!("string@{i} {:?}", code.bc.strings[*i].as_str());
         for f in users.iter().take(10) {
@@ -112,13 +121,28 @@ pub fn strings(input: &Path, pattern: &str) -> Result<()> {
     Ok(())
 }
 
-/// `lina refs <name>`: every function that reads or writes a field called `name`, or uses the
-/// string `name` (as a `String` op or through a global holding the constant, which is how the
-/// game keeps most of its strings: object types, animation names, `ani_block` types).
+/// `lina refs <name>`: every function that reads or writes a field called `name`, calls a native of
+/// that name, or uses the string `name` (as a `String` op or through a global holding the
+/// constant, which is how the game keeps most of its strings: object types, animation names).
 pub fn refs(input: &Path, name: &str) -> Result<()> {
     let code = Code::load(input)?;
+    // Natives of that name: their call sites count too.
+    let natives: Vec<RefFun> = code
+        .bc
+        .natives
+        .iter()
+        .filter(|n| code.str(n.name) == name || format!("{}.{}", code.str(n.lib), code.str(n.name)) == name)
+        .map(|n| n.findex)
+        .collect();
     let mut rows = Vec::new();
     for fun in &code.bc.functions {
+        let calls: Vec<usize> = fun
+            .ops
+            .iter()
+            .enumerate()
+            .filter(|(_, op)| natives.iter().any(|&n| references(op, n)))
+            .map(|(i, _)| i)
+            .collect();
         let reads = openlina_sdk::edit::find_field_access(&code, fun, name, false);
         let writes = openlina_sdk::edit::find_field_access(&code, fun, name, true);
         let mut dyn_ops = Vec::new();
@@ -133,7 +157,7 @@ pub fn refs(input: &Path, name: &str) -> Result<()> {
                 _ => {}
             }
         }
-        if reads.is_empty() && writes.is_empty() && dyn_ops.is_empty() && strings.is_empty() {
+        if reads.is_empty() && writes.is_empty() && dyn_ops.is_empty() && strings.is_empty() && calls.is_empty() {
             continue;
         }
         let list = |kind: &str, v: &[usize]| -> Option<String> {
@@ -142,11 +166,16 @@ pub fn refs(input: &Path, name: &str) -> Result<()> {
                 format!("{kind} ×{} (op {}{})", v.len(), ops.join(","), if v.len() > 6 { ",…" } else { "" })
             })
         };
-        let what: Vec<String> =
-            [list("reads", &reads), list("writes", &writes), list("dynamic", &dyn_ops), list("string", &strings)]
-                .into_iter()
-                .flatten()
-                .collect();
+        let what: Vec<String> = [
+            list("reads", &reads),
+            list("writes", &writes),
+            list("dynamic", &dyn_ops),
+            list("string", &strings),
+            list("calls native", &calls),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
         let loc = code.func_location(fun).unwrap_or_default();
         rows.push(format!("fn@{} {}  // {loc}\n    {}", fun.findex.0, code.func_name(fun.findex), what.join(", ")));
     }
@@ -159,7 +188,10 @@ pub fn refs(input: &Path, name: &str) -> Result<()> {
             .filter(|s| s.to_lowercase().contains(&name.to_lowercase()) && s.len() < 80)
             .take(15)
             .collect();
-        bail!("nothing reads, writes or uses `{name}` (exact match). Similar strings: {like:?}");
+        bail!(
+            "nothing reads, writes, calls or uses `{name}` (exact match; fields, strings, natives). \
+             Strings that contain it: {like:?}"
+        );
     }
     rows.sort();
     for r in rows.iter().take(150) {

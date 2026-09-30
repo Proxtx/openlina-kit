@@ -41,15 +41,23 @@ contains = "[screen-wrap] tick"
     forces items into its roll. See `mods/swap/tests/run-start-selection.toml`.
   - `chaos = true`: seeded random input on every screen but the title (when no scripted input is active);
     `end_total = N` ends after N game steps on any screen. For soak runs, see `tests/all-mods-soak.toml`.
+  - `roll_until_modifier = "<key>"`: the game's own roll, repeated until it draws the modifier (a test that it is in
+    the pool, independent of which seed draws it; that changes with every modifier mod added).
+  - `slots = ["box", "swap:2"]`: exactly these tools (optional ammo) at level tick 1; replays use it.
 - Fixtures: `debug-spawn` (objects at a tick: `object`/`tick`/`x`/`y`, or `spawns = ["box@60:300,60", …]`),
   `trace-positions` (`[pos] tick T <type> x y` for `types` at `ticks`), `trace-calls` (calls to any function,
   with their arguments), `inspect` (any part of the game's state at a moment, see `lina probe`), or a dev mod of
   your own subscribing to `tick`.
 - `[[expect]]`: `contains` (+ `min`/`max`), `not_contains`, `position = { tick, type, x, y, within, away }` on
-  `trace-positions` output.
+  `trace-positions` output; bounds instead of (or with) x/y: `position = { tick = 200, type = "box", y_lt = 110 }`
+  ("still above 110", y grows downwards; also `y_gt`, `x_lt`, `x_gt`). Measure vanilla once and bound against it.
+  An object shows up in `trace-positions` from the tick after it was created.
 - Every run also fails on a crash, a logged Haxe exception (`Null access`, `Called from …`), a `[harness] ERROR`,
   a non-zero exit or the timeout.
-- Aiming: see "Aiming" in `docs/game-internals.md` (hold the direction on the shoot tick).
+- Aiming and jumping: `docs/game/input.md` (hold the direction on the shoot tick; jump fires on the press, so
+  press it again once Lina stands).
+- A scenario with `level` first starts the run's first level (the tutorial; its gameplay ticks run too, so a mod's
+  tick-1 trace can appear for `jeppetutorial`), then loads the chosen level on its tick 2.
 
 Rules:
 
@@ -60,7 +68,10 @@ Rules:
   items, ticks and coordinates. It prints `[harness] slot k: <item> ammo <n>` at level tick 1 and
   `[harness] layout <name> tick <t>` when the screen changes and every 1200 ticks (the tick of these lines varies
   a little between runs; everything else doesn't).
-- Scenario files can live anywhere (`lina test path/to/x.toml`), e.g. throwaway probes.
+- Scenario files can live anywhere (`lina test path/to/x.toml`), e.g. throwaway probes. `lina probe` writes one
+  (`work/probe.toml`); `--harness key=value` and `--set mod.key=value` set any option there.
+- Recordings: `lina run --record` (you play) or the fixture `record` in any run, then `lina recordings <log>`:
+  one replay scenario per level attempt in `work/recordings/`.
 
 ## Running
 

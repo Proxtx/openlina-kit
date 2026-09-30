@@ -1,7 +1,7 @@
 [mod]
 id = "harness"
 name = "Test Harness"
-version = "0.3.0"
+version = "0.4.0"
 section = "dev"
 description = "Drives the game for tests and recordings without input: skips the title, loads a chosen level with chosen items and modifier, plays scripted inputs, captures frames, exits at a given tick."
 authors = ["openlina-kit"]
@@ -10,7 +10,7 @@ requires = ["core"]
 [options.start_tick]
 type = "int"
 default = 5
-description = "Title screen tick at which to skip to the game."
+description = "title-screen tick at which to skip to the game (like a key press)"
 
 [options.level]
 type = "string"
@@ -95,7 +95,7 @@ description = "Print all levels in the pool and all items in the item pool, then
 [options.new_run]
 type = "bool"
 default = false
-description = "Start a run as a returning player (tutorial done) and let the game run its own run start (tool selection); combine with an empty level."
+description = "a returning player's run from the hub (tutorial done, RNGs seeded): the game's own run start with the MANAGER tool selection follows (`inputs` like `\"30-700:right\"` walk off the hub's right edge, `jump` confirms). The selection runs no gameplay ticks, so `capture`/`end_tick` also count layout ticks there"
 
 [options.new_run_items]
 type = "list"
@@ -121,3 +121,13 @@ description = "From tick 60 of every layout but the title, when no scripted inpu
 type = "int"
 default = 0
 description = "Exit after this many game steps in total, on any screen (0 = off). For soak runs through deaths and new runs."
+
+[options.roll_until_modifier]
+type = "string"
+default = ""
+description = "Roll with the game's own code (up to 500 seeds) until it draws this modifier (key or id); prints `[harness] modifier <id> drawn by the game's roll after N roll(s)`. Tests a modifier is in the pool without a fixed seed."
+
+[options.slots]
+type = "list"
+default = []
+description = "Exactly these tools in the slots at level tick 1: `[\"box\", \"swap:2\"]` (name, optional ammo). Replays of recordings use it; `items` rolls instead."
