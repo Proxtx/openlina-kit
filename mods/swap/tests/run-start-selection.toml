@@ -1,0 +1,24 @@
+name = "swap: a run start whose tool roll drew swap goes on into the first level (no hang on the selection screen)"
+mods = ["swap"]
+fixtures = ["trace-calls"]
+timeout = 120
+
+[options.trace-calls]
+functions = ["fish.system.LevelManager.loadCurrentLevel"]
+first = 1
+every = 0
+
+# A returning player's run: Lina walks off the hub's right edge, the MANAGER screen rolls 9
+# tools (swap forced into the roll) and plays their unlock animation; jump confirms.
+[harness]
+new_run = true
+new_run_items = ["swap"]
+inputs = ["30-700:right", "1000-1010:jump", "1200-1210:jump", "1400-1410:shoot", "1600-1700:jump"]
+end_tick = 2400
+
+[[expect]]
+contains = "[harness] run start: tool 0 forced to `swap`"
+
+# the selection finished and the run's first level loaded
+[[expect]]
+contains = "[trace-calls] fish.system.LevelManager.loadCurrentLevel call #1"

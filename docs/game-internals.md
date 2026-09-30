@@ -125,6 +125,20 @@ coordinates.
   signature works as the callback; keep state in globals.
 - Static level geometry has `physics.immovable = true` (tiles such as `tile_short`); boxes, fruits and vines don't.
 - The roll draws 3 items and the 4th slot copies the 2nd (`rollItemsRaw` crashes if the pool has fewer than 2).
+- **Item objects**: every item type also has a global `OClass_item` object (`ev_instancing_ev.item`, 48, invisible,
+  `NAME`/`ammo`/`aim_type`/`unlocked`), laid out as a 12-column grid from (150, 140), 30 apart. `initBaseItems`
+  builds `itemPool` from them at startup. The MANAGER screen draws its tool grid at their positions (offset −13, −18)
+  and its unlock animation looks them up by `NAME`; the editor's tool override list (`editor.ItemOverride.init`) is
+  built from them too. An item in the pool without an object hangs the run start once the roll draws it, so
+  `openlina_sdk::items::register` adds one (the 49th goes to (150, 260)).
+- **Item icons** (`OClass_item_icon` animations named after the item) have two frames: 0 is the 14×14 HUD icon, 1 a
+  28×28 version the MANAGER grid (`icon_display` "unlock_show" sets `animFrame = 1`) and the editor show.
+- **Run start** (a returning player walks off the hub's right edge): `EvSheet_manager_ev.manage` rolls 9 tools
+  (`ItemManager.reroll`, into `pickedItems`) and plays an "unlocked_item" animation block per tool
+  (`final_ani_block`), which waits for the tool's item object; jump then continues and `pick(rand, false, …)` takes
+  the slots from `pickedItems`. **Raw random** (pause menu › Change › Raw random, input command 8) skips that:
+  the manager layout calls `rollItemsRaw` (= `pick(rand, true, …)`, 3 draws from the whole `itemPool`, mod items
+  included) and `goToNextRaw` for every level. The editor's Play button and level previews use `rollItemsRaw` too.
 - Randomness: the run's RNGs are `hxd.Rand` fields of the manager (`mainSeed`, `levelSeed`, `toolSeed`, …), seeded
   randomly at startup; the harness seeds them all from its `seed` option.
 - `Picker.insts` is typed `hl.types.ArrayDyn` but holds an `hl.types.ArrayObj`; cast before indexing (the SDK's

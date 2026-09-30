@@ -105,7 +105,10 @@ pub fn doctor(game_dir: Option<PathBuf>) -> Result<()> {
     println!("sharing");
     match crate::hub::logged_in() {
         Some(site) => r.ok("OpenLina site", &site),
-        None => r.warn("not logged in to an OpenLina site (only for publishing)", "ask the user for the site URL; they run `./lina login <site>` and paste their token"),
+        None => r.warn(
+            "not logged in to an OpenLina site (only for publishing)",
+            "ask the user for the site URL; they run `./lina login <site>` and paste their token",
+        ),
     }
 
     if r.missing > 0 {

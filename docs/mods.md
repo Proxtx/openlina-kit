@@ -60,9 +60,11 @@ vines, enemies, the other player in co-op.
 
 The ray is the game's own Box2D ray cast (native `world_ray_cast`, as used by the Line of Sight behavior
 `fish.system.beh.LOS`) through `openlina_sdk::physics::RayCast`: the nearest hit, Lina herself skipped. Pool entry, HUD
-icon and label via `openlina_sdk::items`; icon drawn from `art/icon.toml`.
+icon and label via `openlina_sdk::items`; icon drawn from `art/icon.toml` (`assets/…/swap.png`, and at 2× as
+`swap-big.png` for the tool selection and the editor).
 
-Source: `mods/swap/src/main.rs`. Requires `core`.
+Source: `mods/swap/src/main.rs`. Requires `core`. `tests/run-start-selection.toml` checks that a run start whose tool
+roll drew swap goes on into the first level.
 
 | option | default | |
 |---|---|---|
@@ -209,6 +211,8 @@ Drives the game for tests and recordings without input (source: `mods/harness/sr
 | `list_levels` | false | print every level and item name, then exit |
 | `pause_tick` / `dump_menu` / `menu_open` | 0 / false / "" | open the pause menu at a level tick, print its items, press the item with this text |
 | `capture_ui` | false | also draw the UI layer (pause menu) into captured frames |
+| `new_run` | false | a returning player's run from the hub (tutorial done, RNGs seeded): the game's own run start with the MANAGER tool selection follows (`inputs` like `"30-700:right"` walk off the hub's right edge, `jump` confirms). The selection runs no gameplay ticks, so `capture`/`end_tick` also count layout ticks there |
+| `new_run_items` | [] | with `new_run`: force these items into the first slots of the run start's tool roll |
 
 It prints `[harness] …` lines (`title skipped`, `loading level …`, `level tick 1: <name> modifier <m> frameTime <dt>`,
 `end at tick N`, `ERROR …`), which `lina test` checks. Use it through scenarios (`lina test`, `lina gif`), see

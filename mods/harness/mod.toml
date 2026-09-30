@@ -1,7 +1,7 @@
 [mod]
 id = "harness"
 name = "Test Harness"
-version = "0.1.0"
+version = "0.2.0"
 section = "dev"
 description = "Drives the game for tests and recordings without input: skips the title, loads a chosen level with chosen items and modifier, plays scripted inputs, captures frames, exits at a given tick."
 authors = ["openlina-kit"]
@@ -91,3 +91,13 @@ description = "Also draw the UI layer (pause menu, ...) into captured frames."
 type = "bool"
 default = false
 description = "Print all levels in the pool and all items in the item pool, then exit."
+
+[options.new_run]
+type = "bool"
+default = false
+description = "Start a run as a returning player (tutorial done) and let the game run its own run start (tool selection); combine with an empty level."
+
+[options.new_run_items]
+type = "list"
+default = []
+description = "With new_run: put these items (by name) into the first slots of the run start's tool roll."

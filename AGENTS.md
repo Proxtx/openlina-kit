@@ -96,7 +96,9 @@ Everything runs headless (SDL offscreen driver): no window, no human, faster tha
 3. **Write scenarios** in `mods/<id>/tests/*.toml` (`lina new` creates `tests/smoke.toml`; format:
    `tools/lina/src/scenario.rs`) and run them with `lina test --mod <id>` (`--wasm` too before publishing):
    - `[harness]`: `level` (names: run a scenario with `list_levels = true` and read its log), `seed`, `items`
-     (item names, same listing), `modifier`, `inputs` (`"60-90:right+jump"`), `end_tick`
+     (item names, same listing), `modifier`, `inputs` (`"60-90:right+jump"`), `end_tick`; `new_run` plays the
+     game's own run start instead (hub, MANAGER tool selection; `new_run_items` forces items into its roll), see
+     `mods/swap/tests/run-start-selection.toml`
    - `fixtures`: `debug-spawn` (spawn objects: `object`/`tick`/`x`/`y`, or `spawns = ["box@60:300,60", …]`),
      `trace-positions` (prints `[pos] tick T <type> x y` for `types` at `ticks`), `trace-calls` (log calls to any
      function), or a fixture mod of your own subscribing to `tick`
@@ -176,10 +178,10 @@ Everything runs headless (SDL offscreen driver): no window, no human, faster tha
 | `edit` | `find*`, `expect_one`, `next_match`/`prev_match`, `replace_op`, `insert_ops`, `insert_ops_with_exits`, `guard_op`, `prepend_call`, `remove_ops`, `add_reg` |
 | `hooks` | `CORE_HOOKS`, `find`, `signature`, `handler`, `subscribe`, `define` |
 | `modifiers` | `register` a modifier (pool + HUD icon), `is_active`, `id_of`, `current_modifier` |
-| `items` | `register` an item (pool entry, HUD icon, label), `is_item`, `crosshair_pos`; behavior in an `item_use` handler |
+| `items` | `register` an item (pool entry, item object for the tool selection and editor, HUD + large icon, label), `is_item`, `crosshair_pos`; behavior in an `item_use` handler |
 | `levels` | `LevelPack::from_toml` + `register`: level packs built in code (core `packs` hook); `current_level_name`, `jump_unless_in_pack` |
 | `text` | `set(key, value)`: texts the game looks up (`Localisation.loc`), e.g. `TOOL_<NAME>` item labels |
-| `anims` | `ensure`: a one-frame animation from a mod image in an object class's animation map |
+| `anims` | `ensure` / `ensure_frames`: an animation from mod images in an object class's animation map |
 | `runner` | `run_mod`: the `main` of every mod |
 | `manifest` | `ModManifest` (mod.toml), `ModPack` (modpack.toml), `resolve_order` |
 | `validate` | `check_function`, `check_touched`, `kind` |

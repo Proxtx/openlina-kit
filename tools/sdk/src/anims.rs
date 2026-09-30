@@ -15,6 +15,19 @@ use crate::asm::{FnBuilder, Label};
 /// `url` (`w`×`h` pixels at 0,0 of the image). Jumps to `missing` if the map doesn't exist yet
 /// (no instance was created). Returns the register holding `name` (a `String`).
 pub fn ensure(f: &mut FnBuilder, class: &str, name: &str, url: &str, size: (f64, f64), missing: Label) -> Result<Reg> {
+    ensure_frames(f, class, name, &[(url, size)], missing)
+}
+
+/// Like [`ensure`], with one frame per image (`(url, (w, h))`, each the whole image from 0,0).
+/// Some objects show a fixed frame: item icons show frame 0 in the HUD and frame 1 (large) in the
+/// tool selection and the editor.
+pub fn ensure_frames(
+    f: &mut FnBuilder,
+    class: &str,
+    name: &str,
+    images: &[(&str, (f64, f64))],
+    missing: Label,
+) -> Result<Reg> {
     let map_get = f.code().method("haxe.ds.StringMap", "get")?;
     let map_set = f.code().method("haxe.ds.StringMap", "set")?;
     let frame_ctor = f.code().method("fish.system.FrameData", "__constructor__")?;
@@ -30,20 +43,24 @@ pub fn ensure(f: &mut FnBuilder, class: &str, name: &str, url: &str, size: (f64,
     let existing = f.call_new(map_get, &[map, name_r])?;
     let have = f.label();
     f.jnotnull(existing, have);
-    let fd = f.reg(frame_t);
-    f.op(Opcode::New { dst: fd });
-    let url_r = f.string_obj(url)?;
-    let (x, y, w, h) = (f.const_f64(0.0), f.const_f64(0.0), f.const_f64(size.0), f.const_f64(size.1));
     let no = f.reg(bool_t);
     f.bool(no, false);
-    let (dur, ox, oy) = (f.const_f64(1.0), f.const_f64(0.5), f.const_f64(0.5));
-    // imagePoints (empty; element type irrelevant), polygon points (empty), no multi-polygons
-    let points = f.new_array_obj(dyn_t, &[])?;
-    let poly = f.empty_f64_array()?;
-    let multi = f.reg(multi_t);
-    f.op(Opcode::Null { dst: multi });
-    f.call_new(frame_ctor, &[fd, url_r, x, y, w, h, no, dur, ox, oy, points, poly, multi])?;
-    let frames = f.new_array_obj(frame_t, &[fd])?;
+    let mut fds = Vec::new();
+    for &(url, size) in images {
+        let fd = f.reg(frame_t);
+        f.op(Opcode::New { dst: fd });
+        let url_r = f.string_obj(url)?;
+        let (x, y, w, h) = (f.const_f64(0.0), f.const_f64(0.0), f.const_f64(size.0), f.const_f64(size.1));
+        let (dur, ox, oy) = (f.const_f64(1.0), f.const_f64(0.5), f.const_f64(0.5));
+        // imagePoints (empty; element type irrelevant), polygon points (empty), no multi-polygons
+        let points = f.new_array_obj(dyn_t, &[])?;
+        let poly = f.empty_f64_array()?;
+        let multi = f.reg(multi_t);
+        f.op(Opcode::Null { dst: multi });
+        f.call_new(frame_ctor, &[fd, url_r, x, y, w, h, no, dur, ox, oy, points, poly, multi])?;
+        fds.push(fd);
+    }
+    let frames = f.new_array_obj(frame_t, &fds)?;
     let anim = f.new_obj("fish.system.Anim")?;
     let (speed, zero) = (f.const_f64(0.0), f.const_i32(0));
     f.call_new(anim_ctor, &[anim, speed, no, zero, zero, no, frames])?;

@@ -1,7 +1,7 @@
 [mod]
 id = "portal-gun"
 name = "Portal Gun"
-version = "0.1.0"
+version = "0.2.0"
 section = "items"
 description = "A new item: fire a blue and an orange portal. Anything that enters one comes out of the other, keeping its momentum. Lina too."
 authors = ["openlina-kit"]

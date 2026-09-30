@@ -45,6 +45,8 @@ struct Opts {
     dump_menu: bool,
     capture_ui: bool,
     menu_open: String,
+    new_run: bool,
+    new_run_items: Vec<String>,
 }
 
 fn list(cfg: &ModConfig, key: &str) -> Result<Vec<String>> {
@@ -119,6 +121,8 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
         dump_menu: cfg.bool("dump_menu", false)?,
         capture_ui: cfg.bool("capture_ui", false)?,
         menu_open: cfg.str("menu_open", "")?.to_string(),
+        new_run: cfg.bool("new_run", false)?,
+        new_run_items: list(cfg, "new_run_items")?,
     };
 
     let i32_t = code.ty_i32();
@@ -126,8 +130,14 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     // 1 = title skipped, 2 = the test level is running.
     let state = code.add_global(i32_t);
 
-    skip_title(code, o.start_tick, state)?;
+    skip_title(code, o.start_tick, o.new_run.then_some(o.seed), state)?;
     let capture = if o.capture.is_some() { Some(build_capture(code, &o.capture_dir, o.capture_ui)?) } else { None };
+    if o.new_run {
+        run_start_clock(code, &o, capture)?;
+        if !o.new_run_items.is_empty() {
+            force_rerolled_items(code, &o.new_run_items)?;
+        }
+    }
     let tick = build_tick(code, &o, state, capture)?;
     hooks::subscribe(code, "tick", tick)?;
     if !o.inputs.is_empty() {
@@ -137,7 +147,7 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
 }
 
 /// At title tick `tick`: `levelManager.refreshPool(Main.i.packManager); layout.goToLayout("main")`.
-fn skip_title(code: &mut Code, tick: i32, state: RefGlobal) -> Result<()> {
+fn skip_title(code: &mut Code, tick: i32, new_run: Option<i32>, state: RefGlobal) -> Result<()> {
     let update = code.method("fish.game.evsheet.EvSheet_first_screen_ev", "update")?;
     let refresh = code.method("fish.system.LevelManager", "refreshPool")?;
     let goto = code.method("fish.system.Layout", "goToLayout")?;
@@ -154,6 +164,20 @@ fn skip_title(code: &mut Code, tick: i32, state: RefGlobal) -> Result<()> {
     let lm = f.get_new(game, "levelManager")?;
     let pm = f.get_new(main, "packManager")?;
     f.call_new(refresh, &[lm, pm])?;
+    if let Some(seed) = new_run {
+        // A returning player's run: no tutorial, the game's own run start (tool selection) follows.
+        let inst_ev = f.get_new(game, "ev_instancing_ev")?;
+        let picker = f.get_new(inst_ev, "manager")?;
+        let first = f.code().method("fish.system.Picker", "first")?;
+        let m_dyn = f.call_new(first, &[picker])?;
+        let manager_t = f.code().class("fish.game.oclass.OClass_manager")?;
+        let manager = f.cast(m_dyn, manager_t);
+        let bool_t = f.code().ty_bool();
+        let yes = f.reg(bool_t);
+        f.bool(yes, true);
+        f.set(manager, "tutorial_done", yes)?;
+        seed_run(&mut f, manager, seed)?;
+    }
     let name = f.string_obj("main")?;
     f.call_new(goto, &[layout, name])?;
     set_global(&mut f, state, 1);
@@ -162,6 +186,34 @@ fn skip_title(code: &mut Code, tick: i32, state: RefGlobal) -> Result<()> {
     f.ret_void();
     let start = f.finish()?;
     prepend_call(code, update, start, &[Reg(1)])
+}
+
+/// Seed every RNG of the run (items come from `toolSeed`, which is random at startup).
+fn seed_run(f: &mut FnBuilder, manager: Reg, seed: i32) -> Result<()> {
+    let rand_init = f.code().method("hxd.Rand", "init")?;
+    for (k, field) in [
+        "mainSeed",
+        "levelSeed",
+        "toolSeed",
+        "toolBlockSeed",
+        "modifierSeed",
+        "colorSeed",
+        "musicSeed",
+        "sfxSeed",
+        "bossSeed",
+        "endwormSeed",
+    ]
+    .iter()
+    .enumerate()
+    {
+        let skip = f.label();
+        let r = f.get_new(manager, field)?;
+        f.jnull(r, skip);
+        let s = f.const_i32(seed.wrapping_mul(31).wrapping_add(k as i32));
+        f.call_new(rand_init, &[r, s])?;
+        f.place(skip);
+    }
+    Ok(())
 }
 
 fn main_instance(f: &mut FnBuilder) -> Result<Reg> {
@@ -296,29 +348,7 @@ fn build_tick(code: &mut Code, o: &Opts, state: RefGlobal, capture: Option<RefFu
         let yes = f.reg(bool_t);
         f.bool(yes, true);
         f.set(manager, "tutorial_done", yes)?;
-        // Seed every RNG of the run (items come from `toolSeed`, which is random at startup).
-        for (k, field) in [
-            "mainSeed",
-            "levelSeed",
-            "toolSeed",
-            "toolBlockSeed",
-            "modifierSeed",
-            "colorSeed",
-            "musicSeed",
-            "sfxSeed",
-            "bossSeed",
-            "endwormSeed",
-        ]
-        .iter()
-        .enumerate()
-        {
-            let skip = f.label();
-            let r = f.get_new(manager, field)?;
-            f.jnull(r, skip);
-            let s = f.const_i32(o.seed.wrapping_mul(31).wrapping_add(k as i32));
-            f.call_new(rand_init, &[r, s])?;
-            f.place(skip);
-        }
+        seed_run(&mut f, manager, o.seed)?;
 
         let rand = f.new_obj("hxd.Rand")?;
         let seed = f.const_i32(o.seed);
@@ -508,6 +538,85 @@ fn build_tick(code: &mut Code, o: &Opts, state: RefGlobal, capture: Option<RefFu
     f.place(end);
     f.ret_void();
     f.finish()
+}
+
+/// With `new_run`: the run start (tool selection) runs no gameplay ticks, so capture and
+/// `end_tick` also follow `mainLayout.currentTick` from `EvSheet_manager_ev.update`, which runs
+/// every frame. Scripted inputs already use that clock.
+fn run_start_clock(code: &mut Code, o: &Opts, capture: Option<RefFun>) -> Result<()> {
+    let update = code.method("fish.game.evsheet.EvSheet_manager_ev", "update")?;
+    let sheet_t = code.class("fish.game.evsheet.EvSheet_manager_ev")?;
+    let void = code.ty_void();
+    let mut f = FnBuilder::new(code, "harness/run_start_clock", &[sheet_t], void);
+    let end = f.label();
+    let main = main_instance(&mut f)?;
+    let game = f.get_new(main, "game")?;
+    let layouts = f.get_new(game, "layouts")?;
+    let layout = f.get_new(layouts, "mainLayout")?;
+    let t = f.get_new(layout, "currentTick")?;
+    if let (Some((from, to, step)), Some(cap)) = (o.capture, capture) {
+        let skip = f.label();
+        let (a, z, s) = (f.const_i32(from), f.const_i32(to), f.const_i32(step.max(1)));
+        f.jlt(t, a, skip);
+        f.jgt(t, z, skip);
+        let i32_t = f.code().ty_i32();
+        let (d, m) = (f.reg(i32_t), f.reg(i32_t));
+        f.sub(d, t, a);
+        f.op(Opcode::SMod { dst: m, a: d, b: s });
+        let zero = f.const_i32(0);
+        f.jne(m, zero, skip);
+        f.call_new(cap, &[t])?;
+        f.place(skip);
+    }
+    if o.end_tick > 0 {
+        let e = f.const_i32(o.end_tick);
+        f.jlt(t, e, end);
+        f.print(&[Print::Str("[harness] end at layout tick "), Print::Val(t)])?;
+        f.exit(0)?;
+    }
+    f.place(end);
+    f.ret_void();
+    let clock = f.finish()?;
+    prepend_call(code, update, clock, &[Reg(0)])
+}
+
+/// `new_run_items`: the run start's tool roll (`ItemManager.reroll`, called by
+/// `EvSheet_manager_ev.manage`) puts these items into the first slots of `pickedItems`, so a test
+/// can see how the tool selection handles them.
+fn force_rerolled_items(code: &mut Code, names: &[String]) -> Result<()> {
+    let reroll = code.method("fish.system.ItemManager", "reroll")?;
+    let find_item = code.method("fish.system.ItemManager", "findItem")?;
+    let manage = code.method("fish.game.evsheet.EvSheet_manager_ev", "manage")?;
+    let ft = code.func_type(reroll)?.clone();
+    let slot_t = code.func_type(code.method("fish.system.ItemManager", "findPicked")?)?.ret;
+    let mut f = FnBuilder::new(code, "harness/reroll", &ft.args, ft.ret);
+    let args: Vec<Reg> = (0..ft.args.len()).map(|i| f.arg(i)).collect();
+    f.call_new(reroll, &args)?;
+    let im = args[0];
+    let picked = f.get_new(im, "pickedItems")?;
+    let n = f.array_len(picked)?;
+    for (k, name) in names.iter().enumerate() {
+        let skip = f.label();
+        let kr = f.const_i32(k as i32);
+        f.jge(kr, n, skip);
+        let slot = f.array_get(picked, kr, slot_t)?;
+        let nm = f.string_obj(name)?;
+        let ty = f.call_new(find_item, &[im, nm])?;
+        f.set(slot, "type", ty)?;
+        f.print(&[Print::Str(&format!("[harness] run start: tool {k} forced to `{name}`"))])?;
+        f.place(skip);
+    }
+    f.ret_void();
+    let wrapper = f.finish()?;
+    let fun = code.func_mut(manage)?;
+    let at = openlina_sdk::edit::expect_one(openlina_sdk::edit::find_calls(fun, reroll), "reroll call in manage")?;
+    let (_, call_args) = openlina_sdk::edit::call_target(&fun.ops[at]).context("not a call")?;
+    let dst = match fun.ops[at] {
+        Opcode::Call4 { dst, .. } => dst,
+        _ => bail!("reroll call in manage is not a Call4"),
+    };
+    openlina_sdk::edit::replace_op(fun, at, call(dst, wrapper, &call_args));
+    Ok(())
 }
 
 /// `capture(n)`: render the game at 600×338 into `Main.gifTarget` and save it as a PNG.

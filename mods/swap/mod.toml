@@ -1,7 +1,7 @@
 [mod]
 id = "swap"
 name = "Swap"
-version = "0.1.0"
+version = "0.2.0"
 section = "items"
 description = "A new item: fire a ray along your aim and trade places with the first object it hits. Lina goes where the object was, the object goes where Lina was."
 authors = ["openlina-kit"]

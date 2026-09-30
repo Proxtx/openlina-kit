@@ -100,6 +100,7 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
             second_layer: false,
             icon: "images/openlina/swap.png",
             icon_size: (12.0, 12.0),
+            big_icon: Some(("images/openlina/swap-big.png", (24.0, 24.0))),
         },
     )?;
 
