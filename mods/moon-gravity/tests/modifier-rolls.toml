@@ -1,0 +1,25 @@
+name = "moon-gravity: the game's own modifier roll can draw it, and the HUD shows its icon"
+mods = ["moon-gravity"]
+fixtures = ["inspect"]
+timeout = 30
+
+[options.moon-gravity]
+trace = true
+
+# the HUD modifier icon (an OClass_optionthingos) plays the mod's animation
+[options.inspect]
+at = ["tick:30"]
+print = ["@optionthingos[].sprite.anim"]
+
+[harness]
+level = "greendemo 1"
+roll_modifier = true
+seed = 12            # this seed draws moon-gravity (id 4779 = modifiers::id_of("moon-gravity"))
+end_tick = 40
+
+[[expect]]
+contains = "[harness] level tick 1: greendemo 1 modifier 4779"
+[[expect]]
+contains = "[moon-gravity] greendemo 1 tick 1: gravity x0.5"
+[[expect]]
+contains = ".sprite.anim = openlina_mod_4779"

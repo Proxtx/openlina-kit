@@ -1,5 +1,5 @@
 name = "all showcase mods together: new runs with random play (no crash, no hang)"
-mods = ["portal-gun", "swap", "screen-wrap", "solid-edges", "tumble", "mod-menu", "ammo-boost"]
+mods = ["portal-gun", "swap", "screen-wrap", "solid-edges", "moon-gravity", "tumble", "mod-menu", "ammo-boost"]
 fixtures = ["trace-calls"]
 timeout = 240
 

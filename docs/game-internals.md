@@ -78,6 +78,29 @@ for (o in secondary_physics.insts)                       // same test, no edgewi
   level data, relying on the edge test to delete them (first ticks of a layout). Mods that change edge
   behavior need to leave those alone.
 
+### Gravity
+
+Found by the moon-gravity mod. The Box2D world is created with gravity (0, 10) (`Layout.initialise`), but gameplay
+layouts set it to 0 when they start (closure fn@9255 from `EvSheet_gameplay.setupEvents`, L6086); gravity is the
+game's own. The "gravity" event group of `EvSheet_gameplay.update` (L16413-16472, ops ~15971-16130) does, every tick:
+
+```haxe
+var g = 1.05;
+if (low_grav.insts.length != 0) g = 0.05;               // any OClass_low_grav object: low gravity
+for (o in physics_obj.insts) {                           // dynamic bodies only (body_get_type != 0)
+    var water = o.is_overlap_water ? 0.4 : 1, lift = o.is_overlap_water ? -0.03 : 0;
+    var f = (o.personal_gravity * o.flipModifier * water * g + lift) * (1 - o.is_overlap_nograv);
+    // + a z_up zone term: -mass * invWorldScale * is_overlap_z_up * water * 0.065
+    body_apply_force(o.physics.body, (0, f), worldCenter, true);
+    // water also damps the velocity by 0.95^(dt*60)
+}
+```
+
+Lina is a `physics_obj` too (`personal_gravity` like the others); her jump sets a velocity, so gravity decides how
+high and how long she flies. A digging player's fall speed is integrated separately (L16522, `personal_gravity *
+14.76 * dt`). On greendemo 1 in vanilla, a box spawned in the air at (540, 60) is at y 124.7 170 ticks later (there is
+noticeable damping), and a jump from the ground (y 193.9) peaks 22 units up after 40 ticks.
+
 ## Timing
 
 The game steps at a fixed `Main.frameTime` = 1/120 s: **120 ticks per second**. `Layout.currentTick` counts ticks

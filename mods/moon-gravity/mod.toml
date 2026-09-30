@@ -1,0 +1,30 @@
+[mod]
+id = "moon-gravity"
+name = "Moon Gravity"
+version = "0.1.0"
+section = "modifiers"
+description = "A new modifier: in levels that roll it, gravity is weaker (half by default). Lina, boxes and fruits fall slower, and Lina jumps higher. Optionally in every level."
+authors = ["openlina-kit"]
+game_builds = ["22056877"]
+requires = ["core"]
+showcase = ["moon-jump.gif"]
+
+[options.factor]
+type = "float"
+default = 0.5
+description = "Gravity in moon levels, as a share of vanilla gravity (0 = floating, 1 = vanilla; up to 4)."
+
+[options.always]
+type = "bool"
+default = false
+description = "Apply in every level instead of as a rolled modifier (and on other screens with gameplay physics, e.g. the tutorial; no HUD icon then)."
+
+[options.trace]
+type = "bool"
+default = false
+description = "Print `[moon-gravity] <layout> tick 1: gravity x<factor>` when a layout with moon gravity starts."
+
+[stats]
+kind = "modifier"
+rolls = "like vanilla"
+gravity = "50%"

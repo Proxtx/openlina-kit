@@ -1,0 +1,38 @@
+name = "moon-gravity: with the modifier, a box falls measurably slower than in vanilla"
+mods = ["moon-gravity"]
+fixtures = ["debug-spawn", "trace-positions"]
+timeout = 60
+
+[options.moon-gravity]
+trace = true
+
+# a box in the open air right of the level (nothing below it)
+[options.debug-spawn]
+object = "box"
+tick = 30
+x = 540.0
+y = 60.0
+
+[options.trace-positions]
+types = ["box"]
+ticks = "35,200"
+
+[harness]
+level = "greendemo 1"
+modifier_key = "moon-gravity"   # force the modifier
+seed = 1
+end_tick = 220
+
+[[expect]]
+contains = "[moon-gravity] greendemo 1 tick 1: gravity x0.5"
+
+# the box was spawned (tick 30) at the same place as in vanilla...
+[[expect]]
+position = { tick = 35, type = "box", x = 540, y = 60, within = 1 }
+
+# ...and 170 ticks later it has fallen 32 units instead of vanilla's 65
+# (vanilla: 540, 124.7; see inactive-without-modifier.toml)
+[[expect]]
+position = { tick = 200, type = "box", x = 540, y = 92.3, within = 2 }
+[[expect]]
+position = { tick = 200, type = "box", x = 540, y = 124.7, within = 15, away = true }

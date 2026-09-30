@@ -1,0 +1,13 @@
+[package]
+name = "openlina-mod-moon-gravity"
+edition.workspace = true
+version = "0.1.0"
+publish = false
+
+[[bin]]
+name = "moon-gravity"
+path = "src/main.rs"
+
+[dependencies]
+openlina-sdk.workspace = true
+anyhow.workspace = true

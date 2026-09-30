@@ -1,0 +1,36 @@
+name = "moon-gravity: without the modifier, the box falls and Lina jumps exactly as in vanilla"
+mods = ["moon-gravity"]
+fixtures = ["debug-spawn", "trace-positions"]
+timeout = 60
+
+[options.moon-gravity]
+trace = true
+
+[options.debug-spawn]
+object = "box"
+tick = 30
+x = 540.0
+y = 60.0
+
+[options.trace-positions]
+types = ["player", "box"]
+ticks = "160,200"
+
+[harness]
+level = "greendemo 1"
+modifier = 0                    # no modifier this level
+seed = 1
+inputs = ["120-130:jump"]
+end_tick = 220
+
+[[expect]]
+not_contains = "[moon-gravity]"
+
+# vanilla numbers (the same scenario with `mods = []` gives the same positions)
+[[expect]]
+position = { tick = 200, type = "box", x = 540, y = 124.7, within = 2 }
+# Lina's vanilla jump peaks 22 units above the ground (193.9) at tick 160, and she is almost down at 200
+[[expect]]
+position = { tick = 160, type = "player", x = 122, y = 171.7, within = 2 }
+[[expect]]
+position = { tick = 200, type = "player", x = 122, y = 191.5, within = 2 }

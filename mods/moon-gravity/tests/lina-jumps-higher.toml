@@ -1,0 +1,42 @@
+name = "moon-gravity: with the modifier, Lina jumps twice as high and stays in the air twice as long"
+mods = ["moon-gravity"]
+fixtures = ["debug-spawn", "trace-positions"]
+timeout = 60
+
+[options.moon-gravity]
+trace = true
+
+# a box drifting down next to her, for the showcase
+[options.debug-spawn]
+object = "box"
+tick = 30
+x = 300.0
+y = 40.0
+
+[options.trace-positions]
+types = ["player"]
+ticks = "160,200"
+
+[harness]
+level = "greendemo 1"
+modifier_key = "moon-gravity"
+seed = 1
+inputs = ["120-130:jump"]
+end_tick = 340
+
+[[expect]]
+contains = "[moon-gravity] greendemo 1 tick 1: gravity x0.5"
+
+# the same jump as in inactive-without-modifier.toml: at tick 160 vanilla's peak (171.7) is
+# already passed...
+[[expect]]
+position = { tick = 160, type = "player", x = 122, y = 161.2, within = 2 }
+# ...and at tick 200 she is at her peak, 45 units up, where vanilla has her nearly landed (191.5)
+[[expect]]
+position = { tick = 200, type = "player", x = 122, y = 148.9, within = 2 }
+[[expect]]
+position = { tick = 200, type = "player", x = 122, y = 191.5, within = 20, away = true }
+
+[gif]
+capture = "100-340/3"
+out = "media/moon-jump.gif"

@@ -1,0 +1,33 @@
+name = "moon-gravity: with always = true it applies in a level without the modifier"
+mods = ["moon-gravity"]
+fixtures = ["debug-spawn", "trace-positions"]
+timeout = 60
+
+[options.moon-gravity]
+trace = true
+always = true
+
+[options.debug-spawn]
+object = "box"
+tick = 30
+x = 540.0
+y = 60.0
+
+[options.trace-positions]
+types = ["box"]
+ticks = "200"
+
+[harness]
+level = "greendemo 1"
+modifier = 0
+seed = 1
+end_tick = 220
+
+[[expect]]
+contains = "[harness] level tick 1: greendemo 1 modifier 0"
+[[expect]]
+contains = "[moon-gravity] greendemo 1 tick 1: gravity x0.5"
+
+# the same fall as with the rolled modifier (box-falls-slower.toml), not vanilla's 124.7
+[[expect]]
+position = { tick = 200, type = "box", x = 540, y = 92.3, within = 2 }

@@ -108,7 +108,8 @@ mosa-mod/                 (plain folder)
   `lina sprite` (text grids → PNG, game palette). screen-wrap has 3 tests (box wraps; fruits vanilla by default;
   fruits wrap with `coins = true`) and `media/box-wraps.gif`, `media/icon.png`. A scenario run takes 7-10 s.
 - **Stage 4 (in progress):** screen-wrap is a real modifier; mod-menu (general); portal-gun (items); plus
-  ammo-boost (from the docs test) and solid-edges (a modifier, a friend's idea; originally always on). Core hooks now: tick,
+  ammo-boost (from the docs test), solid-edges (a modifier, a friend's idea; originally always on) and
+  moon-gravity (a modifier scaling the game's own gravity). Core hooks now: tick,
   edge_exit, modifier_pool, modifier_icon, item_pool, item_use, loc. Remaining: the Tumble level.
 - **Docs test:** a fresh agent with only the repo built ammo-boost from the docs in ~50 min and reported flaws
   (fixed in cc769c6). Repeat this after big changes.

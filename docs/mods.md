@@ -103,6 +103,29 @@ open; objects far off-screen stay vanilla. With screen-wrap in the pack: two rol
 `always` one steps aside in levels that roll the other; both `always` refuses to build. Tests: 6 scenarios, 3 of
 them with screen-wrap. Idea by a friend of the project.
 
+## moon-gravity (modifiers)
+
+A modifier (key `moon-gravity`, id 4779, HUD icon from `art/modifier.toml`, also in "dx" runs); with `always = true`
+it applies in every level instead (no icon then). In levels that roll it, gravity is `factor` (0.5) of vanilla:
+boxes, fruits and Lina fall slower, and Lina's jump goes about twice as high (45 instead of 22 units) and lasts twice
+as long. It scales the game's own gravity strength (`g` in the "gravity" group of `EvSheet_gameplay.update`, see
+[game-internals.md](game-internals.md#gravity)) once per tick, so vanilla's low-gravity objects, flipped gravity and
+no-gravity zones keep working on top of it. Left alone: water and `z_up` lift, Lina while digging, `secondary_physics`
+objects. Combines with every other modifier mod (a level has one modifier; an `always` moon gravity stacks with any).
+
+Source: `mods/moon-gravity/src/main.rs`. Requires `core`.
+
+| option | default | |
+|---|---|---|
+| `factor` | `0.5` | Gravity as a share of vanilla's (0 = floating, 1 = vanilla; 0 to 4). |
+| `always` | `false` | Apply in every level instead of as a rolled modifier (also on other screens with gameplay physics, e.g. the tutorial). |
+| `trace` | `false` | Print `[moon-gravity] <layout> tick 1: gravity x<factor>` when a layout with moon gravity starts. |
+
+Tests (`mods/moon-gravity/tests/`, 6 scenarios, positions read by `trace-positions`): a box falls 32 units in 170
+ticks instead of vanilla's 65; without the modifier the box and a jump match vanilla exactly and nothing is printed;
+Lina's jump peaks 45 units up at tick 200 where vanilla has her landing (showcase `media/moon-jump.gif`); `always`
+without the modifier; `factor = 0.25` (16 units); the game's roll draws it (seed 12) and the HUD plays its icon.
+
 ## mod-menu (general)
 
 Adds `OPENLINA MODS (n)` to the pause menu, after the game's MODDING MENU: a submenu listing every mod of the pack
