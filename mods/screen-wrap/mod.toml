@@ -37,3 +37,8 @@ description = "Don't wrap during the first ticks of a layout, when levels delete
 type = "bool"
 default = false
 description = "Print every wrap to stdout."
+
+[stats]
+kind = "modifier"
+rolls = "like vanilla"
+fruits = "exempt"

@@ -17,3 +17,7 @@ description = "Multiply the starting ammo of every item by this (0 to 1000). Ite
 type = "bool"
 default = false
 description = "Print every boosted ammo value: `[ammo-boost] <item>: ammo <vanilla> -> <boosted>`."
+
+[stats]
+ammo = "×2"
+applies_to = "all items"

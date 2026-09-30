@@ -49,7 +49,7 @@ mosa-mod/                 (plain folder)
 - [x] 2. Kit foundation: wasm package format, `openlina` helper, core hooks/registries, screen-wrap ported
 - [x] 3. Harness + `lina test` / `lina gif` / `lina sprite`
 - [x] 4. Showcase mods: modifier → general → item → level, each with icon, gifs, tests
-- [ ] 5. Website implementation: API, voting, zip/JSON export, upload tokens, review queue
+- [x] 5. Website implementation: API, voting, zip/JSON export, upload tokens, review queue (openlina-web)
 - [ ] 6. Agent integration: `lina pull/publish`, skill, change-request workflow, docs polish
 
 ## Findings
@@ -57,6 +57,9 @@ mosa-mod/                 (plain folder)
 (Filled in as stages complete. Details in game-internals.md.)
 
 - Design prototype: https://claude.ai/artifact/SeqU5XWxttwHCJwjgDh6Uy (copy in openlina-web/design/), approved.
+- Website (stage 5): openlina-web, axum + SQLite, tokens issued by the admin CLI (no accounts/passwords); a pack
+  zip from the site installs with `openlina install` (checked end to end). Mods show `[stats]` from mod.toml
+  and `media/icon.png` + gifs. Stage 6 adds `lina login/pull/publish` against its API.
 
 - Items are created in code (`EvSheet_instancing_ev`, ~L100–278) as `OClass_item` with `NAME`, `ammo`,
   `aim_type`, `unlocked`, `secondLayer`, then `ItemManager.initBaseItems`. Behavior is dispatched in

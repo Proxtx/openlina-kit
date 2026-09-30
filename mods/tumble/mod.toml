@@ -32,3 +32,8 @@ description = "Tiles in the ring (one of them is left out as the gap)."
 type = "float"
 default = 130.0
 description = "Radius of the ring."
+
+[stats]
+levels = 1
+turns = "90° every 10 s"
+built = "in code"

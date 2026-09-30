@@ -17,3 +17,7 @@ description = "List each mod's option values under it."
 type = "bool"
 default = false
 description = "Print the entries it adds to stdout."
+
+[stats]
+where = "pause menu"
+shows = "mods + options"

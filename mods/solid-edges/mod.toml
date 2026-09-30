@@ -33,3 +33,8 @@ description = "Fruits bounce too. Pushing fruits out is how levels are won, so t
 type = "bool"
 default = false
 description = "Print every real bounce (not resting contact) to stdout."
+
+[stats]
+kind = "always on"
+bounce = "50%"
+fruits = "exempt"

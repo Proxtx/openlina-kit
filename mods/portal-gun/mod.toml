@@ -37,4 +37,4 @@ description = "Print portal placements and teleports to stdout."
 ammo = 4
 aim = "long"
 portals = 2
-keeps_momentum = true
+keeps_momentum = "yes"
