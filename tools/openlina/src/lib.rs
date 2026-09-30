@@ -32,9 +32,16 @@ pub fn data_dir() -> Result<PathBuf> {
     Ok(base.join("openlina"))
 }
 
+/// The patched bytecode and, per mod, what it makes the game able to do outside the game
+/// (see `openlina_sdk::caps`). Callers decide whether to accept those mods.
+pub struct Built {
+    pub bytes: Vec<u8>,
+    pub caps: Vec<(String, Vec<openlina_sdk::caps::Finding>)>,
+}
+
 /// Apply `packages` (any order; they are sorted by their dependencies) to `input` with the
 /// options from `pack`. Prints one line per mod.
-pub fn build(input: Vec<u8>, packages: &[Package], pack: &ModPack) -> Result<Vec<u8>> {
+pub fn build(input: Vec<u8>, packages: &[Package], pack: &ModPack) -> Result<Built> {
     let manifests: Vec<_> = packages.iter().map(|p| p.manifest.clone()).collect();
     let order = resolve_order(&manifests)?;
     let user_options = |id: &str| pack.mods.iter().find(|e| e.id == id).map(|e| e.options.clone()).unwrap_or_default();
@@ -51,17 +58,26 @@ pub fn build(input: Vec<u8>, packages: &[Package], pack: &ModPack) -> Result<Vec
     }
     let info_toml = toml::to_string(&info)?;
     let mut bytes = input;
+    let mut before = openlina_sdk::Code::from_bytes(&bytes).context("the game's bytecode does not parse")?;
+    let mut snap = openlina_sdk::caps::Snapshot::of(&before);
+    let mut caps = Vec::new();
     for (k, &i) in order.iter().enumerate() {
         let p = &packages[i];
         let id = &p.manifest.info.id;
         let options = toml::to_string(&info.mods[k].options)?;
         let t = std::time::Instant::now();
         bytes = patch::run(&p.patch, &bytes, id, &options, &info_toml).with_context(|| format!("applying `{id}`"))?;
+        // The result must still be valid bytecode.
+        let after = openlina_sdk::Code::from_bytes(&bytes).with_context(|| format!("the bytecode after `{id}` does not parse"))?;
+        let found = openlina_sdk::caps::diff(&snap, &before, &after);
         println!("  applied {id} {} ({:.1}s)", p.manifest.info.version, t.elapsed().as_secs_f64());
+        if !found.is_empty() {
+            caps.push((id.clone(), found));
+        }
+        snap = openlina_sdk::caps::Snapshot::of(&after);
+        before = after;
     }
-    // The result must still be valid bytecode.
-    openlina_sdk::Code::from_bytes(&bytes).context("the patched bytecode does not parse")?;
-    Ok(bytes)
+    Ok(Built { bytes, caps })
 }
 
 /// Copy `src` to `dst` recursively.

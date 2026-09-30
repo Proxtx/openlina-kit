@@ -52,6 +52,13 @@ pub fn list_mods() -> Result<()> {
     Ok(())
 }
 
+/// Marker `lina pull` leaves in the mods it extracted: someone else's code.
+pub const PULLED_MARKER: &str = ".openlina-pulled";
+
+pub fn is_pulled(dir: &Path) -> bool {
+    dir.join(PULLED_MARKER).is_file()
+}
+
 fn target_dir() -> PathBuf {
     std::env::var_os("CARGO_TARGET_DIR").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("target"))
 }
@@ -131,19 +138,47 @@ pub fn build_pack(game_dir: &Path, pack: &ModPack, wasm: bool, overlay: &Path) -
         let found = all.iter().find(|(_, m)| m.info.id == e.id).with_context(|| format!("no mod `{}` in mods/", e.id))?;
         chosen.push(found.clone());
     }
-    let ids: Vec<String> = chosen.iter().map(|(_, m)| m.info.id.clone()).collect();
-    cargo_build(&ids, wasm)?;
+    // Mods pulled from a site are someone else's code: they only ever run sandboxed (wasm).
+    let (foreign, own): (Vec<_>, Vec<_>) = chosen.iter().map(|(d, m)| (d, m.info.id.clone())).partition(|(d, _)| is_pulled(d));
+    let own: Vec<String> = own.into_iter().map(|(_, id)| id).collect();
+    let foreign: Vec<String> = foreign.into_iter().map(|(_, id)| id).collect();
+    if !own.is_empty() {
+        cargo_build(&own, wasm)?;
+    }
+    if !foreign.is_empty() {
+        cargo_build(&foreign, true)?;
+    }
     let packages: Vec<Package> = chosen
         .into_iter()
         .map(|(dir, manifest)| {
             let id = manifest.info.id.clone();
-            let patch = if wasm { Patch::Wasm(patch_path(&id, true)) } else { Patch::Native(patch_path(&id, false)) };
+            let patch = if wasm || foreign.contains(&id) { Patch::Wasm(patch_path(&id, true)) } else { Patch::Native(patch_path(&id, false)) };
             Package { dir, manifest, patch }
         })
         .collect();
     let input = std::fs::read(ORIG).context("run `lina setup` first")?;
     println!("building {} mod(s){}", packages.len(), if wasm { " (wasm)" } else { "" });
-    let bytes = openlina::build(input, &packages, pack)?;
+    let built = openlina::build(input, &packages, pack)?;
+    let mut refused = Vec::new();
+    for (id, findings) in &built.caps {
+        let p = packages.iter().find(|p| &p.manifest.info.id == id).expect("built mods are in the pack");
+        if p.manifest.info.section == Section::Dev {
+            continue; // test fixtures (harness: frames, exit)
+        }
+        let list: String = findings.iter().map(|f| format!("      {f}\n")).collect();
+        if foreign.contains(id) {
+            refused.push(format!("  {id} (pulled from a site):\n{list}"));
+        } else {
+            println!("  warning: {id} reaches outside the game (players' `openlina` refuses it unless they allow it):\n{list}");
+        }
+    }
+    ensure!(
+        refused.is_empty(),
+        "pulled mods that reach outside the game (files, programs, network, Steam, …):\n{}\n\
+         Read their code. Only if the user agrees to trust them, delete mods/<id>/.openlina-pulled.",
+        refused.join("")
+    );
+    let bytes = built.bytes;
     let mut assets = Vec::new();
     for p in &packages {
         assets.extend(p.assets()?);

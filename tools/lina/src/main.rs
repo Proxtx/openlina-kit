@@ -4,6 +4,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 mod build;
+mod doctor;
 mod dump;
 mod hub;
 mod inspect;
@@ -173,6 +174,8 @@ enum Cmd {
         #[arg(long)]
         no_test: bool,
     },
+    /// Check this machine: toolchain (with or without nix), wasm target, ImageMagick, the game, setup.
+    Doctor,
     /// Self-test: roundtrip the pristine bytecode and run the validator on every function.
     Check {
         #[arg(long, default_value = ORIG)]
@@ -229,6 +232,7 @@ fn main() -> Result<()> {
             sprite::render(&file, &out, scale)
         }
         Cmd::Check { input } => build::check(&input),
+        Cmd::Doctor => doctor::doctor(cli.game_dir.clone()),
         Cmd::Login { site, token } => hub::login(&site, token),
         Cmd::Pull { pack, mods_dir, force } => hub::pull(&pack, &mods_dir, force),
         Cmd::Publish { id, yes, no_test } => hub::publish(game_dir, &id, yes, !no_test),

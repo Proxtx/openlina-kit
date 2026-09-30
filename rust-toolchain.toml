@@ -1,0 +1,6 @@
+# Used by rustup (setups without nix): the stable toolchain with the wasm target mods are built for.
+# The nix dev shell brings its own toolchain and ignores this file.
+[toolchain]
+channel = "stable"
+targets = ["wasm32-wasip1"]
+components = ["clippy", "rustfmt"]

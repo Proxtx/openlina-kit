@@ -65,6 +65,13 @@ fn site_and_token() -> Result<(String, String)> {
     }
 }
 
+/// The site `lina login` saved, if any.
+pub fn logged_in() -> Option<String> {
+    let c = load_config().ok()?;
+    c.token.as_ref()?;
+    c.site
+}
+
 // ---------------------------------------------------------------------- http
 
 fn agent() -> ureq::Agent {
@@ -200,22 +207,45 @@ pub fn pull(pack: &str, mods_dir: &Path, force: bool) -> Result<()> {
                 format!("{}: local {} kept, pack has {} (use --force to replace)", m.id, local.info.version, m.version)
             }
         } else if root.join("source").is_dir() {
-            if dst.exists() {
-                std::fs::remove_dir_all(&dst)?;
-            }
-            std::fs::create_dir_all(&dst)?;
-            openlina::copy_dir(&root.join("source"), &dst)?;
-            std::fs::copy(root.join("mod.toml"), dst.join("mod.toml"))?;
-            for sub in ["assets", "media"] {
-                if root.join(sub).is_dir() {
-                    openlina::copy_dir(&root.join(sub), &dst.join(sub))?;
+            match check_source(&root.join("source"), &m.id) {
+                Err(why) => {
+                    let q = work.join("quarantine").join(&m.id);
+                    if q.exists() {
+                        std::fs::remove_dir_all(&q)?;
+                    }
+                    openlina::copy_dir(&root, &q)?;
+                    format!("{}: NOT extracted, its source breaks the kit's rules ({why}); it is in {} for you to read", m.id, q.display())
+                }
+                Ok(()) => {
+                    if dst.exists() {
+                        std::fs::remove_dir_all(&dst)?;
+                    }
+                    std::fs::create_dir_all(&dst)?;
+                    openlina::copy_dir(&root.join("source"), &dst)?;
+                    std::fs::copy(root.join("mod.toml"), dst.join("mod.toml"))?;
+                    for sub in ["assets", "media"] {
+                        if root.join(sub).is_dir() {
+                            openlina::copy_dir(&root.join(sub), &dst.join(sub))?;
+                        }
+                    }
+                    let sha: String = Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
+                    std::fs::write(
+                        dst.join(crate::build::PULLED_MARKER),
+                        format!(
+                            "# Pulled by `lina pull`: someone else's code. lina builds and runs it only as wasm and refuses it\n\
+                             # if it reaches outside the game. Delete this file only if the user decided to trust the mod.\n\
+                             pack = {:?}\nversion = {:?}\nstatus = {:?}\nsha256 = {:?}\n",
+                            pack.url, m.version, m.status, sha
+                        ),
+                    )?;
+                    format!("{}: source {} extracted to {} (pulled: runs as wasm only)", m.id, m.version, dst.display())
                 }
             }
-            format!("{}: source {} extracted to {}", m.id, m.version, dst.display())
         } else {
             format!("{}: {} has no source (wasm only); it can be installed but not changed", m.id, m.version)
         };
         std::fs::remove_dir_all(&tmp)?;
+        let note = if m.status == "reviewed" { note } else { format!("{note}. WARNING: {} on the site", m.status.to_uppercase()) };
         println!("  {note}");
         notes.push(note);
     }
@@ -232,6 +262,7 @@ pub fn pull(pack: &str, mods_dir: &Path, force: bool) -> Result<()> {
                 options: m.options.clone(),
                 request: m.request.clone(),
                 url: Some(m.package.clone()),
+                status: Some(m.status.clone()),
             })
             .collect(),
         section_requests: pack.section_requests.clone(),
@@ -305,6 +336,77 @@ fn requests_md(pack: &Pack, mods_dir: &Path, notes: &[String]) -> Result<String>
         s.push_str(&format!("\nAdded as requirements: {}.\n", required.join("; ")));
     }
     Ok(s)
+}
+
+/// A pulled mod's source must be a plain mod crate: building it must not run code on this
+/// machine (no build scripts, no dependencies beyond the kit's workspace ones, no cargo config).
+fn check_source(src: &Path, id: &str) -> std::result::Result<(), String> {
+    fn walk(dir: &Path, root: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
+        for e in std::fs::read_dir(dir)? {
+            let p = e?.path();
+            out.push(p.strip_prefix(root).unwrap_or(&p).to_path_buf());
+            if p.is_dir() {
+                walk(&p, root, out)?;
+            }
+        }
+        Ok(())
+    }
+    let mut files = Vec::new();
+    walk(src, src, &mut files).map_err(|e| e.to_string())?;
+    for f in &files {
+        let name = f.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        if name.starts_with('.') {
+            return Err(format!("hidden file `{}`", f.display()));
+        }
+        if f.as_os_str() == "build.rs" || f.as_os_str() == "rust-toolchain.toml" || f.as_os_str() == "rust-toolchain" {
+            return Err(format!("`{}`", f.display()));
+        }
+    }
+    let text = std::fs::read_to_string(src.join("Cargo.toml")).map_err(|_| "no Cargo.toml".to_string())?;
+    let t: toml::Table = toml::from_str(&text).map_err(|e| format!("Cargo.toml: {e}"))?;
+    let workspace: toml::Table = std::fs::read_to_string("Cargo.toml")
+        .ok()
+        .and_then(|s| toml::from_str::<toml::Table>(&s).ok())
+        .and_then(|w| w.get("workspace")?.get("dependencies")?.as_table().cloned())
+        .unwrap_or_default();
+    for (k, v) in &t {
+        match k.as_str() {
+            "package" => {
+                let p = v.as_table().ok_or("[package] is not a table")?;
+                for (pk, pv) in p {
+                    if !["name", "version", "edition", "publish", "description", "authors", "license"].contains(&pk.as_str()) {
+                        return Err(format!("[package] key `{pk}`"));
+                    }
+                    if pk == "name" && pv.as_str() != Some(&format!("openlina-mod-{id}")) {
+                        return Err(format!("the crate must be named openlina-mod-{id}"));
+                    }
+                }
+            }
+            "bin" => {
+                for b in v.as_array().ok_or("[[bin]] is not a list")? {
+                    let b = b.as_table().ok_or("[[bin]] entry is not a table")?;
+                    if b.keys().any(|k| k != "name" && k != "path") {
+                        return Err("[[bin]] may only have name and path".into());
+                    }
+                    if let Some(path) = b.get("path").and_then(|p| p.as_str()) {
+                        if !path.starts_with("src/") || path.contains("..") {
+                            return Err(format!("[[bin]] path `{path}`"));
+                        }
+                    }
+                }
+            }
+            "dependencies" => {
+                for (dep, spec) in v.as_table().ok_or("[dependencies] is not a table")? {
+                    let ok = spec.as_table().is_some_and(|s| s.len() == 1 && s.get("workspace").and_then(|w| w.as_bool()) == Some(true));
+                    if !ok || !workspace.contains_key(dep) {
+                        return Err(format!("dependency `{dep}` (only `<name>.workspace = true` of the kit's workspace dependencies)"));
+                    }
+                }
+            }
+            other => return Err(format!("Cargo.toml section `{other}`")),
+        }
+    }
+    Ok(())
 }
 
 fn quote(text: &str) -> String {

@@ -26,7 +26,15 @@ struct Cli {
 #[derive(Subcommand)]
 enum Cmd {
     /// Install a pack zip, a mod zip, or a directory holding either, then build.
-    Install { paths: Vec<PathBuf> },
+    Install {
+        paths: Vec<PathBuf>,
+        /// Install mods the site has not reviewed yet without asking.
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Allow an installed mod to reach outside the game (files, programs, network, Steam), after
+    /// the build refused it. Only for mods you trust; the allowance ends when the mod changes.
+    Allow { id: String },
     /// Remove an installed mod, then build.
     Uninstall { id: String },
     /// List installed mods and their options.
@@ -58,9 +66,9 @@ fn main() -> Result<()> {
     let data = data_dir()?;
     let game_dir = || game::game_dir(cli.game_dir.clone());
     match cli.cmd {
-        Cmd::Install { paths } => {
+        Cmd::Install { paths, yes } => {
             for p in &paths {
-                install(&data, p)?;
+                install(&data, p, yes)?;
             }
             install_self(&data)?;
             build(&data, &game_dir()?)?;
@@ -79,6 +87,10 @@ fn main() -> Result<()> {
                 std::fs::remove_dir_all(dir)?;
             }
             pack.save(&data.join("modpack.toml"))?;
+            let mut trust = load_trust(&data)?;
+            if trust.remove(&id).is_some() {
+                save_trust(&data, &trust)?;
+            }
             build(&data, &game_dir()?)
         }
         Cmd::List => {
@@ -110,6 +122,17 @@ fn main() -> Result<()> {
             build(&data, &game_dir()?)
         }
         Cmd::Build => build(&data, &game_dir()?),
+        Cmd::Allow { id } => {
+            let pack = load_state(&data)?;
+            if !pack.mods.iter().any(|e| e.id == id) {
+                bail!("`{id}` is not installed");
+            }
+            let mut trust = load_trust(&data)?;
+            trust.insert(id.clone(), toml::Value::String(patch_hash(&data, &id)?));
+            save_trust(&data, &trust)?;
+            println!("allowed {id} (until it changes)");
+            build(&data, &game_dir()?)
+        }
         Cmd::Run { timeout, headless } => {
             let game = game_dir()?;
             let overlay = data.join("game");
@@ -150,8 +173,41 @@ fn load_state(data: &Path) -> Result<ModPack> {
     }
 }
 
+/// Mods allowed to reach outside the game: id → sha256 of the patch.wasm that was allowed.
+fn load_trust(data: &Path) -> Result<toml::Table> {
+    let p = data.join("trust.toml");
+    if !p.exists() {
+        return Ok(toml::Table::new());
+    }
+    toml::from_str(&std::fs::read_to_string(&p)?).with_context(|| format!("parsing {}", p.display()))
+}
+
+fn save_trust(data: &Path, t: &toml::Table) -> Result<()> {
+    std::fs::write(data.join("trust.toml"), toml::to_string(t)?)?;
+    Ok(())
+}
+
+fn patch_hash(data: &Path, id: &str) -> Result<String> {
+    use sha2::{Digest, Sha256};
+    let bytes = std::fs::read(data.join("mods").join(id).join("patch.wasm"))?;
+    Ok(Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// Ask a yes/no question on the terminal; false when there is no terminal.
+fn confirm(question: &str) -> Result<bool> {
+    use std::io::{IsTerminal, Write};
+    if !std::io::stdin().is_terminal() {
+        return Ok(false);
+    }
+    print!("{question} [y/N] ");
+    std::io::stdout().flush()?;
+    let mut line = String::new();
+    std::io::stdin().read_line(&mut line)?;
+    Ok(matches!(line.trim(), "y" | "Y" | "yes" | "j" | "ja"))
+}
+
 /// Install a pack or a single mod from a zip or a directory.
-fn install(data: &Path, path: &Path) -> Result<()> {
+fn install(data: &Path, path: &Path, yes: bool) -> Result<()> {
     let tmp = data.join("tmp");
     if tmp.exists() {
         std::fs::remove_dir_all(&tmp)?;
@@ -200,6 +256,20 @@ fn install(data: &Path, path: &Path) -> Result<()> {
             }
         }
     }
+    // Mods the site has not reviewed: say so and ask.
+    let unreviewed: Vec<String> = incoming
+        .mods
+        .iter()
+        .filter(|e| incoming_ids.contains(&e.id) && matches!(e.status.as_deref(), Some("unreviewed" | "rejected")))
+        .map(|e| format!("{} {} ({})", e.id, e.version.as_deref().unwrap_or("?"), e.status.as_deref().unwrap_or("?")))
+        .collect();
+    if !unreviewed.is_empty() && !yes {
+        println!("Not reviewed by the site's maintainers yet:\n  {}", unreviewed.join("\n  "));
+        println!("Mods are code that runs in your game. Only install them if you trust their authors.");
+        if !confirm("Install anyway?")? {
+            bail!("not installed (to install unreviewed mods without asking: `openlina install --yes …`)");
+        }
+    }
     let mut state = state_before;
     for dir in dirs {
         let pkg = Package::load(&dir)?;
@@ -214,6 +284,7 @@ fn install(data: &Path, path: &Path) -> Result<()> {
             Some(e) => {
                 if let Some(new) = entry {
                     e.options = new.options;
+                    e.status = new.status;
                 }
             }
             None => state.mods.push(entry.unwrap_or(PackEntry { id: id.clone(), ..Default::default() })),
@@ -264,7 +335,27 @@ fn build(data: &Path, game: &Path) -> Result<()> {
         pack.mods.iter().map(|e| Package::load(&data.join("mods").join(&e.id))).collect::<Result<_>>()?;
     let input = game::read_bytecode(game)?;
     println!("building {} mod(s)", packages.len());
-    let bytes = openlina::build(input, &packages, &pack)?;
+    let built = openlina::build(input, &packages, &pack)?;
+    // Mods that make the game reach outside the game need the player's explicit allowance.
+    let trust = load_trust(data)?;
+    let mut refused = String::new();
+    for (id, findings) in &built.caps {
+        let list: String = findings.iter().map(|f| format!("      {f}\n")).collect();
+        if trust.get(id).and_then(|v| v.as_str()) == Some(patch_hash(data, id)?.as_str()) {
+            println!("  note: {id} is allowed to reach outside the game:\n{list}");
+        } else {
+            refused.push_str(&format!("  {id}:\n{list}"));
+        }
+    }
+    if !refused.is_empty() {
+        bail!(
+            "not built: these mods make the game reach outside the game (files, programs, network, Steam, …):\n{refused}\n\
+             Game mods don't normally need this. Such a mod could read, change or delete your files or run programs.\n\
+             If you trust it (you know its author, or someone reviewed its code): `openlina allow <id>`.\n\
+             Otherwise: `openlina uninstall <id>`. Until then the last working build stays in place."
+        );
+    }
+    let bytes = built.bytes;
     let mut assets = Vec::new();
     for p in &packages {
         assets.extend(p.assets()?);

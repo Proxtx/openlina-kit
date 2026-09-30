@@ -29,7 +29,12 @@ mosa-mod/                 (plain folder)
 - **Testing without synthetic input** (xdotool doesn't reach the game): a harness patch boots straight into a
   level, gives items, picks modifiers, replays scripted inputs through `PlayerInputs`, emits assertion trace
   lines, captures frames via Heaps → `lina gif`. Run under Xvfb where possible.
-- **Tools installed via nix** (flake devShells per repo).
+- **Tools installed via nix** (flake devShells per repo), but nix is optional: `rust-toolchain.toml` + rustup,
+  `./lina doctor` checks a machine.
+- **Safety** (mods are code running with the player's rights): capability check after every mod (`caps`),
+  `openlina allow` for the rare mod that needs more; unreviewed mods need a confirmation; pulled mods are
+  quarantined if their crate could run code at build time, marked, and only ever run as wasm.
+  Open: server-side reproducible builds (source ↔ patch.wasm), wasm time/memory limits.
 - **Windows:** the Windows build also ships the JIT + `hlboot.dat`; test via Proton later.
 
 ## Showcase mods

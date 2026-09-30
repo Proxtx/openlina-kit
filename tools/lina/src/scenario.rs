@@ -26,6 +26,9 @@
 //! scale = 1                         # 1 = 600x338
 //! ```
 //!
+//! Each run gets its own empty `userdata` (saves, settings, level pack states), so runs are
+//! independent of the player's saves and never change them.
+//!
 //! A run passes when the game exits with code 0 (the harness ends it at `end_tick`), the log has
 //! no crash, and every expectation holds.
 
@@ -118,6 +121,13 @@ fn run(game: &Path, sc: &Scenario, extra_harness: toml::Table, wasm: bool, work:
     let overlay = work.join("game");
     let bytes = build::build_pack(game, &pack, wasm, &overlay)?;
     std::fs::write(work.join("hlboot.dat"), &bytes)?;
+    // A fresh save directory per run: results don't depend on the player's saves (e.g. which level
+    // packs they enabled), and test runs never write to them.
+    let userdata = overlay.join("userdata");
+    if userdata.symlink_metadata().is_ok() {
+        std::fs::remove_file(&userdata).or_else(|_| std::fs::remove_dir_all(&userdata))?;
+    }
+    std::fs::create_dir(&userdata)?;
     let out = openlina::game::command(game, &std::fs::canonicalize(&overlay)?, Some(&overlay.join("hlboot.dat")), Some(sc.timeout), true)?
         .output()
         .context("running the game")?;
@@ -261,14 +271,14 @@ pub fn gif(game: &Path, file: &Path, out: Option<&Path>) -> Result<()> {
         std::fs::create_dir_all(d)?;
     }
     // 120 ticks per second: one frame every `step` ticks lasts step/120 s.
-    let mut cmd = Command::new("magick");
+    let mut cmd = Command::new(magick());
     cmd.arg("-delay").arg(format!("{step}x120")).arg("-loop").arg("0");
     cmd.args(&pngs);
     if spec.scale > 1 {
         cmd.arg("-filter").arg("point").arg("-resize").arg(format!("{}%", spec.scale * 100));
     }
     cmd.arg("-layers").arg("Optimize").arg(&dest);
-    let st = cmd.status().context("running ImageMagick `magick` (inside `nix develop`)")?;
+    let st = cmd.status().context("running ImageMagick (install it, or use `nix develop`; `lina doctor` checks)")?;
     ensure!(st.success(), "magick failed");
     if Command::new("gifsicle").arg("-O3").arg("--batch").arg(&dest).status().is_err() {
         eprintln!("(gifsicle not found; gif not optimized)");
@@ -276,4 +286,16 @@ pub fn gif(game: &Path, file: &Path, out: Option<&Path>) -> Result<()> {
     let size = std::fs::metadata(&dest)?.len();
     println!("wrote {} ({} frames, {:.0} KB)", dest.display(), pngs.len(), size as f64 / 1024.0);
     Ok(())
+}
+
+/// ImageMagick 7 is `magick`, ImageMagick 6 (still common in distributions) is `convert`.
+pub fn magick() -> &'static str {
+    let works = |c: &str| Command::new(c).arg("-version").output().is_ok_and(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).contains("ImageMagick"));
+    if works("magick") {
+        "magick"
+    } else if works("convert") {
+        "convert"
+    } else {
+        "magick"
+    }
 }

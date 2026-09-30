@@ -25,6 +25,7 @@ use hlbc::{Bytecode, Resolve, Str};
 
 pub mod anims;
 pub mod asm;
+pub mod caps;
 pub mod edit;
 pub mod hooks;
 pub mod items;

@@ -181,6 +181,9 @@ pub struct PackEntry {
     pub request: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
+    /// Review status on the site it came from (`reviewed`, `unreviewed`); none for local builds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
 }
 
 impl ModPack {

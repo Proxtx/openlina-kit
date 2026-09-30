@@ -16,19 +16,27 @@ tools/openlina/   openlina: the player helper (install packs, build, run, Steam 
 mods/<id>/        one crate per mod: mod.toml + src/main.rs (+ assets/, media/)
 modpack.toml      which mods `lina build` applies, and their options
 docs/             plan, game internals, mods
-flake.nix         dev shell: Rust + wasm32-wasip1 target, imagemagick, gifsicle
+flake.nix         dev shell: Rust + wasm32-wasip1 target, imagemagick, gifsicle (optional)
+rust-toolchain.toml  the same toolchain for rustup users
+lina, openlina    wrappers: build (if needed) and run the tools
 ```
 
 ## Quick start (development)
 
+With nix (`nix develop` gives Rust with the wasm target, imagemagick, gifsicle) or without it: install Rust with
+[rustup](https://rustup.rs) (the toolchain and the `wasm32-wasip1` target come from `rust-toolchain.toml`) and,
+for gifs, ImageMagick (and optionally gifsicle) from your package manager.
+
 ```bash
-nix develop
-cargo build --release
-lina() { target/nix/release/lina "$@"; }
-lina setup          # copy the pristine hlboot.dat to work/, check the game version
-lina build          # build the mods in modpack.toml and apply them -> work/hlboot.modded.dat + work/game
-lina run            # play it
+nix develop         # optional
+./lina doctor       # checks toolchain, wasm target, ImageMagick, the game; says how to fix what's missing
+./lina setup        # copy the pristine hlboot.dat to work/, check the game version
+./lina build        # build the mods in modpack.toml and apply them -> work/hlboot.modded.dat + work/game
+./lina run          # play it
 ```
+
+`./lina` and `./openlina` run the tools from their release build and (re)build them when the sources changed
+(`target/`, or `target/nix/` inside the nix shell).
 
 The game directory defaults to `~/.local/share/Steam/steamapps/common/Mosa Lina` (`--game-dir` or `MOSA_GAME_DIR`).
 
@@ -71,6 +79,11 @@ openlina run                # or play from Steam with: "<data dir>/bin/openlina"
 openlina set screen-wrap coins=true
 openlina list | uninstall <id> | build | launch-option
 ```
+
+Safety: `openlina install` asks before installing mods the site hasn't reviewed (`--yes` skips the question), and
+after patching it checks what every mod makes the game able to do (`openlina_sdk::caps`). A mod that reaches
+outside the game (files, programs, network, Steam, reflection, changed constants or types) is refused until you
+run `openlina allow <id>`; the allowance ends when the mod changes. Gameplay mods never need that.
 
 ## The OpenLina website
 

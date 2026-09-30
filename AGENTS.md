@@ -6,10 +6,10 @@ for what's known about the game, and [docs/PLAN.md](docs/PLAN.md) for where the 
 ## Setup (once per game version)
 
 ```bash
-nix develop                       # enter the dev shell once: Rust + wasm32-wasip1, imagemagick, gifsicle
-                                  # (`nix develop -c <cmd>` per command works too, but warns about the dirty git tree)
-cargo build --release
-lina() { target/nix/release/lina "$@"; }
+nix develop                       # optional: Rust + wasm32-wasip1, imagemagick, gifsicle. Without nix: rustup
+                                  # (rust-toolchain.toml adds the wasm target) + imagemagick from the package manager
+lina() { ./lina "$@"; }           # the wrapper builds the tools when needed
+lina doctor                       # checks all of the above and the game; fix what it reports
 lina setup                        # work/hlboot.orig.dat (+ version check)
 lina dump                         # work/dump/: hx/ (pseudo-Haxe), asm/ (exact), classes.tsv, functions.tsv
 lina check                        # must report 0 validator problems
@@ -114,7 +114,7 @@ Everything runs headless (SDL offscreen driver): no window, no human, faster tha
 6. `cargo test --release` (relocation, validator and manifest tests) and `cargo clippy --release`.
 7. `lina pack <id>` produces `dist/<id>-<version>.zip`. To test the player flow, bundle it (required mods such as
    `core` are added automatically) and install into a throwaway data dir:
-   `lina pack <id> --bundle try && OPENLINA_HOME=$PWD/work/home target/nix/release/openlina install dist/try.zip`
+   `lina pack <id> --bundle try && OPENLINA_HOME=$PWD/work/home ./openlina install dist/try.zip`
    (a single mod zip can only be installed on top of its requirements).
 
 ## 5. Share (OpenLina website)
@@ -125,6 +125,11 @@ Everything runs headless (SDL offscreen driver): no window, no human, faster tha
   version, test, bundle for the player).
 - `lina publish <id>`: scenarios on wasm, package with source (`source/` in the zip), dry-run summary; uploads
   only with `--yes`, **after the user agreed**. The skill `.claude/skills/openlina-modding` has the full workflow.
+- **Safety**: after every mod, lina and the player's `openlina` compare the bytecode (`openlina_sdk::caps`) and
+  report new uses of files, programs, network, Steam, reflection, new natives, changed constants or types. lina
+  warns; `openlina` refuses the mod until the player runs `openlina allow <id>`. Mods from `lina pull` are marked
+  (`.openlina-pulled`), build and run only as wasm, and are refused outright when they reach outside the game;
+  sources with build scripts, hidden files or foreign dependencies are quarantined instead of extracted.
 
 ## HashLink pitfalls (learned the hard way)
 
@@ -165,3 +170,4 @@ Everything runs headless (SDL offscreen driver): no window, no human, faster tha
 | `runner` | `run_mod`: the `main` of every mod |
 | `manifest` | `ModManifest` (mod.toml), `ModPack` (modpack.toml), `resolve_order` |
 | `validate` | `check_function`, `check_touched`, `kind` |
+| `caps` | `Snapshot`, `diff`: what a patch makes the game able to do outside the game (see Safety above) |

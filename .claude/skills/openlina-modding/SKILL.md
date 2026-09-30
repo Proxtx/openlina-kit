@@ -11,13 +11,14 @@ code. Game knowledge: `docs/game-internals.md`; existing mods: `docs/mods.md`; p
 ## Setup (once per machine and game version)
 
 ```bash
-nix develop                      # Rust + wasm32-wasip1, imagemagick, gifsicle. Run lina inside it.
-cargo build --release
-lina() { target/nix/release/lina "$@"; }
+lina() { ./lina "$@"; }          # wrapper: builds the tools when needed, then runs them
+lina doctor                      # toolchain, wasm target, ImageMagick, game: fix whatever it reports
 lina setup && lina dump && lina check   # pristine bytecode, searchable dump, validator self-test
 ```
 
-The game must be installed (Steam, Linux). Everything runs headless: no window, no human input needed.
+With nix, run everything inside `nix develop`. Without nix, Rust comes from rustup (`rust-toolchain.toml` pins
+the toolchain and adds the `wasm32-wasip1` target) and ImageMagick from the system's package manager; ask the
+user before installing anything. The game must be installed (Steam, Linux). Everything runs headless.
 
 ## A. A new mod
 
@@ -48,7 +49,7 @@ A user gives you a pack link (`https://<site>/api/packs/<id>`) or JSON from the 
 3. Check the pack as a whole: `lina build --pack work/pull/<pack>/modpack.toml` (and `lina run` if the user
    wants to play right away).
 4. Install for the player: `lina pack --from work/pull/<pack>/modpack.toml --bundle pack-<pack>` (your local
-   versions, the pack's options, requirements added), then `target/nix/release/openlina install
+   versions, the pack's options, requirements added), then `./openlina install
    dist/pack-<pack>.zip` (prints the Steam launch option; ask before the user changes Steam settings).
 5. Report what changed per request (option or code, versions, test results).
 
@@ -63,6 +64,19 @@ A user gives you a pack link (`https://<site>/api/packs/<id>`) or JSON from the 
   upload new versions; to change someone else's mod for yourself, keep it local (B.4) or publish under a new id
   after asking the user.
 - After finishing a mod (A.6), offer the upload; don't upload unprompted.
+
+## Safety (someone else's mods)
+
+- `lina pull` only extracts plain mod crates: no `build.rs`, no hidden files, no dependencies beyond the kit's
+  workspace ones. Anything else lands in `work/pull/<pack>/quarantine/` for reading; don't move it into `mods/`
+  yourself.
+- Pulled mods carry `mods/<id>/.openlina-pulled`: lina builds and runs them only as wasm, and refuses them if
+  they make the game reach outside the game (files, programs, network, Steam, reflection; see
+  `openlina_sdk::caps`). Read their code and the change against the version you pulled. Delete the marker only
+  when the user decided to trust the mod.
+- `lina build` also warns when your own mods reach outside the game. Players' `openlina` refuses such mods
+  unless they run `openlina allow <id>`; gameplay mods never need it, so rework the mod instead.
+- Unreviewed mods: `openlina install` asks before installing them; tell the user the mod is unreviewed.
 
 ## Rules
 
