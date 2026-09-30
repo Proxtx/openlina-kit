@@ -164,10 +164,22 @@ How it works: the game always copies ammo as `Field r = type.baseAmmo; SetField 
 Not boosted: ammo that doesn't come from `baseAmmo` (level-authored `test_item` objects, the `main`
 layout's preset slots). Written from the docs alone by an agent with no other context (the docs test).
 
+## inspect (dev)
+
+Prints parts of the game's state at chosen moments: `[inspect] <moment> <path> = <value>`. `at`: `tick:N` (level
+tick N) or `layout:<name>@N` (the first frame of that layout at or after its tick N, for screens without gameplay
+ticks such as the MANAGER tool selection). `print`: paths from `Main.i` (`game.itemManager.pickedItems[].type.name`),
+`@<type>` for the main layout's objects of a type (`@item_icon[].sprite.anim`) or `$<class>.<static>`
+(`$fish.game.oclass.OClass_item_icon._animData`); `[]` walks an object array, `[3]` picks one element. Fields are
+read typed where the type is known (a superclass is cast to the one subclass that has the field) and dynamically
+otherwise; a field no known type has fails the build. `lina probe` writes and runs such a scenario from the
+command line.
+
 ## trace-calls (debug)
 
 Prints `[trace-calls] <function> call #N  (fn@<findex> <file:line>)` to stdout: the first `first` calls, then every
-`every`-th. Functions are `pkg.Class.method`, a findex, or `hook:<name>` for a core hook.
+`every`-th. Functions are `pkg.Class.method`, `Class.method`, a findex, an injected function (`swap/use`) or
+`hook:<name>` for a core hook.
 
 ```toml
 [[mod]]
@@ -212,6 +224,7 @@ Drives the game for tests and recordings without input (source: `mods/harness/sr
 | `pause_tick` / `dump_menu` / `menu_open` | 0 / false / "" | open the pause menu at a level tick, print its items, press the item with this text |
 | `capture_ui` | false | also draw the UI layer (pause menu) into captured frames |
 | `new_run` | false | a returning player's run from the hub (tutorial done, RNGs seeded): the game's own run start with the MANAGER tool selection follows (`inputs` like `"30-700:right"` walk off the hub's right edge, `jump` confirms). The selection runs no gameplay ticks, so `capture`/`end_tick` also count layout ticks there |
+| `turbo` | 16 | extra game steps per rendered frame (0 = real time); results don't change, only the wall-clock time |
 | `new_run_items` | [] | with `new_run`: force these items into the first slots of the run start's tool roll |
 
 It prints `[harness] …` lines (`title skipped`, `loading level …`, `level tick 1: <name> modifier <m> frameTime <dt>`,

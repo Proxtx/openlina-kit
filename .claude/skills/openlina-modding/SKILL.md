@@ -32,7 +32,8 @@ installing or updating anything, including rustup targets or toolchains. The gam
 3. Options for every tunable, a `trace` option, `[stats]` in `mod.toml` for the website, the design notes as the
    module doc comment.
 4. Graphics as text grids: `art/*.toml` → `lina sprite … --out assets/images/…` (game) and `media/icon.png` (site).
-5. Tests: scenarios in `tests/*.toml` that can fail (`lina test --mod <id>`, then `--wasm`), a showcase gif
+   To find out how the game behaves, look at it running: `lina probe … --at tick:30 <paths>` (AGENTS.md §1).
+5. Tests: scenarios in `tests/*.toml` that can fail (`lina test --mod <id>`, then `--wasm`; `-k`, `--failed`), a showcase gif
    (`lina gif mods/<id>/tests/<x>.toml`); look at the frames in `work/gif/frames/` before keeping it.
 6. Add it to `docs/mods.md`; commit.
 

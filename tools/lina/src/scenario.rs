@@ -189,12 +189,14 @@ impl Scenario {
     }
 }
 
-/// Build and run a scenario headless. Returns (exit code, log).
+/// Build and run a scenario headless in `work`. Returns (exit code, log); the build's progress
+/// is the log's first lines. With `compiled`, the mods were compiled beforehand.
 fn run(
     game: &Path,
     sc: &Scenario,
     extra_harness: toml::Table,
     wasm: bool,
+    compiled: bool,
     work: &Path,
 ) -> Result<(Option<i32>, String)> {
     let mut extra_harness = extra_harness;
@@ -211,8 +213,15 @@ fn run(
     }
     let pack = sc.pack(extra_harness)?;
     let overlay = work.join("game");
-    let bytes = build::build_pack(game, &pack, wasm, &overlay)?;
-    std::fs::write(work.join("hlboot.dat"), &bytes)?;
+    let mut build_log = String::new();
+    let built = build::build_pack(game, &pack, wasm, &overlay, compiled, &mut |l| {
+        build_log.push_str(&l);
+        build_log.push('\n');
+    });
+    if let Err(e) = built {
+        std::fs::write(work.join("log.txt"), format!("{build_log}build failed: {e:#}\n"))?;
+        return Err(e);
+    }
     // A fresh save directory per run: results don't depend on the player's saves (e.g. which level
     // packs they enabled), and test runs never write to them.
     let userdata = overlay.join("userdata");
@@ -229,7 +238,8 @@ fn run(
     )?
     .output()
     .context("running the game")?;
-    let mut log = String::from_utf8_lossy(&out.stdout).to_string();
+    let mut log = build_log;
+    log.push_str(&String::from_utf8_lossy(&out.stdout));
     log.push_str(&String::from_utf8_lossy(&out.stderr));
     // Steam's client library is chatty; keep the log readable.
     let log: String = log
@@ -312,37 +322,158 @@ pub fn find(paths: &[PathBuf], only_mod: Option<&str>) -> Result<Vec<PathBuf>> {
     Ok(out)
 }
 
-pub fn test(game: &Path, files: &[PathBuf], wasm: bool) -> Result<()> {
+/// How `lina test` runs.
+pub struct TestOpts {
+    pub wasm: bool,
+    /// Scenarios running at the same time (each is its own game process).
+    pub jobs: usize,
+}
+
+/// The default for `--jobs`: half the cores, at most 8.
+pub fn default_jobs() -> usize {
+    std::thread::available_parallelism().map(|n| n.get() / 2).unwrap_or(1).clamp(1, 8)
+}
+
+/// The scenarios that failed in the last `lina test` (for `--failed`).
+const FAILED: &str = "work/test/failed.txt";
+
+pub fn last_failed() -> Result<Vec<PathBuf>> {
+    let text = std::fs::read_to_string(FAILED).context("no failed scenarios recorded (work/test/failed.txt)")?;
+    Ok(text.lines().filter(|l| !l.is_empty()).map(PathBuf::from).collect())
+}
+
+struct Outcome {
+    name: String,
+    file: PathBuf,
+    work: PathBuf,
+    secs: f64,
+    fails: Vec<String>,
+    tail: Vec<String>,
+}
+
+pub fn test(game: &Path, files: &[PathBuf], opts: &TestOpts) -> Result<()> {
     ensure!(!files.is_empty(), "no scenarios found (mods/<id>/tests/*.toml)");
-    let mut failed = Vec::new();
-    for (i, f) in files.iter().enumerate() {
-        let sc = Scenario::load(f)?;
-        let work = PathBuf::from("work/test").join(i.to_string());
-        if work.exists() {
-            std::fs::remove_dir_all(&work)?;
-        }
-        std::fs::create_dir_all(&work)?;
-        println!("--- {} ({})", sc.name, f.display());
-        let t = std::time::Instant::now();
-        let fails = match run(game, &sc, toml::Table::new(), wasm, &work) {
-            Ok((code, log)) => check(&sc, code, &log),
-            Err(e) => vec![format!("{e:#}")],
-        };
-        if fails.is_empty() {
-            println!("PASS {} ({:.1}s)", sc.name, t.elapsed().as_secs_f64());
-        } else {
-            println!("FAIL {} ({:.1}s), log: {}", sc.name, t.elapsed().as_secs_f64(), work.join("log.txt").display());
-            for x in &fails {
-                println!("    {x}");
-            }
-            failed.push(sc.name);
-        }
+    let started = std::time::Instant::now();
+    let scenarios: Vec<Scenario> = files.iter().map(|f| Scenario::load(f)).collect::<Result<_>>()?;
+    // Compile every mod the scenarios need once, up front (cargo output stays visible).
+    let mut ids = std::collections::BTreeSet::new();
+    for sc in &scenarios {
+        ids.extend(sc.pack(toml::Table::new())?.mods.into_iter().map(|e| e.id));
     }
-    println!("\n{} passed, {} failed", files.len() - failed.len(), failed.len());
+    build::compile(&ids.into_iter().collect::<Vec<_>>(), opts.wasm)?;
+
+    let root = PathBuf::from("work/test");
+    if root.exists() {
+        std::fs::remove_dir_all(&root)?;
+    }
+    std::fs::create_dir_all(&root)?;
+    let jobs = opts.jobs.clamp(1, scenarios.len());
+    println!("running {} scenario(s), {jobs} at a time{}", scenarios.len(), if opts.wasm { " (wasm)" } else { "" });
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let outcomes = std::sync::Mutex::new(Vec::new());
+    let print = std::sync::Mutex::new(());
+    std::thread::scope(|s| {
+        for _ in 0..jobs {
+            s.spawn(|| loop {
+                let i = next.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let Some(sc) = scenarios.get(i) else { break };
+                let o = run_one(game, sc, &files[i], &root.join(i.to_string()), opts.wasm);
+                let _guard = print.lock().unwrap();
+                report(&o);
+                outcomes.lock().unwrap().push(o);
+            });
+        }
+    });
+    let outcomes = outcomes.into_inner().unwrap();
+    let failed: Vec<&Outcome> = outcomes.iter().filter(|o| !o.fails.is_empty()).collect();
+    std::fs::write(FAILED, failed.iter().map(|o| format!("{}\n", o.file.display())).collect::<String>())?;
+    println!(
+        "\n{} passed, {} failed ({:.0}s)",
+        outcomes.len() - failed.len(),
+        failed.len(),
+        started.elapsed().as_secs_f64()
+    );
     if !failed.is_empty() {
-        bail!("failed: {}", failed.join(", "));
+        println!("rerun the failures with `lina test --failed`");
+        bail!("failed: {}", failed.iter().map(|o| o.name.as_str()).collect::<Vec<_>>().join(", "));
     }
     Ok(())
+}
+
+fn run_one(game: &Path, sc: &Scenario, file: &Path, work: &Path, wasm: bool) -> Outcome {
+    let t = std::time::Instant::now();
+    let (fails, log) = match std::fs::create_dir_all(work)
+        .map_err(anyhow::Error::from)
+        .and_then(|_| run(game, sc, toml::Table::new(), wasm, true, work))
+    {
+        Ok((code, log)) => (check(sc, code, &log), log),
+        Err(e) => (vec![format!("{e:#}")], String::new()),
+    };
+    let frames = work.join("frames");
+    if frames.is_dir() {
+        contact_sheet(&frames, &work.join("frames.png"));
+    }
+    if fails.is_empty() {
+        // Passed: the overlay (patched bytecode, links) isn't needed; keep log and frames.
+        let _ = std::fs::remove_dir_all(work.join("game"));
+    }
+    // The last lines of the game's output: where a hang or crash left off.
+    let tail = log.lines().rev().filter(|l| !l.trim().is_empty()).take(4).map(String::from).collect::<Vec<_>>();
+    Outcome {
+        name: sc.name.clone(),
+        file: file.to_path_buf(),
+        work: work.to_path_buf(),
+        secs: t.elapsed().as_secs_f64(),
+        fails,
+        tail: tail.into_iter().rev().collect(),
+    }
+}
+
+fn report(o: &Outcome) {
+    let frames = o.work.join("frames.png");
+    let frames = if frames.exists() { format!(", frames: {}", frames.display()) } else { String::new() };
+    if o.fails.is_empty() {
+        println!("PASS {} ({:.1}s){frames}", o.name, o.secs);
+        return;
+    }
+    println!("FAIL {} ({:.1}s), {}{frames}", o.name, o.secs, o.file.display());
+    for x in &o.fails {
+        println!("    {x}");
+    }
+    println!(
+        "    log: {} (the patched game is kept in {})",
+        o.work.join("log.txt").display(),
+        o.work.join("game").display()
+    );
+    if !o.tail.is_empty() {
+        println!("    last lines:");
+        for l in &o.tail {
+            println!("      {l}");
+        }
+    }
+}
+
+/// All captured frames of a run in one image (5 per row, half size), to look at in one go.
+fn contact_sheet(frames: &Path, out: &Path) {
+    let Ok(dir) = std::fs::read_dir(frames) else { return };
+    let mut pngs: Vec<PathBuf> =
+        dir.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "png")).collect();
+    if pngs.is_empty() {
+        return;
+    }
+    pngs.sort();
+    // At most 40 frames: every n-th one.
+    let step = pngs.len().div_ceil(40);
+    let pngs: Vec<PathBuf> = pngs.into_iter().step_by(step).collect();
+    let mut cmd = if magick() == "magick" {
+        let mut c = Command::new("magick");
+        c.arg("montage");
+        c
+    } else {
+        Command::new("montage")
+    };
+    cmd.args(&pngs).args(["-tile", "5x", "-geometry", "300x169+2+2", "-background", "#000"]).arg(out);
+    let _ = cmd.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status();
 }
 
 /// Run a scenario with frame capture and assemble the frames into a gif (needs ImageMagick's
@@ -362,7 +493,7 @@ pub fn gif(game: &Path, file: &Path, out: Option<&Path>) -> Result<()> {
     let mut extra = toml::Table::new();
     extra.insert("capture".into(), toml::Value::String(spec.capture.clone()));
     extra.insert("capture_dir".into(), toml::Value::String(std::fs::canonicalize(&frames)?.to_string_lossy().into()));
-    let (code, log) = run(game, &sc, extra, false, &work)?;
+    let (code, log) = run(game, &sc, extra, false, false, &work)?;
     let fails = check(&sc, code, &log);
     if !fails.is_empty() {
         bail!("the scenario failed ({}):\n  {}", work.join("log.txt").display(), fails.join("\n  "));
@@ -411,4 +542,76 @@ pub fn magick() -> &'static str {
     } else {
         "magick"
     }
+}
+
+/// What `lina probe` runs.
+pub struct ProbeSpec {
+    pub paths: Vec<String>,
+    pub mods: Vec<String>,
+    pub level: Option<String>,
+    pub at: Vec<String>,
+    pub new_run: bool,
+    pub inputs: Vec<String>,
+    pub capture: Option<String>,
+    pub end: Option<u32>,
+    pub seed: i64,
+}
+
+/// `lina probe`: a throwaway scenario with the `inspect` fixture (written to work/probe.toml, so it
+/// can be kept or rerun), then only what matters from its log.
+pub fn probe(game: &Path, p: &ProbeSpec) -> Result<()> {
+    ensure!(!p.paths.is_empty(), "give paths to print, e.g. game.levelManager.currentLevel.type.name");
+    let last_tick = p.at.iter().filter_map(|a| a.strip_prefix("tick:")?.parse::<u32>().ok()).max();
+    let end = p.end.unwrap_or_else(|| last_tick.map(|t| t + 60).unwrap_or(1200));
+    let mut harness = toml::Table::new();
+    if let Some(l) = &p.level {
+        harness.insert("level".into(), l.clone().into());
+    }
+    harness.insert("seed".into(), p.seed.into());
+    harness.insert("end_tick".into(), (end as i64).into());
+    if p.new_run {
+        harness.insert("new_run".into(), true.into());
+    }
+    if !p.inputs.is_empty() {
+        harness.insert("inputs".into(), p.inputs.clone().into());
+    }
+    if let Some(c) = &p.capture {
+        harness.insert("capture".into(), c.clone().into());
+    }
+    let mut inspect = toml::Table::new();
+    inspect.insert("at".into(), p.at.clone().into());
+    inspect.insert("print".into(), p.paths.clone().into());
+    let mut options = toml::Table::new();
+    options.insert("inspect".into(), inspect.into());
+    let mut sc = toml::Table::new();
+    sc.insert("name".into(), "probe".into());
+    sc.insert("mods".into(), p.mods.clone().into());
+    sc.insert("fixtures".into(), vec!["inspect".to_string()].into());
+    sc.insert("timeout".into(), 120.into());
+    sc.insert("options".into(), options.into());
+    sc.insert("harness".into(), harness.into());
+    let file = PathBuf::from("work/probe.toml");
+    std::fs::create_dir_all("work")?;
+    std::fs::write(&file, toml::to_string(&sc)?)?;
+
+    let scenario = Scenario::load(&file)?;
+    let ids: Vec<String> = scenario.pack(toml::Table::new())?.mods.into_iter().map(|e| e.id).collect();
+    build::compile(&ids, false)?;
+    let work = PathBuf::from("work/test/probe");
+    if work.exists() {
+        std::fs::remove_dir_all(&work)?;
+    }
+    let o = run_one(game, &scenario, &file, &work, false);
+    let log = std::fs::read_to_string(work.join("log.txt")).unwrap_or_default();
+    for l in log.lines().filter(|l| l.starts_with("[inspect]") || l.starts_with("[harness] ERROR")) {
+        println!("{}", l.trim_start_matches("[inspect] "));
+    }
+    if !o.fails.is_empty() {
+        println!("(the run failed; details below)");
+        report(&o);
+    } else if work.join("frames.png").exists() {
+        println!("frames: {}", work.join("frames.png").display());
+    }
+    println!("scenario: {} (edit and rerun with `lina test {}`)", file.display(), file.display());
+    Ok(())
 }

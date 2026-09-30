@@ -121,9 +121,49 @@ enum Cmd {
         /// Only the scenarios of this mod.
         #[arg(long = "mod")]
         only: Option<String>,
+        /// Only scenarios whose name or file contains this text.
+        #[arg(short = 'k', long)]
+        filter: Option<String>,
+        /// Only the scenarios that failed in the last run.
+        #[arg(long)]
+        failed: bool,
         /// Use the wasm builds (what players run).
         #[arg(long)]
         wasm: bool,
+        /// Scenarios to run at the same time (default: half the cores, at most 8).
+        #[arg(short = 'j', long)]
+        jobs: Option<usize>,
+    },
+    /// Look at the running game: print parts of its state (fixture `inspect`) at chosen moments,
+    /// without writing a scenario or a mod. E.g.
+    /// `lina probe --mod swap --level "greendemo 1" --at tick:30 game.itemManager.itemPool.length`.
+    Probe {
+        /// Paths to print (see mods/inspect/mod.toml): `game.a.b[].c`, `@<type>[].field`, `$<class>.<static>`.
+        paths: Vec<String>,
+        /// Mods to load (repeatable).
+        #[arg(long = "mod")]
+        mods: Vec<String>,
+        /// Level to load by name (default: the run's first level).
+        #[arg(long)]
+        level: Option<String>,
+        /// Moments (repeatable): `tick:N` or `layout:<name>@N`.
+        #[arg(long, default_value = "tick:30")]
+        at: Vec<String>,
+        /// Play the game's own run start (hub, tool selection) instead of loading a level.
+        #[arg(long)]
+        new_run: bool,
+        /// Scripted inputs (repeatable), e.g. `30-700:right`.
+        #[arg(long)]
+        input: Vec<String>,
+        /// Capture frames `from-to/step` (a contact sheet is written).
+        #[arg(long)]
+        capture: Option<String>,
+        /// End at this tick (default: 60 after the last `tick:` moment, or 1200).
+        #[arg(long)]
+        end: Option<u32>,
+        /// Seed.
+        #[arg(long, default_value_t = 1)]
+        seed: i64,
     },
     /// Record a scenario's [gif] section: capture frames headless, write the gif (default: the
     /// scenario's gif.out, relative to its mod directory).
@@ -223,10 +263,21 @@ fn main() -> Result<()> {
             }
             build::pack(&ids, bundle.as_deref(), from.as_ref(), &out)
         }
-        Cmd::Test { files, only, wasm } => {
-            let files = scenario::find(&files, only.as_deref())?;
-            scenario::test(&game_dir()?, &files, wasm)
+        Cmd::Test { files, only, filter, failed, wasm, jobs } => {
+            let mut files = if failed { scenario::last_failed()? } else { scenario::find(&files, only.as_deref())? };
+            if let Some(k) = &filter {
+                files.retain(|f| {
+                    f.to_string_lossy().contains(k.as_str())
+                        || scenario::Scenario::load(f).is_ok_and(|s| s.name.contains(k.as_str()))
+                });
+            }
+            let opts = scenario::TestOpts { wasm, jobs: jobs.unwrap_or_else(scenario::default_jobs) };
+            scenario::test(&game_dir()?, &files, &opts)
         }
+        Cmd::Probe { paths, mods, level, at, new_run, input, capture, end, seed } => scenario::probe(
+            &game_dir()?,
+            &scenario::ProbeSpec { paths, mods, level, at, new_run, inputs: input, capture, end, seed },
+        ),
         Cmd::Gif { scenario, out } => scenario::gif(&game_dir()?, &scenario, out.as_deref()),
         Cmd::Sprite { file, out, scale, palette } => {
             if palette {

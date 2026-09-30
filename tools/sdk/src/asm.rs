@@ -82,6 +82,24 @@ impl<'a> FnBuilder<'a> {
         Reg(self.regs.len() as u32 - 1)
     }
 
+    /// New `F64` register (shorthand for `reg(code().ty_f64())`, which the borrow checker rejects).
+    pub fn reg_f64(&mut self) -> Reg {
+        let t = self.code.ty_f64();
+        self.reg(t)
+    }
+
+    /// New `I32` register.
+    pub fn reg_i32(&mut self) -> Reg {
+        let t = self.code.ty_i32();
+        self.reg(t)
+    }
+
+    /// New `Bool` register.
+    pub fn reg_bool(&mut self) -> Reg {
+        let t = self.code.ty_bool();
+        self.reg(t)
+    }
+
     pub fn reg_type(&self, r: Reg) -> RefType {
         self.regs[r.0 as usize]
     }

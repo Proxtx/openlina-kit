@@ -1,0 +1,14 @@
+[package]
+name = "openlina-mod-inspect"
+edition.workspace = true
+version = "0.1.0"
+publish = false
+
+[[bin]]
+name = "inspect"
+path = "src/main.rs"
+
+[dependencies]
+openlina-sdk.workspace = true
+anyhow.workspace = true
+toml.workspace = true

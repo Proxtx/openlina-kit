@@ -25,11 +25,17 @@ lina check                        # must report 0 validator problems
   header shows `fn@<findex>` and its source `file:line`, and every op its source line (`L1234`).
 - Game logic lives in `fish.game.evsheet.EvSheet_*` (event sheets, per-tick `update`), object types in
   `fish.game.oclass.OClass_*`, engine code in `fish.system.*`. See docs/game-internals.md.
-- Queries: `lina fn <Class.method|findex> [--hx] [--ops a..b]` (`--hx` falls back to the disassembly when the
-  decompiler fails, which is common for closures and big functions), `lina callers <fn>`, `lina strings <text>`,
-  `lina hooks`,
+- Queries: `lina fn <Class.method|findex> [--hx] [--ops a..b]` (`Class.method` works without the package;
+  `--hx` falls back to the disassembly when the decompiler fails, which is common for closures and big functions),
+  `lina callers <fn>`, `lina strings <text>`, `lina hooks`,
   `grep -rn "\.fieldName$" work/dump/asm` (readers of a field), `classes.tsv` / `functions.tsv`.
 - Many callbacks are anonymous closures in `asm/_global.asm`, attributed by their source line.
+- **Look at the running game** instead of guessing from the code: `lina probe` prints any part of the game's
+  state at a moment you pick, in about 7 seconds, no mod or scenario to write:
+  `lina probe --mod swap --level "greendemo 1" --at tick:30 game.itemManager.itemPool.length "@item[].NAME"`
+  (`--new-run` for the run start, `--at layout:manager@200` for screens without gameplay, `--input`, `--capture`).
+  Paths start at `Main.i`, `@<type>` (the layout's objects of a type) or `$<class>.<static>`; `[]` walks arrays.
+  It writes `work/probe.toml`, a normal scenario (fixture `inspect`) you can extend and turn into a test.
 
 ## 2. Plan the patch
 
@@ -87,7 +93,9 @@ Rules:
 
 ## 4. Verify
 
-Everything runs headless (SDL offscreen driver): no window, no human, faster than real time.
+Everything runs headless (SDL offscreen driver): no window, no human. The harness runs 16 extra game steps per
+rendered frame (`turbo`), and `lina test` runs half the cores' worth of scenarios at once: the whole suite takes
+about a minute. Steps keep their fixed length, so results are the same as in real time.
 
 1. `lina build --mod <id>` (natively; `--wasm` for exactly what players run). Each mod validates the functions
    it touched (register bounds, jumps, call arity and value kinds, fields, returns) and the result must parse.
@@ -113,8 +121,12 @@ Everything runs headless (SDL offscreen driver): no window, no human, faster tha
    - `items` rolls from a temporary pool of just those items with the game's own code (so ammo mods apply); slot
      order follows the seed.
    - Scenario files can live anywhere (`lina test path/to/x.toml`), e.g. throwaway probes with `list_levels`.
-   - Logs: `work/test/<n>/log.txt`, numbered by position in the run. A run fails on a crash, a logged Haxe
-     exception (`Null access`, `Called from …`), a `[harness] ERROR`, a non-zero exit or the timeout.
+   - Logs: `work/test/<n>/log.txt` (build lines first), numbered by position in the run. A run fails on a crash, a
+     logged Haxe exception (`Null access`, `Called from …`), a `[harness] ERROR`, a non-zero exit or the timeout;
+     the failure report shows the log's last lines (where a hang stopped) and keeps the patched game in
+     `work/test/<n>/game/` (`lina fn … --input work/test/<n>/game/hlboot.dat`).
+   - `lina test -k <text>` (name or file contains), `--failed` (the failures of the last run), `-j <n>` (parallel
+     runs, default half the cores). Captured frames also land in one contact sheet, `work/test/<n>/frames.png`.
 4. **Showcase gifs** (the scenario's expectations are checked too): add a `[gif]` section (`capture = "from-to/step"` in level ticks, 120 ticks per second;
    `out = "media/x.gif"`) and run `lina gif mods/<id>/tests/<scenario>.toml` (`--out <file>` writes elsewhere,
    e.g. for a probe). Frames come from the game's own renderer at 600×338. Look at them before publishing
@@ -173,8 +185,8 @@ Everything runs headless (SDL offscreen driver): no window, no human, faster tha
 
 | module | purpose |
 |---|---|
-| `Code` (lib.rs) | load/save, `class`, `field`, `field_type`, `method`, `native`, `func(_mut)`, `func_type`, `func_name`, `op_location`, interning (`string`, `float`, `int`, `intern_type`, `ty_*`), `add_global` |
-| `asm::FnBuilder` | new functions: registers, labels, jumps, constants, `get`/`set` fields, `call`, `static_obj`, `new_obj`, `cast`, `string_obj`, `string_of`, `print`, arrays (`array_len`, `array_get`, `new_array_obj`, `empty_f64_array`, `for_range`), `jstr_ne`, `exit`, globals (`get_global`, `set_global`, `clear_global`), `static_closure` |
+| `Code` (lib.rs) | load/save, `class`, `field`, `field_type`, `method`, `find_fn` (any name people write), `native`, `func(_mut)`, `func_type`, `func_name`, `op_location`, interning (`string`, `float`, `int`, `intern_type`, `ty_*`), `add_global` |
+| `asm::FnBuilder` | new functions: registers (`reg`, `reg_f64`/`reg_i32`/`reg_bool`), labels, jumps, constants, `get`/`set` fields, `call`, `static_obj`, `new_obj`, `cast`, `string_obj`, `string_of`, `print`, arrays (`array_len`, `array_get`, `new_array_obj`, `empty_f64_array`, `for_range`), `jstr_ne`, `exit`, globals (`get_global`, `set_global`, `clear_global`), `static_closure` |
 | `edit` | `find*`, `expect_one`, `next_match`/`prev_match`, `replace_op`, `insert_ops`, `insert_ops_with_exits`, `guard_op`, `prepend_call`, `remove_ops`, `add_reg` |
 | `hooks` | `CORE_HOOKS`, `find`, `signature`, `handler`, `subscribe`, `define` |
 | `modifiers` | `register` a modifier (pool + HUD icon), `is_active`, `id_of`, `current_modifier` |

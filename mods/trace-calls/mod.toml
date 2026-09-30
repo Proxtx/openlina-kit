@@ -1,7 +1,7 @@
 [mod]
 id = "trace-calls"
 name = "Trace Calls"
-version = "0.1.0"
+version = "0.2.0"
 section = "dev"
 description = "Debug tool: print a line when chosen functions are called."
 authors = ["openlina-kit"]
@@ -10,7 +10,7 @@ after = ["core"]
 [options.functions]
 type = "list"
 default = []
-description = "Functions to trace: `pkg.Class.method`, a findex, or `hook:<name>` for a core hook."
+description = "Functions to trace: `pkg.Class.method`, `Class.method`, a findex, an injected function (`swap/use`), or `hook:<name>` for a core hook."
 
 [options.first]
 type = "int"

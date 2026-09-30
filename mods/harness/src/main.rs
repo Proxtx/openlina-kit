@@ -47,6 +47,7 @@ struct Opts {
     menu_open: String,
     new_run: bool,
     new_run_items: Vec<String>,
+    turbo: i32,
 }
 
 fn list(cfg: &ModConfig, key: &str) -> Result<Vec<String>> {
@@ -123,6 +124,7 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
         menu_open: cfg.str("menu_open", "")?.to_string(),
         new_run: cfg.bool("new_run", false)?,
         new_run_items: list(cfg, "new_run_items")?,
+        turbo: cfg.i64("turbo", 16)? as i32,
     };
 
     let i32_t = code.ty_i32();
@@ -131,6 +133,9 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     let state = code.add_global(i32_t);
 
     skip_title(code, o.start_tick, o.new_run.then_some(o.seed), state)?;
+    if o.turbo > 0 {
+        turbo(code, o.turbo)?;
+    }
     let capture = if o.capture.is_some() { Some(build_capture(code, &o.capture_dir, o.capture_ui)?) } else { None };
     if o.new_run {
         run_start_clock(code, &o, capture)?;
@@ -172,8 +177,7 @@ fn skip_title(code: &mut Code, tick: i32, new_run: Option<i32>, state: RefGlobal
         let m_dyn = f.call_new(first, &[picker])?;
         let manager_t = f.code().class("fish.game.oclass.OClass_manager")?;
         let manager = f.cast(m_dyn, manager_t);
-        let bool_t = f.code().ty_bool();
-        let yes = f.reg(bool_t);
+        let yes = f.reg_bool();
         f.bool(yes, true);
         f.set(manager, "tutorial_done", yes)?;
         seed_run(&mut f, manager, seed)?;
@@ -214,6 +218,29 @@ fn seed_run(f: &mut FnBuilder, manager: Reg, seed: i32) -> Result<()> {
         f.place(skip);
     }
     Ok(())
+}
+
+/// `Main.mainLoop` adds the real time since the last frame to `accum` and runs one game step per
+/// `Main.frameTime` (1/120 s) in it, then renders once: the game runs in real time even headless.
+/// With `turbo`, every frame also gets `turbo` extra steps. Steps keep their fixed length, so runs
+/// stay deterministic; only the wall-clock time shrinks.
+fn turbo(code: &mut Code, steps: i32) -> Result<()> {
+    let main_loop = code.method("fish.system.Main", "mainLoop")?;
+    let main_t = code.class("fish.system.Main")?;
+    let void = code.ty_void();
+    let mut f = FnBuilder::new(code, "harness/turbo", &[main_t], void);
+    let main = f.arg(0);
+    let st = f.static_obj("fish.system.Main")?;
+    let ft = f.get_new(st, "frameTime")?;
+    let n = f.const_f64(steps as f64);
+    let extra = f.reg_f64();
+    f.mul(extra, ft, n);
+    let acc = f.get_new(main, "accum")?;
+    f.add(acc, acc, extra);
+    f.set(main, "accum", acc)?;
+    f.ret_void();
+    let h = f.finish()?;
+    prepend_call(code, main_loop, h, &[Reg(0)])
 }
 
 fn main_instance(f: &mut FnBuilder) -> Result<Reg> {
@@ -485,8 +512,7 @@ fn build_tick(code: &mut Code, o: &Opts, state: RefGlobal, capture: Option<RefFu
         f.jne(t, p, skip);
         let main = main_instance(&mut f)?;
         let inputs = f.get_new(main, "localInputs")?;
-        let bool_t = f.code().ty_bool();
-        let yes = f.reg(bool_t);
+        let yes = f.reg_bool();
         f.bool(yes, true);
         f.set(inputs, "paused", yes)?;
         f.print(&[Print::Str("[harness] paused")])?;

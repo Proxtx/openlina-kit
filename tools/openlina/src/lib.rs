@@ -40,8 +40,8 @@ pub struct Built {
 }
 
 /// Apply `packages` (any order; they are sorted by their dependencies) to `input` with the
-/// options from `pack`. Prints one line per mod.
-pub fn build(input: Vec<u8>, packages: &[Package], pack: &ModPack) -> Result<Built> {
+/// options from `pack`. Reports one line per mod to `log`.
+pub fn build(input: Vec<u8>, packages: &[Package], pack: &ModPack, log: &mut dyn FnMut(String)) -> Result<Built> {
     let manifests: Vec<_> = packages.iter().map(|p| p.manifest.clone()).collect();
     let order = resolve_order(&manifests)?;
     let user_options = |id: &str| pack.mods.iter().find(|e| e.id == id).map(|e| e.options.clone()).unwrap_or_default();
@@ -71,7 +71,7 @@ pub fn build(input: Vec<u8>, packages: &[Package], pack: &ModPack) -> Result<Bui
         let after = openlina_sdk::Code::from_bytes(&bytes)
             .with_context(|| format!("the bytecode after `{id}` does not parse"))?;
         let found = openlina_sdk::caps::diff(&snap, &before, &after);
-        println!("  applied {id} {} ({:.1}s)", p.manifest.info.version, t.elapsed().as_secs_f64());
+        log(format!("  applied {id} {} ({:.1}s)", p.manifest.info.version, t.elapsed().as_secs_f64()));
         if !found.is_empty() {
             caps.push((id.clone(), found));
         }

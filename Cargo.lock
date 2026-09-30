@@ -1186,6 +1186,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "openlina-mod-inspect"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "openlina-sdk",
+ "toml",
+]
+
+[[package]]
 name = "openlina-mod-mod-menu"
 version = "0.1.0"
 dependencies = [

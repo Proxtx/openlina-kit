@@ -395,6 +395,40 @@ impl Code {
         RefFun(a.max(b))
     }
 
+    /// A function by name, as people and scenarios write it: a findex (`2816`), `hook:<name>` (a
+    /// core hook), an injected function (`swap/use`), `pkg.Class.method`, or `Class.method` without
+    /// the package when that is unique.
+    pub fn find_fn(&self, spec: &str) -> Result<RefFun> {
+        if let Ok(i) = spec.parse::<usize>() {
+            return Ok(RefFun(i));
+        }
+        if let Some(hook) = spec.strip_prefix("hook:") {
+            return crate::hooks::find(self, hook);
+        }
+        let suffix = format!(".{spec}");
+        let found: Vec<RefFun> = self
+            .bc
+            .functions
+            .iter()
+            .map(|f| f.findex)
+            .filter(|&f| {
+                let n = self.func_name(f);
+                n == spec || (!spec.contains('/') && n.ends_with(&suffix))
+            })
+            .collect();
+        match found.as_slice() {
+            [one] => Ok(*one),
+            [] if spec.contains('/') => {
+                bail!("no injected function `{spec}` (patched bytecode: `--input work/hlboot.modded.dat`)")
+            }
+            [] => bail!("no function `{spec}` (search work/dump/functions.tsv)"),
+            many => bail!(
+                "`{spec}` is ambiguous: {}",
+                many.iter().map(|f| format!("fn@{} {}", f.0, self.func_name(*f))).collect::<Vec<_>>().join(", ")
+            ),
+        }
+    }
+
     /// Human readable `Class.method` name of a function.
     pub fn func_name(&self, f: RefFun) -> String {
         if let Some(fun) = self.bc.functions.iter().find(|x| x.findex == f) {

@@ -555,8 +555,12 @@ pub fn publish(game: impl FnOnce() -> Result<PathBuf>, id: &str, yes: bool, test
         if files.is_empty() {
             println!("warning: {id} has no scenarios (mods/{id}/tests/*.toml); publishing untested");
         } else {
-            crate::scenario::test(&game()?, &files, true)
-                .context("the mod's scenarios fail (wasm); fix them before publishing")?;
+            crate::scenario::test(
+                &game()?,
+                &files,
+                &crate::scenario::TestOpts { wasm: true, jobs: crate::scenario::default_jobs() },
+            )
+            .context("the mod's scenarios fail (wasm); fix them before publishing")?;
             std::fs::create_dir_all(stamp.parent().unwrap())?;
             std::fs::write(&stamp, &fingerprint)?;
         }

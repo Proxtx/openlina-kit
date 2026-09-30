@@ -340,7 +340,7 @@ fn build(data: &Path, game: &Path) -> Result<()> {
         pack.mods.iter().map(|e| Package::load(&data.join("mods").join(&e.id))).collect::<Result<_>>()?;
     let input = game::read_bytecode(game)?;
     println!("building {} mod(s)", packages.len());
-    let built = openlina::build(input, &packages, &pack)?;
+    let built = openlina::build(input, &packages, &pack, &mut |l| println!("{l}"))?;
     // Mods that make the game reach outside the game need the player's explicit allowance.
     let trust = load_trust(data)?;
     let mut refused = String::new();

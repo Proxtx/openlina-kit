@@ -125,7 +125,7 @@ fn select(pack_path: &Path, only: &[String]) -> Result<(ModPack, Vec<(PathBuf, M
 
 pub fn build(game_dir: &Path, pack_path: &Path, only: &[String], wasm: bool, out: &Path) -> Result<()> {
     let (pack, _) = select(pack_path, only)?;
-    let bytes = build_pack(game_dir, &pack, wasm, Path::new(OVERLAY))?;
+    let bytes = build_pack(game_dir, &pack, wasm, Path::new(OVERLAY), false, &mut |l| println!("{l}"))?;
     if let Some(d) = out.parent() {
         std::fs::create_dir_all(d)?;
     }
@@ -136,7 +136,39 @@ pub fn build(game_dir: &Path, pack_path: &Path, only: &[String], wasm: bool, out
 
 /// Build the mods of `pack` from mods/, apply them to the pristine bytecode and create the
 /// overlay game directory `overlay`. Returns the patched bytecode.
-pub fn build_pack(game_dir: &Path, pack: &ModPack, wasm: bool, overlay: &Path) -> Result<Vec<u8>> {
+/// Compile the mods with these ids: natively (or wasm with `wasm`); mods pulled from a site
+/// always as wasm, since they only ever run sandboxed.
+pub fn compile(ids: &[String], wasm: bool) -> Result<()> {
+    let all = all_mods()?;
+    let mut own = Vec::new();
+    let mut foreign = Vec::new();
+    for id in ids {
+        let (dir, _) = all.iter().find(|(_, m)| &m.info.id == id).with_context(|| format!("no mod `{id}` in mods/"))?;
+        if is_pulled(dir) {
+            foreign.push(id.clone());
+        } else {
+            own.push(id.clone());
+        }
+    }
+    if !own.is_empty() {
+        cargo_build(&own, wasm)?;
+    }
+    if !foreign.is_empty() {
+        cargo_build(&foreign, true)?;
+    }
+    Ok(())
+}
+
+/// Build `pack` into the overlay directory `overlay`; returns the patched bytecode. Progress goes
+/// to `log`. With `compiled`, the mods were already compiled (see [`compile`]).
+pub fn build_pack(
+    game_dir: &Path,
+    pack: &ModPack,
+    wasm: bool,
+    overlay: &Path,
+    compiled: bool,
+    log: &mut dyn FnMut(String),
+) -> Result<Vec<u8>> {
     let all = all_mods()?;
     let mut chosen = Vec::new();
     for e in &pack.mods {
@@ -144,17 +176,12 @@ pub fn build_pack(game_dir: &Path, pack: &ModPack, wasm: bool, overlay: &Path) -
             all.iter().find(|(_, m)| m.info.id == e.id).with_context(|| format!("no mod `{}` in mods/", e.id))?;
         chosen.push(found.clone());
     }
+    let ids: Vec<String> = chosen.iter().map(|(_, m)| m.info.id.clone()).collect();
+    if !compiled {
+        compile(&ids, wasm)?;
+    }
     // Mods pulled from a site are someone else's code: they only ever run sandboxed (wasm).
-    let (foreign, own): (Vec<_>, Vec<_>) =
-        chosen.iter().map(|(d, m)| (d, m.info.id.clone())).partition(|(d, _)| is_pulled(d));
-    let own: Vec<String> = own.into_iter().map(|(_, id)| id).collect();
-    let foreign: Vec<String> = foreign.into_iter().map(|(_, id)| id).collect();
-    if !own.is_empty() {
-        cargo_build(&own, wasm)?;
-    }
-    if !foreign.is_empty() {
-        cargo_build(&foreign, true)?;
-    }
+    let foreign: Vec<String> = chosen.iter().filter(|(d, _)| is_pulled(d)).map(|(_, m)| m.info.id.clone()).collect();
     let packages: Vec<Package> = chosen
         .into_iter()
         .map(|(dir, manifest)| {
@@ -168,8 +195,8 @@ pub fn build_pack(game_dir: &Path, pack: &ModPack, wasm: bool, overlay: &Path) -
         })
         .collect();
     let input = std::fs::read(ORIG).context("run `lina setup` first")?;
-    println!("building {} mod(s){}", packages.len(), if wasm { " (wasm)" } else { "" });
-    let built = openlina::build(input, &packages, pack)?;
+    log(format!("building {} mod(s){}", packages.len(), if wasm { " (wasm)" } else { "" }));
+    let built = openlina::build(input, &packages, pack, log)?;
     let mut refused = Vec::new();
     for (id, findings) in &built.caps {
         let p = packages.iter().find(|p| &p.manifest.info.id == id).expect("built mods are in the pack");
@@ -180,7 +207,9 @@ pub fn build_pack(game_dir: &Path, pack: &ModPack, wasm: bool, overlay: &Path) -
         if foreign.contains(id) {
             refused.push(format!("  {id} (pulled from a site):\n{list}"));
         } else {
-            println!("  warning: {id} reaches outside the game (players' `openlina` refuses it unless they allow it):\n{list}");
+            log(format!(
+                "  warning: {id} reaches outside the game (players' `openlina` refuses it unless they allow it):\n{list}"
+            ));
         }
     }
     ensure!(

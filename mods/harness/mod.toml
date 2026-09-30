@@ -1,7 +1,7 @@
 [mod]
 id = "harness"
 name = "Test Harness"
-version = "0.2.0"
+version = "0.3.0"
 section = "dev"
 description = "Drives the game for tests and recordings without input: skips the title, loads a chosen level with chosen items and modifier, plays scripted inputs, captures frames, exits at a given tick."
 authors = ["openlina-kit"]
@@ -101,3 +101,8 @@ description = "Start a run as a returning player (tutorial done) and let the gam
 type = "list"
 default = []
 description = "With new_run: put these items (by name) into the first slots of the run start's tool roll."
+
+[options.turbo]
+type = "int"
+default = 16
+description = "Extra game steps per rendered frame (0 = real time). Steps keep their fixed length, so results don't change, only the wall-clock time."

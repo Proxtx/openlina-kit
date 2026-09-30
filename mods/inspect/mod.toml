@@ -1,0 +1,18 @@
+[mod]
+id = "inspect"
+name = "Inspect"
+version = "0.1.0"
+section = "dev"
+description = "Test fixture: print any part of the game's state at chosen moments, e.g. `game.itemManager.pickedItems[].type.name` at `layout:manager@200`. For probes; no mod code to write."
+authors = ["openlina-kit"]
+requires = ["core"]
+
+[options.at]
+type = "list"
+default = ["tick:1"]
+description = "When: `tick:N` (level tick N), `layout:<name>@N` (the first frame of layout <name> at or after its tick N; `layout:<name>` for its start)."
+
+[options.print]
+type = "list"
+default = []
+description = "What: paths from `Main.i` (`game.levelManager.currentLevel.type.name`), `@<type>` for a layout's objects of that type (`@item_icon[].sprite.anim`) or `$<class>.<static>` (`$fish.game.oclass.OClass_item_icon._animData`). `[]` goes through every element of an array, `[3]` picks one."
