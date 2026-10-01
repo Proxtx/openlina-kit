@@ -53,8 +53,12 @@ pub const CORE_HOOKS: &[HookInfo] = &[
         args: "(pos: Vector2Default, edgewith: F64, margin: F64, sheet: EvSheet_gameplay, kind: I32, physics: beh.Physics)",
         returns: "Bool",
         doc: "An object is outside the screen and vanilla is about to delete it. kind 0 = physics object, \
-              1 = coin (fruit; deleting it is how levels are won), 2 = secondary physics object. Return true \
-              to keep it (e.g. after moving it). `physics` is the object's physics behavior (velocity: \
+              1 = coin (fruit: `coinedgecheck` deletes it, which collects it through its destroy listener, or \
+              puts a glitched fruit back at its spawn until every player touched it; a fruit kept here is not \
+              collected unless the subscriber collects it, see screen-wrap), 2 = secondary physics \
+              object, 3 = frog (`frogland_count` was already raised for a live one; deleting a frog the player \
+              controls in frog mode loses the level, through its destroy listener). Return true to keep it \
+              (e.g. after moving it). `physics` is the object's physics behavior (velocity: \
               getVelocityX/Y, setVelocity).",
     },
     HookInfo {

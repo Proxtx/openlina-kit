@@ -18,6 +18,21 @@ Maintainers: bump the version in the commit that changes something mods can noti
 `v<version>` and push the tag; the release workflow builds `openlina` and the skill zip. Then update the website
 (rebuild it against the new kit, replace its helpers) before uploading mods made with the new kit.
 
+## 0.1.2 (2026-10-01)
+
+- **SDK**: `sound` (`play`: the game's sound effects by name, or a mod's own from `assets/media/`; unknown names are
+  skipped instead of crashing the game).
+- **Core 0.6.0**: `edge_exit` kind 3, frogs (vanilla raised `frogland_count` already).
+- **Mods**: screen-wrap 0.5.0 wraps fruits by default (a fruit pushed off the screen is still collected, then
+  wraps), frogs, and joined objects (step ladders, bamboo, tentacles…) as a whole group; swap 0.4.0 swaps with level
+  geometry too (`walls = "swap" | "block" | "pass"` replaces `walls_block`) and plays sounds; portal-gun 0.4.0 plays
+  the game's gun sounds; ray-crosshair 0.2.0 hides the game's reticle while its marker shows (`hide_reticle`);
+  solid-edges 0.2.2 (corrected fruit description); moon-gravity 0.1.1. Icons redrawn in the vanilla style (solid
+  shapes, 2-3 tones, every size drawn natively).
+- **Fixtures**: debug-spawn `pushes` (give objects of a type a velocity at a tick).
+- **Docs**: how fruits are collected (touching, or deleting: pushing off the screen, the delete tool), sounds, the
+  icon style.
+
 ## 0.1.1 (2026-10-01)
 
 - **SDK**: `aim` (`AimRay`: the ray from Lina through the reticle to the next surface, with the hit point and

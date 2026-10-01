@@ -12,8 +12,8 @@
 //!     var pos = o.sprite.position, ew = o.edgewith;
 //!     if (outside(pos, ew, margin = 25))                 // x only tested if !bossMode
 //!         switch (o.type) {
-//!             case "coin":   coinedgecheck(o);           // kind 1 (win condition)
-//!             case "frog":   frogland_count++; destroy;  // not hooked
+//!             case "coin":   coinedgecheck(o);           // kind 1 (deleting collects the fruit)
+//!             case "frog":   frogland_count++; destroy;  // kind 3 (the count stays)
 //!             case "player": // handled by player_death
 //!             default:       o.sprite.destroy();         // kind 0
 //!         }
@@ -22,7 +22,7 @@
 //!     if (outside(o.sprite.position, 0)) o.sprite.destroy();  // kind 2, edgewith = 0
 //! ```
 //!
-//! Each of the three calls is guarded with `if (edge_exit(...)) skip the call;`. With no
+//! Each of the four calls is guarded with `if (edge_exit(...)) skip the call;`. With no
 //! subscriber the hook returns false and the game behaves exactly as vanilla.
 //!
 //! ## `player_edge(pos, margin, sheet, player) -> Bool`
@@ -75,6 +75,18 @@ fn apply(code: &mut Code) -> Result<()> {
     ensure_destroys_sprite_of(code, &fun, destroy_default, item)?;
     let coin_call = expect_one(find_calls(&fun, coinedgecheck), "update calls coinedgecheck()")?;
     ensure!(coin_call > ew_op, "coinedgecheck() is not after the edge test");
+    // frogs: `frogland_count++` (alive ones), then destroy: the destroy is guarded, the count stays
+    let frog_count =
+        expect_one(find_field_access(code, &fun, "frogland_count", true), "update writes `.frogland_count`")?;
+    ensure!(frog_count > ew_op, "the frogland_count write is not after the edge test");
+    let destroy_frog =
+        next_match(&fun, frog_count, |op| calls(op, destroy)).context("destroy() after frogland_count++")?;
+    ensure!(
+        destroy_frog - frog_count <= 6,
+        "the frog destroy() is {} ops after frogland_count++",
+        destroy_frog - frog_count
+    );
+    let frog = destroyed_object(code, &fun, destroy_frog)?;
 
     // ---- anchors: secondary_physics loop
     let sp =
@@ -99,27 +111,25 @@ fn apply(code: &mut Code) -> Result<()> {
     let tick = hooks::define(code, "tick", &[sheet_t, layout_t], void)?;
     let physics_t = code.class("fish.system.beh.Physics")?;
     let edge = hooks::define(code, "edge_exit", &[pos_t, f64_t, f64_t, sheet_t, i32_t, physics_t], bool_t)?;
-    let item_t = fun.regs[item.0 as usize];
-    let item2_t = fun.regs[item2.0 as usize];
-    let physics_field = code.field(item_t, "physics")?;
-    let physics_field2 = code.field(item2_t, "physics")?;
 
-    // ---- guard the three calls, last site first so earlier indices stay valid
-    let mut sites = vec![
+    // ---- guard the four calls, last site first so earlier indices stay valid
+    let mut sites = [
         Site { site: destroy_default, kind: 0, pos, ew: Some(ew), margin, sheet, obj: item },
         Site { site: coin_call, kind: 1, pos, ew: Some(ew), margin, sheet, obj: item },
+        Site { site: destroy_frog, kind: 3, pos, ew: Some(ew), margin, sheet, obj: frog },
         Site { site: destroy_secondary, kind: 2, pos: pos2, ew: None, margin: margin2, sheet: sheet2, obj: item2 },
     ];
     sites.sort_by_key(|s| std::cmp::Reverse(s.site));
     let zero_c = code.float(0.0);
-    let kind_c: Vec<_> = (0..3).map(|k| code.int(k)).collect();
+    let kind_c: Vec<_> = (0..4).map(|k| code.int(k)).collect();
+    let physics_fields: Vec<_> =
+        sites.iter().map(|s| code.field(fun.regs[s.obj.0 as usize], "physics")).collect::<Result<_>>()?;
     let f = code.func_mut(update)?;
     let ok = add_reg(f, bool_t);
     let kind_r = add_reg(f, i32_t);
     let zero = add_reg(f, f64_t);
     let phys = add_reg(f, physics_t);
-    for s in &sites {
-        let field = if s.obj == item { physics_field } else { physics_field2 };
+    for (s, &field) in sites.iter().zip(&physics_fields) {
         let mut ops = vec![
             Opcode::Int { dst: kind_r, ptr: kind_c[s.kind as usize] },
             Opcode::Field { dst: phys, obj: s.obj, field },
@@ -410,4 +420,14 @@ fn ensure_destroys_sprite_of(code: &Code, fun: &Function, at: usize, item: Reg) 
     let Opcode::Field { obj, .. } = fun.ops[load] else { unreachable!() };
     ensure!(obj == item, "destroy() is not called on the edge-tested object");
     Ok(())
+}
+
+/// The object whose `.sprite` the `destroy()` call at `at` destroys.
+fn destroyed_object(code: &Code, fun: &Function, at: usize) -> Result<Reg> {
+    let (_, args) = call_target(&fun.ops[at]).context("destroy() is not a call")?;
+    let load = prev_match(fun, at, |op| matches!(op, Opcode::Field { dst, .. } if *dst == args[0]))
+        .context("sprite load before destroy()")?;
+    ensure!(is_field(code, fun, &fun.ops[load], "sprite"), "destroy() arg is not a `.sprite`");
+    let Opcode::Field { obj, .. } = fun.ops[load] else { unreachable!() };
+    Ok(obj)
 }

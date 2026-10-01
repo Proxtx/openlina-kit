@@ -102,7 +102,13 @@ checked too. Frames come from the game's own renderer at 600×338; look at them 
 Pixel art as text grids in `mods/<id>/art/*.toml`: `lina sprite mods/<id>/art/x.toml --out
 mods/<id>/assets/images/x.png` (game sprites; paths relative to where you run it) or `--out
 mods/<id>/media/icon.png` (website icon). `lina sprite --palette` lists the game palette; `--scale 16` writes a
-preview, `--scale 2` a large item icon.
+preview.
+
+**Icon style** (vanilla, `res/images/item_icon-sheet0.png` and `optionthingos-sheet0.png`): bold solid silhouettes in
+two or three soft tones (a base, a lighter highlight on the upper left, maybe a darker shade), rounded corners, no
+outlines and no thin lines. Draw every size natively: 12x12 for the HUD item icon, 24x24 for the big one (tool
+selection, editor, website icon; a 12x12 icon scaled up 2x looks too pixelated next to vanilla), 16x16 for
+modifiers in the vanilla modifier tones (`#83a4a5`, `#abc3c3`, `#5f7f80`). See swap, portal-gun, screen-wrap.
 
 Images from elsewhere: the game reads only **8-bit PNGs** (and 16-bit ones without a palette). A 1-, 2- or 4-bit PNG
 (small palettes; image optimizers write them) throws `Unsupported png format <bits>/<type>` while the game starts and

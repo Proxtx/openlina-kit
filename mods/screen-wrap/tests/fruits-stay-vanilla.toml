@@ -1,10 +1,11 @@
-name = "screen-wrap: fruits are not wrapped by default (pushing them out still wins)"
+name = "screen-wrap: with coins = false fruits stay vanilla (pushing one off the screen collects and deletes it)"
 mods = ["screen-wrap"]
 fixtures = ["debug-spawn", "trace-calls"]
 timeout = 60
 
 [options.screen-wrap]
 trace = true
+coins = false
 
 [options.debug-spawn]
 object = "coin"

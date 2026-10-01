@@ -27,6 +27,7 @@ use openlina_sdk::asm::{FnBuilder, Print};
 use openlina_sdk::hlbc::opcodes::Opcode;
 use openlina_sdk::hlbc::types::{RefGlobal, RefType, Reg};
 use openlina_sdk::items::{self, Aim, Item};
+use openlina_sdk::sound::{self, Sound};
 use openlina_sdk::{aim, anims, hooks, Code, ModConfig};
 
 const ITEM: &str = "portal";
@@ -58,6 +59,7 @@ struct Opts {
     range: f64,
     mid_air: bool,
     preset: Option<[f64; 4]>,
+    sounds: bool,
     trace: bool,
 }
 
@@ -76,6 +78,7 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
         range: cfg.f64("range", 400.0)?,
         mid_air: cfg.bool("mid_air", false)?,
         preset,
+        sounds: cfg.bool("sounds", true)?,
         trace: cfg.bool("trace", false)?,
     };
 
@@ -216,6 +219,10 @@ fn build_use(
     let (slot, sheet, player_picker, cross) = (f.arg(0), f.arg(1), f.arg(2), f.arg(3));
     let (not_mine, handled) = (f.label(), f.label());
     items::is_item(&mut f, slot, ITEM, not_mine)?;
+    if o.sounds {
+        // the game's own gun sound, as loud as its gun
+        sound::play(&mut f, sheet, &Sound::new("gungun_shot").volume(-3.0).pitch(0.2))?;
+    }
     let (cx, cy) = items::crosshair_pos(&mut f, cross, handled)?;
     // The reticle is just in front of Lina: follow Lina -> reticle to the next surface within
     // `range` (what `ray-crosshair` shows), and put the portal half a portal in front of it.
@@ -405,6 +412,9 @@ fn build_tick(code: &mut Code, st: &State, place: openlina_sdk::hlbc::types::Ref
             f.set(pos, "y", ey)?;
             set_g(f, st.cool_uid, uid);
             set_g(f, st.cool_tick, tick);
+            if o.sounds {
+                sound::play(f, sheet, &Sound::new("gungun_port").volume(-3.0))?;
+            }
             if o.trace {
                 let ty = f.get_new(obj, "type")?;
                 f.print(&[

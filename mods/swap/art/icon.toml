@@ -1,16 +1,24 @@
-# HUD item icon and website icon (12x12): two arrows trading places, Lina (white) and a box (brown).
+# HUD item icon (12x12): the big icon's two balls and arrowheads.
+[palette]
+B = "#2c6f96"
+O = "#b45f22"
+b = "#419ecd"
+c = "#8fd0ee"
+o = "#e8883a"
+q = "#f2b27a"
+
 [[frame]]
 pixels = """
-.ww.........
-.ww....o....
-.......oo...
-..ooooooooo.
-.......oo...
-.......o....
-....b.......
-...bb.......
-.bbbbbbbbb..
-...bb....nn.
-....b....nn.
+............
+..bbb..ooo..
+.bccbb..ooo.
+.bcbbb...o..
+.bbbbb......
+..bbb.......
+.......ooo..
+......oqqoo.
+..b...oqooo.
+.bbb..ooooo.
+..bbb..ooo..
 ............
 """

@@ -1,0 +1,38 @@
+name = "screen-wrap: a fruit pushed off the screen is collected and still wraps (once collected, it stays collected)"
+mods = ["screen-wrap"]
+fixtures = ["debug-spawn", "inspect"]
+timeout = 60
+
+[options.screen-wrap]
+trace = true
+
+# a second fruit, just below the bottom edge
+[options.debug-spawn]
+object = "coin"
+tick = 30
+x = 540.0
+y = 400.0
+
+[options.inspect]
+at = ["tick:25", "tick:200"]
+print = ["@coin[].state"]
+
+[harness]
+level = "greendemo 1"
+modifier_key = "screen-wrap"   # force the modifier
+end_tick = 600
+
+# collected as it crosses, like vanilla's delete would...
+[[expect]]
+contains = "[screen-wrap] tick 30 fruit collected"
+# ...and wrapped to the top instead of disappearing
+[[expect]]
+contains = "[screen-wrap] tick 30 kind 1 (540, 400) -> (540, 106)"
+# it is still there later, collected (the level's own fruit is not)
+[[expect]]
+contains = "[inspect] tick:200 @coin[1].state = 1"
+[[expect]]
+contains = "[inspect] tick:200 @coin[0].state = 0"
+[[expect]]
+contains = "fruit collected"
+max = 1

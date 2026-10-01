@@ -1,8 +1,8 @@
 [mod]
 id = "swap"
 name = "Swap"
-version = "0.3.0"
-kit = "0.1.1"
+version = "0.4.0"
+kit = "0.1.2"
 section = "items"
 description = "A new item: fire a ray along your aim and trade places with the first object it hits. Lina goes where the object was, the object goes where Lina was."
 authors = ["openlina-kit"]
@@ -25,15 +25,20 @@ type = "float"
 default = 400.0
 description = "How far the ray reaches from Lina, in layout units (the play field is 600 x 338)."
 
-[options.walls_block]
-type = "bool"
-default = true
-description = "Static level geometry (tiles, walls) stops the ray: nothing is swapped when the ray hits a wall first. Off: the ray passes through walls and only movable objects count."
+[options.walls]
+type = "string"
+default = "swap"
+description = "Static level geometry (tiles, walls) on the ray: `swap` trades places with it like with anything else (the tile goes where Lina stood), `block` stops the ray (nothing is swapped), `pass` lets the ray through to the movable objects behind."
 
 [options.check_ticks]
 type = "int"
 default = 12
 description = "With trace: how many ticks after a swap to print where both objects really are (a check for tests)."
+
+[options.sounds]
+type = "bool"
+default = true
+description = "Play the game's teleporter sounds: `shoot_telebox` when Swap fires, `tele_telebox` when it swaps."
 
 [options.trace]
 type = "bool"
@@ -44,5 +49,4 @@ description = "Print every shot (`[swap] tick T: ray …`, `player (x, y) <-> bo
 ammo = 3
 aim = "long"
 range = 400
-swaps_with = "first object in line of sight"
-walls_block = "yes"
+swaps_with = "anything in line of sight, walls too"

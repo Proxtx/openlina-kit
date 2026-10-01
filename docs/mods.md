@@ -26,7 +26,7 @@ on its own; with no subscribers every hook falls through to vanilla.
 |---|---|---|
 | `tick` | `(sheet, layout) -> Void` | start of every gameplay tick (`EvSheet_gameplay.update`): levels, and also the hub (`help`), the tool selection (`manager`) and the title screens' first ticks; `openlina_sdk::world::is_level` tells levels apart |
 | `player_edge` | `(pos, margin, sheet, player) -> Bool` | Lina (state "normal") left the screen and vanilla is about to call `player_death` (a pit, a side); return true to keep her alive. Also on the hub, where walking off the right edge starts a run |
-| `edge_exit` | `(pos, edgewith, margin, sheet, kind, physics) -> Bool` | an object left the screen and vanilla is about to delete it; kind 0 physics object, 1 coin/fruit, 2 secondary physics object; return true to keep it |
+| `edge_exit` | `(pos, edgewith, margin, sheet, kind, physics) -> Bool` | an object left the screen and vanilla is about to delete it; kind 0 physics object, 1 coin/fruit (deleting collects it), 2 secondary physics object, 3 frog; return true to keep it |
 | `modifier_pool` | `(pool, dx) -> Void` | a modifier is about to be drawn from `pool` (`LevelManager.rollRaw`/`reroll`); used by `openlina_sdk::modifiers` |
 | `modifier_icon` | `(icon) -> Bool` | the HUD modifier icon is about to be set; used by `openlina_sdk::modifiers` |
 | `item_pool` | `(itemManager) -> Void` | the item pool was built; used by `openlina_sdk::items` |
@@ -46,8 +46,10 @@ next surface along Lina's aim within `range` (400), half a portal in front of it
 fruit or vine segment in the way blocks the shot, and with nothing in range it fizzles (`mid_air`: the portal goes
 to the end of the range instead). Any moving object that gets within `radius`
 (14) of one portal comes out of the other, pushed out along its direction of travel with its velocity kept;
-Lina too. Portals reset every level. Pool entry, HUD icon and label via `openlina_sdk::items`; portals are
-`Sprite15` objects with the mod's own animations (`assets/images/openlina/portal-*.png`, drawn from `art/*.toml`).
+Lina too. Portals reset every level. Firing plays the game's gun sound (`gungun_shot`), a teleport its port sound
+(`gungun_port`; `sounds`, through `openlina_sdk::sound`). Pool entry, HUD icon and label via `openlina_sdk::items`
+(icons in the vanilla style, `art/icon.toml` 12x12 and `art/icon-big.toml` 24x24); portals are `Sprite15` objects
+with the mod's own animations (`assets/images/openlina/portal-*.png`, drawn from `art/*.toml`).
 
 Options: `ammo`, `radius`, `range`, `mid_air`, `preset` (`"ax,ay,bx,by"`: place both portals at level start, for
 tests and showcases), `trace`. Tests: in the pool; two shots down place blue then orange on the platform under Lina
@@ -64,6 +66,7 @@ Options:
 | `range` | float | `400.0` | How far the shot reaches from Lina along the aim: the portal lands on the first surface within this distance (kept inside the play field). Only level geometry takes portals; a box or other movable object in the way blocks the shot. |
 | `mid_air` | bool | `false` | With no surface within `range`, place the portal in mid-air at the end of the range. Off: the shot fizzles. |
 | `preset` | string | `""` | Place both portals when a level starts: "ax,ay,bx,by" (tests, showcases). |
+| `sounds` | bool | `true` | Play the game's gun sounds: `gungun_shot` when the Portal Gun fires, `gungun_port` when something goes through a portal. |
 | `trace` | bool | `false` | Print portal placements (also as `[pos] tick T portal-blue x y`), shots that place nothing, and teleports. |
 <!-- /options -->
 
@@ -71,17 +74,19 @@ Options:
 
 A new item, **Swap** (`swap`, 3 ammo, long aim): each shot casts a ray from Lina along her aim, `range` (400) units
 long. The first object the ray hits trades places with her: Lina goes where the object was, the object goes where
-Lina was (velocities kept). If nothing is hit, nothing happens, and the shot is still used. With `walls_block`
-(default) static level geometry stops the ray, so a wall in between means no swap; without it the ray passes
-through walls and only movable objects count. Anything with a Box2D fixture can be swapped: boxes, fruits, frogs,
-vines, enemies, the other player in co-op.
+Lina was (velocities kept). If nothing is hit, nothing happens, and the shot is still used. Swap trades places with
+everything with a Box2D fixture: boxes, fruits, frogs, vines, enemies, the other player in co-op, and (`walls =
+"swap"`, default) static level geometry too: the tile goes where Lina stood and stays solid there (a box dropped on
+it lands on it). `walls = "block"`: a wall in between means no swap; `"pass"`: the ray goes through walls and only
+movable objects count. Firing plays the game's teleporter sounds (`shoot_telebox`, then `tele_telebox` for the
+swap; `sounds`, through `openlina_sdk::sound`).
 
 The ray is the game's own Box2D ray cast (native `world_ray_cast`, as used by the Line of Sight behavior
 `fish.system.beh.LOS`) through `openlina_sdk::aim::AimRay`: the nearest hit, Lina herself skipped. While Swap is
 selected, the `ray-crosshair` marker shows where that ray stops (`swap-box.toml` checks that it sits on the box
 before the shot). Pool entry, HUD
-icon and label via `openlina_sdk::items`; icon drawn from `art/icon.toml` (`assets/…/swap.png`, and at 2× as
-`swap-big.png` for the tool selection and the editor).
+icon and label via `openlina_sdk::items`; icons in the vanilla style: `art/icon.toml` (12x12, `assets/…/swap.png`, the
+HUD) and `art/icon-big.toml` (24x24, `swap-big.png` for the tool selection and the editor, and the website icon).
 
 Source: `mods/swap/src/main.rs`. Requires `core` and `ray-crosshair`. `tests/run-start-selection.toml` checks that a run start whose tool
 roll drew swap goes on into the first level.
@@ -92,16 +97,18 @@ roll drew swap goes on into the first level.
 | `ammo` | int | `3` | Swap shots per level (0 to 99). |
 | `aim` | string | `"long"` | How the item is aimed (the game's aim types): shoot, short, short2, mid, mid2, long, long2 or remote. Only the direction counts; the ray is `range` long. |
 | `range` | float | `400.0` | How far the ray reaches from Lina, in layout units (the play field is 600 x 338). |
-| `walls_block` | bool | `true` | Static level geometry (tiles, walls) stops the ray: nothing is swapped when the ray hits a wall first. Off: the ray passes through walls and only movable objects count. |
+| `walls` | string | `"swap"` | Static level geometry (tiles, walls) on the ray: `swap` trades places with it like with anything else (the tile goes where Lina stood), `block` stops the ray (nothing is swapped), `pass` lets the ray through to the movable objects behind. |
 | `check_ticks` | int | `12` | With trace: how many ticks after a swap to print where both objects really are (a check for tests). |
+| `sounds` | bool | `true` | Play the game's teleporter sounds: `shoot_telebox` when Swap fires, `tele_telebox` when it swaps. |
 | `trace` | bool | `false` | Print every shot (`[swap] tick T: ray …`, `player (x, y) <-> box (x, y)`, `nothing in line of sight`, `blocked by <type>`, with the ammo left) and the check after each swap (`[swap] check: … near the object's old spot: true`). |
 <!-- /options -->
 
-Tests (`mods/swap/tests/`, 8 scenarios): in the pool with 3 shots; `ammo` option; a box right of Lina is swapped
+Tests (`mods/swap/tests/`, 10 scenarios): in the pool with 3 shots; `ammo` option; a box right of Lina is swapped
 and both positions hold 12 ticks later (read back from the game); aiming up at a box in the air swaps Lina up and
 the box down (showcase `media/swap-up.gif`, also `media/swap-box.gif`); firing into the empty sky swaps nothing but
-uses the shot; `walls_block` in both directions (the platform under Lina blocks a downward shot at a box below it;
-with `walls_block = false` the same shot swaps); the swap checked by the `trace-positions` fixture alone.
+uses the shot; the three `walls` modes with the same downward shot (default: Lina swaps with the platform tile under
+her, and both stay put; `block`: the tile stops the shot; `pass`: it swaps with the box below); the swap checked by
+the `trace-positions` fixture alone.
 
 ## tumble (levels)
 
@@ -147,7 +154,7 @@ Options:
 | `bounce` | float | `0.5` | Share of the speed kept when bouncing off the border (0 = stop dead, 1 = perfectly elastic). |
 | `friction` | float | `0.9` | Speed along the border kept per tick of contact (1 = frictionless sliding). |
 | `rest_speed` | float | `40.0` | Impacts slower than this stop instead of bouncing (avoids jitter while resting on the border). |
-| `coins` | bool | `false` | Fruits bounce too. Pushing fruits out is how levels are won, so this makes levels unwinnable. |
+| `coins` | bool | `false` | Fruits bounce too. Pushing a fruit off the screen collects it in vanilla; bouncing fruits can then only be collected by touching them. |
 | `trace` | bool | `false` | Print every real bounce (not resting contact) to stdout. |
 <!-- /options -->
 
@@ -179,8 +186,9 @@ without the modifier; `factor = 0.25` (16 units); the game's roll draws it (seed
 ## ray-crosshair (general)
 
 A utility for item mods: while Lina holds an item that asks for it, a small ring marks where her aim meets the next
-surface, the first tile, wall or object along the direction of the game's reticle within the item's range (the
-reticle itself stays: it shows the direction). Item mods opt in with `openlina_sdk::aim::show_crosshair(code, item,
+surface, the first tile, wall or object along the direction of the game's reticle within the item's range. The
+marker replaces the game's reticle while it shows (`hide_reticle`; the reticle still gives the direction, and comes
+back for every other item). Item mods opt in with `openlina_sdk::aim::show_crosshair(code, item,
 range)` and `requires = ["core", "ray-crosshair"]`, and fire with the same `aim::AimRay`, so they act exactly where
 the marker is: swap and portal-gun do. With nothing in range, or another item selected, the marker is hidden. Only
 the first player gets one.
@@ -193,11 +201,13 @@ overlap them. Showcase `media/marker.gif`.
 
 Source: `mods/ray-crosshair/src/main.rs`. Requires `core`. Tests: `mods/ray-crosshair/tests/` (the marker in front
 of the vine, by position; hidden for other items and back; on the floor when aiming down, hidden for the sky; the
-showcase). `trace` also prints the marker as `[pos] tick T ray-crosshair x y` for `position` expectations.
+showcase; the game's reticle hidden while the marker shows and back after switching items). `trace` also prints the
+marker as `[pos] tick T ray-crosshair x y` for `position` expectations.
 
 <!-- options:ray-crosshair -->
 | option | type | default | description |
 |---|---|---|---|
+| `hide_reticle` | bool | `true` | Hide the game's own aim reticle while the marker shows (it comes back for every other item). Off: both show. |
 | `trace` | bool | `false` | Print what the aim hits every `trace_every` ticks (`[ray-crosshair] tick T: aim hits <type> at (x, y)`, or `marker hidden`) and the marker as `[pos] tick T ray-crosshair x y` (for `position` expectations). |
 | `trace_every` | int | `30` | With trace: print every this many level ticks. |
 <!-- /options -->
@@ -230,23 +240,37 @@ With `player = true` Lina wraps too: instead of `player_death` at the screen edg
 the opposite side (showcase `media/player-wraps.gif`). The hub (layout `help`) stays vanilla, since walking off its
 right edge starts a run; her other deaths (explosions) stay as well.
 
-Source: `mods/screen-wrap/src/main.rs`. Requires `core`. Tests: `mods/screen-wrap/tests/` (9 scenarios).
+What leaving the screen does in vanilla still happens, then the object wraps instead of disappearing:
+- **Fruits** (`coins`): pushing a fruit off the screen collects it (vanilla: deleting a fruit collects it, through
+  its destroy listener); the mod collects it the same way and wraps it, already collected. Glitched fruits stay
+  vanilla.
+- **Frogs** (`frogs`): a live frog leaving still counts as landed (`frogland_count`); the frog you steer in frog mode
+  stays vanilla, since losing it loses the level. The frog item (`s_frog`) is an ordinary physics object and wraps.
+- **Joined objects** (`joined`): step ladders, bamboo, tentacles and the like are several bodies held by Box2D
+  joints. The mod follows the joints to the whole group and moves every piece by the same offset once the
+  group's centre crosses an edge, so nothing is torn across the screen (pieces past the edge are kept until then).
+  Groups held by level geometry (a vine hanging from the ceiling) or by Lina stay vanilla.
+
+Source: `mods/screen-wrap/src/main.rs`. Requires `core` (0.6.0: frogs). Tests: `mods/screen-wrap/tests/` (12
+scenarios).
 
 <!-- options:screen-wrap -->
 | option | type | default | description |
 |---|---|---|---|
 | `always` | bool | `false` | Apply in every level instead of as a rolled modifier. |
-| `coins` | bool | `false` | Also wrap fruits. Pushing fruits out is how levels are won, so this makes levels unwinnable. |
+| `coins` | bool | `true` | Also wrap fruits. A fruit pushed off the screen is still collected, as in vanilla, and then comes back on the other side (already collected). Glitched fruits stay vanilla (back to their spawn until every player touched them). |
+| `frogs` | bool | `true` | Also wrap frogs. A live frog leaving still counts as landed (they show up in the frog level), every time it crosses. The frog you steer in frog mode is left to vanilla: losing it still loses the level. |
+| `joined` | bool | `true` | Wrap objects joined to others (step ladders, bamboo, tentacles, chains) as a whole: pieces past the edge stay until the group's centre crosses, then every piece moves together. Groups held by level geometry or by Lina are left to vanilla. |
 | `player` | bool | `false` | Also wrap Lina: leaving the screen (falling into a pit, walking off a side) brings her back on the opposite side instead of losing the level. Her other deaths stay. |
 | `secondary` | bool | `true` | Also wrap secondary physics objects. |
 | `max_overshoot` | float | `200.0` | Only wrap objects at most this far past the edge. Physics objects move at most 100 units per tick (the Box2D speed cap, observed in game), so keep this above 100. Parked objects sit about 1000 out. |
 | `min_tick` | int | `5` | Don't wrap during the first ticks of a layout, when levels delete objects placed off-screen. |
-| `trace` | bool | `false` | Print `[screen-wrap] tick T kind K (x, y) -> (x', y')` for every wrap. |
+| `trace` | bool | `false` | Print `[screen-wrap] tick T kind K (x, y) -> (x', y')` for every wrap, `group of N with <type>, centre (x, y) -> (x', y')` for joined objects and `<type> is held by something that can't move` when a group is left to vanilla. |
 <!-- /options -->
 
 What stays vanilla:
-- The player still dies at the edge.
-- Frogs still count as "landed" and disappear.
+- The player still dies at the edge (unless `player`).
+- Glitched fruits, the frog steered in frog mode, groups held by something that can't move.
 - Objects the game parks far off-screen (e.g. at −1000, −1000), or places off-screen in level data and deletes
   on the first ticks, are still destroyed. That's what `max_overshoot` and `min_tick` are for; without them,
   junk would drop into levels.
@@ -257,8 +281,9 @@ limit and keeps falling into view. See [game/world.md](game/world.md#screen-and-
 edge test.
 
 Verified in game (all by `lina test`): the game's roll draws it (seed 11); with the modifier a spawned box keeps
-wrapping; without it the box reaches the edge and is deleted; fruits stay vanilla unless `coins`; `always` works
-without the modifier. The HUD shows the icon.
+wrapping; without it the box reaches the edge and is deleted; a fruit pushed off the screen is collected and
+wraps, once (`coins = false`: vanilla); the frog item wraps; a step ladder thrown off the top wraps as a group of 6
+(`joined = false`: piece by piece); `always` works without the modifier. The HUD shows the icon.
 
 ## cannons (general)
 
@@ -376,6 +401,9 @@ and wraps forever.
 Several objects: `spawns = ["box@60:300,60", "s_ball@90:420,40"]` (`<type>@<tick>:<x>,<y>`, layer 0) instead of
 the single-object options.
 
+Pushes: `pushes = ["stepladder@300:0,-900"]` (`<type>@<tick>:<vx>,<vy>`) gives every physics object of the type that
+velocity at that tick, e.g. to throw something the player built off the screen (screen-wrap's `joined` tests).
+
 Options:
 
 <!-- options:debug-spawn -->
@@ -387,6 +415,7 @@ Options:
 | `y` | float | `60.0` | y position. |
 | `layer` | int | `0` | Layer index. |
 | `spawns` | list | `[]` | Several objects instead: ["<type>@<tick>:<x>,<y>", ...] (layer 0). Overrides object/tick/x/y/layer. |
+| `pushes` | list | `[]` | Velocities to give: ["<type>@<tick>:<vx>,<vy>", ...]: at that tick every physics object of the type gets that velocity (`Physics.setVelocity`), e.g. to throw a built step ladder off the screen. |
 <!-- /options -->
 
 ## trace-positions (dev)

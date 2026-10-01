@@ -1,13 +1,18 @@
 [mod]
 id = "ray-crosshair"
 name = "Ray Crosshair"
-version = "0.1.0"
-kit = "0.1.1"
+version = "0.2.0"
+kit = "0.1.2"
 section = "general"
 description = "A utility for item mods: while Lina holds an item that asks for it, a marker shows where her aim meets the next surface (the first tile, wall or object along the aim, within the item's range). Swap and the Portal Gun use it."
 authors = ["openlina-kit"]
 game_builds = ["22056877"]
 requires = ["core"]
+
+[options.hide_reticle]
+type = "bool"
+default = true
+description = "Hide the game's own aim reticle while the marker shows (it comes back for every other item). Off: both show."
 
 [options.trace]
 type = "bool"

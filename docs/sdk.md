@@ -15,6 +15,7 @@
 | `anims` | `ensure` / `ensure_frames`: an animation from mod images in an object class's animation map |
 | `assets` | `png_problem` / `png_problems`: images in `assets/` the game can't load (only 8-bit PNGs, and 16-bit without a palette; others freeze it while starting) |
 | `physics` | `RayCast`: the nearest object on a line (Box2D `world_ray_cast`), e.g. line of sight; `fraction` for the hit point |
+| `sound` | `play(f, sheet, &Sound::new("gungun_shot").volume(-3.0).pitch(0.2))`: the game's sound effects (`res/media/`, listed in docs/game/engine.md) or a mod's own (`assets/media/<name>.wav`) |
 | `aim` | `AimRay` (the ray from Lina through the reticle to the next surface, with the hit point, `before` to step back from it), `shooter` (in `item_use`), `show_crosshair` (the `ray-crosshair` marker for an item) |
 | `world` | inside handlers: `is_level` / `jump_unless_level` (the `tick` hook also runs on the hub, title and tool selection: `NOT_LEVELS`), `player_pos` (Lina's x, y), `spawn` / `spawn_on` (create an object like levels do, on a layer), `count` (instances of a type) |
 | `kit` | `KIT_VERSION`, `KitVersion` (lines), `issue`/`issues`: which mods a tool of this kit can run (CHANGELOG.md) |

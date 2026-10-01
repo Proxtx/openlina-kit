@@ -1,4 +1,4 @@
-name = "swap: a wall between Lina and the box stops the ray (walls_block, default)"
+name = "swap: by default Swap trades places with level geometry too (the platform tile under Lina)"
 mods = ["swap"]
 fixtures = ["debug-spawn"]
 timeout = 60
@@ -6,7 +6,7 @@ timeout = 60
 [options.swap]
 trace = true
 
-# a box below the platform Lina stands on, right where her downward ray passes
+# the same scene as walls-block.toml: a box below the platform, which the ray never reaches
 [options.debug-spawn]
 object = "box"
 tick = 118
@@ -17,12 +17,18 @@ y = 280.0
 level = "greendemo 1"
 seed = 3
 items = ["swap", "box"]
-inputs = ["90-122:down", "120:shoot"]   # aim down, through the platform
+inputs = ["90-122:down", "120:shoot"]   # aim down, at the platform
 end_tick = 140
 
+# the ray stops at the platform tile, which trades places with Lina
 [[expect]]
-contains = "[swap] tick 121: blocked by tile_short (ammo left 2)"
+contains = "[swap] tick 121: player ("
 [[expect]]
-not_contains = " <-> "
+contains = ") <-> tile_short ("
 [[expect]]
-not_contains = "nothing in line of sight"
+not_contains = "blocked by"
+# both stay where the swap put them: the static tile moved, Lina is in its old spot
+[[expect]]
+contains = "near the object's old spot: true"
+[[expect]]
+contains = "near the player's old spot: true"

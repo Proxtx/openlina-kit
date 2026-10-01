@@ -1,8 +1,8 @@
 [mod]
 id = "moon-gravity"
 name = "Moon Gravity"
-version = "0.1.0"
-kit = "0.1.0"
+version = "0.1.1"
+kit = "0.1.2"
 section = "modifiers"
 description = "A new modifier: in levels that roll it, gravity is weaker (half by default). Lina, boxes and fruits fall slower, and Lina jumps higher. Optionally in every level."
 authors = ["openlina-kit"]

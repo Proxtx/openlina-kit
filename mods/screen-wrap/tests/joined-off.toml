@@ -1,0 +1,28 @@
+name = "screen-wrap: with joined = false the pieces of a step ladder wrap one by one"
+mods = ["screen-wrap"]
+fixtures = ["debug-spawn"]
+timeout = 60
+
+[options.screen-wrap]
+trace = true
+always = true
+joined = false
+
+# Lina builds a step ladder on her platform; at tick 300 it is thrown up, off the top
+[options.debug-spawn]
+spawns = ["box@5:-1000,-1000"]          # (the fixture's own box, parked out of the way)
+pushes = ["stepladder@300:0,-900"]
+
+[harness]
+level = "greendemo 1"
+seed = 1
+items = ["stepladder"]
+inputs = ["60:shoot"]
+end_tick = 480
+
+
+[[expect]]
+contains = " kind 0 ("
+
+[[expect]]
+not_contains = "group of"

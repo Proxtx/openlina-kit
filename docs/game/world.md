@@ -10,8 +10,12 @@ sources listed in the debug info; findexes (`fn@N`) refer to this build. Index: 
   `work/dump/asm/fish/game/evsheet/EvSheet_gameplay.asm`.
 - On the title screen the gameplay sheet only runs for its first ticks (startup cleanup). It runs every
   tick in levels.
-- **Coins are the fruits.** Pushing fruits out of the screen is how you win a level (`coinedgecheck`, fn@3751,
-  collects them), and `coin.glitched` coins respawn at `spawnPos` until every player has touched them.
+- **Coins are the fruits.** A level is won by collecting every fruit (`coin_fn`, fn@3732, counts `portal.coins`
+  down). A fruit is collected when Lina touches it (`tryTouchCoin`, fn@3752: `state = 1`, `coin_fn`) or when it is
+  deleted: pushed off the screen (`coinedgecheck`, fn@3751, destroys it) or with the delete tool. Deleting goes
+  through the fruit's destroy listener (closure fn@10163 from `setupEvents`, L9490): if `state == 0` and it isn't
+  glitched, `coin_fn(touched = 0)` and `state = 1`. `coin.glitched` fruits respawn at `spawnPos` instead until every
+  player has touched them.
 - The player loses at the screen edge (`player_death`, fn@3746). Items come from `ItemManager` and
   `EvSheet_gameplay.shoot` (fn@3739).
 
@@ -31,8 +35,8 @@ for (o in physics_obj.insts) {                           // L16219
     if (pos.y > 338 - margin + ew || pos.y < margin - ew
         || (!bossMode && (pos.x < margin - ew || pos.x > 600 - margin + ew)))
         switch (o.type) {
-            case "coin":   coinedgecheck(o);             // win condition
-            case "frog":   frogland_count++; destroy;
+            case "coin":   coinedgecheck(o);             // deletes the fruit, which collects it
+            case "frog":   if (alive) frogland_count++; destroy;   // counted for "greenfrogs 1"; a steered frog: lost
             case "player": // handled above
             default:       o.sprite.destroy();
         }

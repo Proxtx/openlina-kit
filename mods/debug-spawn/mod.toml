@@ -1,8 +1,8 @@
 [mod]
 id = "debug-spawn"
 name = "Debug Spawn"
-version = "0.1.0"
-kit = "0.1.0"
+version = "0.2.0"
+kit = "0.1.2"
 section = "dev"
 description = "Test fixture: spawn objects at fixed ticks of every gameplay layout."
 authors = ["openlina-kit"]
@@ -37,3 +37,8 @@ description = "Layer index."
 type = "list"
 default = []
 description = "Several objects instead: [\"<type>@<tick>:<x>,<y>\", ...] (layer 0). Overrides object/tick/x/y/layer."
+
+[options.pushes]
+type = "list"
+default = []
+description = "Velocities to give: [\"<type>@<tick>:<vx>,<vy>\", ...]: at that tick every physics object of the type gets that velocity (`Physics.setVelocity`), e.g. to throw a built step ladder off the screen."

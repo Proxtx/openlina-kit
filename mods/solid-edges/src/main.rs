@@ -19,8 +19,8 @@
 //! Moving `sprite.position` teleports the Box2D body (`Physics.syncPosWithSprite`).
 //!
 //! Left alone:
-//! - the player (it still dies at the edge), frogs, and fruits unless `coins` (pushing fruits
-//!   out is how levels are won)
+//! - the player (it still dies at the edge), frogs, and fruits unless `coins` (pushing a fruit
+//!   off the screen collects it; a fruit that bounces back can only be collected by touching it)
 //! - static bodies (`physics.immovable`), destroyed sprites
 //! - the first ticks of a layout and objects far off-screen: levels place objects off-screen and
 //!   the game parks objects at e.g. -1000,-1000; those stay vanilla (deleted)

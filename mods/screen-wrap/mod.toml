@@ -1,8 +1,8 @@
 [mod]
 id = "screen-wrap"
 name = "Screen Wrap"
-version = "0.4.0"
-kit = "0.1.0"
+version = "0.5.0"
+kit = "0.1.2"
 section = "modifiers"
 description = "A new modifier: in levels that roll it, objects leaving the screen come back on the opposite side instead of being destroyed. Long levels and boss arenas wrap top and bottom only."
 authors = ["openlina-kit"]
@@ -16,8 +16,18 @@ description = "Apply in every level instead of as a rolled modifier."
 
 [options.coins]
 type = "bool"
-default = false
-description = "Also wrap fruits. Pushing fruits out is how levels are won, so this makes levels unwinnable."
+default = true
+description = "Also wrap fruits. A fruit pushed off the screen is still collected, as in vanilla, and then comes back on the other side (already collected). Glitched fruits stay vanilla (back to their spawn until every player touched them)."
+
+[options.frogs]
+type = "bool"
+default = true
+description = "Also wrap frogs. A live frog leaving still counts as landed (they show up in the frog level), every time it crosses. The frog you steer in frog mode is left to vanilla: losing it still loses the level."
+
+[options.joined]
+type = "bool"
+default = true
+description = "Wrap objects joined to others (step ladders, bamboo, tentacles, chains) as a whole: pieces past the edge stay until the group's centre crosses, then every piece moves together. Groups held by level geometry or by Lina are left to vanilla."
 
 [options.player]
 type = "bool"
@@ -42,9 +52,10 @@ description = "Don't wrap during the first ticks of a layout, when levels delete
 [options.trace]
 type = "bool"
 default = false
-description = "Print `[screen-wrap] tick T kind K (x, y) -> (x', y')` for every wrap."
+description = "Print `[screen-wrap] tick T kind K (x, y) -> (x', y')` for every wrap, `group of N with <type>, centre (x, y) -> (x', y')` for joined objects and `<type> is held by something that can't move` when a group is left to vanilla."
 
 [stats]
 kind = "modifier"
 rolls = "like vanilla"
-fruits = "exempt"
+fruits = "wrap (still count)"
+joined = "wrap together"

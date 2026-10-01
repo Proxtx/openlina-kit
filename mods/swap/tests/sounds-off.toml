@@ -1,0 +1,34 @@
+name = "swap: with sounds = false Swap stays silent"
+mods = ["swap"]
+fixtures = ["debug-spawn", "trace-calls"]
+timeout = 60
+
+[options.swap]
+trace = true
+sounds = false
+
+# the scene of swap-box.toml: a box right of Lina
+[options.debug-spawn]
+object = "box"
+tick = 10
+x = 170.0
+y = 185.0
+
+[options.trace-calls]
+functions = ["fish.game.evsheet.EvSheet.sfx"]
+first = 50
+every = 0
+
+[harness]
+level = "greendemo 1"
+seed = 3
+items = ["swap", "box"]
+inputs = ["60:shoot"]
+end_tick = 100
+
+[[expect]]
+contains = ") <-> box ("
+[[expect]]
+not_contains = "shoot_telebox"
+[[expect]]
+not_contains = "tele_telebox"

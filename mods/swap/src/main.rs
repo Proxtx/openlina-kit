@@ -15,9 +15,11 @@
 //!   behavior uses it) through `openlina_sdk::aim::AimRay`: the nearest `ObjectClass` on the
 //!   line, Lina herself excluded. The `ray-crosshair` mod shows where it stops while Swap is
 //!   selected (`aim::show_crosshair`, up to `range`).
-//! - Walls: with `walls_block` (default) static bodies (`physics.immovable`: tiles, level
-//!   geometry) take part in the ray and stop it: when the nearest hit is static, nothing is
-//!   swapped. Without it the ray passes through static bodies and only movable objects count.
+//! - Walls (`walls`): by default (`swap`) static bodies (`physics.immovable`: tiles, level
+//!   geometry) take part in the ray and trade places with Lina like anything else: the tile goes
+//!   where she stood and stays solid there (the game moves static bodies to their sprite as well;
+//!   a box dropped on a moved tile lands on it). `block`: the first static hit stops the ray and
+//!   nothing is swapped. `pass`: the ray passes through static bodies, only movable objects count.
 //! - Swapping writes both `sprite.position`s; `Physics.syncPosWithSprite` then moves the Box2D
 //!   bodies (a teleport). Velocities are kept, like the portal gun's teleports.
 //! - `trace` prints every shot (`[swap] tick T: player (x, y) <-> box (x, y)`, `nothing in line of
@@ -34,6 +36,7 @@ use anyhow::{bail, Result};
 use openlina_sdk::asm::{FnBuilder, Print};
 use openlina_sdk::hlbc::types::{RefGlobal, Reg};
 use openlina_sdk::items::{self, Aim, Item};
+use openlina_sdk::sound::{self, Sound};
 use openlina_sdk::{aim, hooks, Code, ModConfig};
 
 const ITEM: &str = "swap";
@@ -44,9 +47,21 @@ fn main() {
     openlina_sdk::run_mod(apply)
 }
 
+/// What static level geometry (tiles, walls) does to the ray: `walls` option.
+#[derive(Clone, Copy, PartialEq)]
+enum Walls {
+    /// It takes part in the ray and trades places with Lina like anything else.
+    Swap,
+    /// It stops the ray: nothing is swapped.
+    Block,
+    /// The ray passes through it.
+    Pass,
+}
+
 struct Opts {
     range: f64,
-    walls_block: bool,
+    walls: Walls,
+    sounds: bool,
     trace: bool,
     check_ticks: i32,
 }
@@ -82,7 +97,13 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     let aim = parse_aim(cfg.str("aim", "long")?)?;
     let o = Opts {
         range: cfg.f64("range", 400.0)?,
-        walls_block: cfg.bool("walls_block", true)?,
+        walls: match cfg.str("walls", "swap")? {
+            "swap" => Walls::Swap,
+            "block" => Walls::Block,
+            "pass" => Walls::Pass,
+            other => bail!("walls `{other}`: expected swap, block or pass"),
+        },
+        sounds: cfg.bool("sounds", true)?,
         trace: cfg.bool("trace", false)?,
         check_ticks: cfg.i64("check_ticks", 12)? as i32,
     };
@@ -114,7 +135,7 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
         old: [g(code, f64_t), g(code, f64_t), g(code, f64_t), g(code, f64_t)],
     };
     aim::show_crosshair(code, ITEM, o.range)?;
-    let ray = aim::AimRay::install(code, "swap/ray_hit", o.walls_block)?;
+    let ray = aim::AimRay::install(code, "swap/ray_hit", o.walls != Walls::Pass)?;
     build_use(code, &st, &ray, &o)?;
     if o.trace {
         build_check(code, &st, &o)?;
@@ -129,6 +150,9 @@ fn build_use(code: &mut Code, st: &State, ray: &aim::AimRay, o: &Opts) -> Result
     let (slot, sheet, player_picker, cross) = (f.arg(0), f.arg(1), f.arg(2), f.arg(3));
     let (not_mine, handled) = (f.label(), f.label());
     items::is_item(&mut f, slot, ITEM, not_mine)?;
+    if o.sounds {
+        sound::play(&mut f, sheet, &Sound::new("shoot_telebox").volume(-3.0).pitch(0.2))?;
+    }
     let (cx, cy) = items::crosshair_pos(&mut f, cross, handled)?;
     let (player, px, py) = aim::shooter(&mut f, player_picker, handled)?;
     let psprite = f.get_new(player, "sprite")?;
@@ -174,7 +198,7 @@ fn build_use(code: &mut Code, st: &State, ray: &aim::AimRay, o: &Opts) -> Result
     let physics = f.get_new(best, "physics")?;
     f.jnull(physics, handled);
     let btype = f.get_new(best, "type")?;
-    if o.walls_block {
+    if o.walls == Walls::Block {
         let movable = f.label();
         let immovable = f.get_new(physics, "immovable")?;
         f.jfalse(immovable, movable);
@@ -201,6 +225,9 @@ fn build_use(code: &mut Code, st: &State, ray: &aim::AimRay, o: &Opts) -> Result
     f.set(bpos, "y", py)?;
     f.set(ppos, "x", bx)?;
     f.set(ppos, "y", by)?;
+    if o.sounds {
+        sound::play(&mut f, sheet, &Sound::new("tele_telebox").volume(-3.0))?;
+    }
     if o.trace {
         f.print(&[
             Print::Str("[swap] tick "),

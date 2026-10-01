@@ -1,0 +1,41 @@
+# Big HUD item icon and website icon (24x24), vanilla style: a chunky grey blaster with an orange
+# tank and a blue portal at the muzzle.
+[palette]
+B = "#2c6f96"
+G = "#8b8fa3"
+O = "#b45f22"
+b = "#419ecd"
+c = "#8fd0ee"
+g = "#b9bccb"
+k = "#5f6377"
+o = "#e8883a"
+q = "#f2b27a"
+w = "#e6e8f0"
+
+[[frame]]
+pixels = """
+........................
+........................
+........................
+.........o..............
+.......ooqoo.......bbb..
+.......oqooo.......bbb..
+.......ooooo......bbbbb.
+.......ooooo......bcccb.
+...gwwwwwowwwgg...bcccb.
+..GggggggggggggGGbbcccbb
+..GggggggggggggGGbbcccbb
+..GGGGGGGGGGGGGkkbbcccbb
+..GGGGGGGGGGGGGkkbbcccbb
+..GGGGGGGGGGGGGkkkbcccb.
+...GGGGGGGGGGGG...bcccb.
+.....GGG..........bbbbb.
+....kGGGk..........bbb..
+....kkkkk..........bbb..
+....kkkkk...............
+....kkkkk...............
+....kkkkk...............
+.....kkk................
+........................
+........................
+"""

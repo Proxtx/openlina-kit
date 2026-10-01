@@ -1,0 +1,21 @@
+name = "screen-wrap: the frog item leaving the screen wraps"
+mods = ["screen-wrap"]
+timeout = 60
+
+[options.screen-wrap]
+trace = true
+always = true
+
+[harness]
+level = "greendemo 1"
+seed = 1
+items = ["frog"]
+inputs = ["40-62:left", "60:shoot"]   # thrown left, off the left edge
+end_tick = 240
+
+# the item's frog (`s_frog`) comes back on the right, and keeps going
+[[expect]]
+contains = " kind 0 (7.92796485668493, 268.354941383214) -> (589.927964856685, 268.354941383214) s_frog"
+[[expect]]
+contains = ") s_frog"
+min = 2

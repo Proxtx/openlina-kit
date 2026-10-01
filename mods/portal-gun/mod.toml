@@ -1,8 +1,8 @@
 [mod]
 id = "portal-gun"
 name = "Portal Gun"
-version = "0.3.0"
-kit = "0.1.1"
+version = "0.4.0"
+kit = "0.1.2"
 section = "items"
 description = "A new item: fire a blue and an orange portal onto the next surface along your aim (a marker shows where). Anything that enters one comes out of the other, keeping its momentum. Lina too."
 authors = ["openlina-kit"]
@@ -33,6 +33,11 @@ description = "With no surface within `range`, place the portal in mid-air at th
 type = "string"
 default = ""
 description = "Place both portals when a level starts: \"ax,ay,bx,by\" (tests, showcases)."
+
+[options.sounds]
+type = "bool"
+default = true
+description = "Play the game's gun sounds: `gungun_shot` when the Portal Gun fires, `gungun_port` when something goes through a portal."
 
 [options.trace]
 type = "bool"

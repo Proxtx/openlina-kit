@@ -37,6 +37,7 @@ pub mod manifest;
 pub mod modifiers;
 pub mod physics;
 pub mod runner;
+pub mod sound;
 pub mod text;
 pub mod validate;
 pub mod world;

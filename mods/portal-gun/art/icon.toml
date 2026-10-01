@@ -1,16 +1,28 @@
-# HUD item icon and website icon (12x12): the portal gun.
+# HUD item icon (12x12): the big icon's blaster and portal.
+[palette]
+B = "#2c6f96"
+G = "#8b8fa3"
+O = "#b45f22"
+b = "#419ecd"
+c = "#8fd0ee"
+g = "#b9bccb"
+k = "#5f6377"
+o = "#e8883a"
+q = "#f2b27a"
+w = "#e6e8f0"
+
 [[frame]]
 pixels = """
-.....oo.....
-....o..o....
-....o..o....
-.....oo.....
 ............
-.kkkkkkkkk..
-.kgggggggbk.
-.kgwwwgggbbk
-.kkkkdgkkbk.
-....kdk..k..
-....kdk.....
-....kkk.....
+............
+....oo...bb.
+....oo..bbbb
+.gggggg.bccb
+GGGGGGGkbccb
+GGGGGGGkbccb
+.GGGGGG.bbbb
+..kk.....bb.
+..kk........
+..kk........
+............
 """

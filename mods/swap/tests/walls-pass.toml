@@ -1,11 +1,11 @@
-name = "swap: with walls_block = false the ray passes through the platform and swaps with the box below"
+name = "swap: with walls = \"pass\" the ray passes through the platform and swaps with the box below"
 mods = ["swap"]
 fixtures = ["debug-spawn"]
 timeout = 60
 
 [options.swap]
 trace = true
-walls_block = false
+walls = "pass"
 
 # the same scene as walls.toml
 [options.debug-spawn]

@@ -20,8 +20,12 @@
 //!   `AimRay` act exactly where the marker is.
 //! - The marker belongs to the layout it was created in: a new layout (level, retry) gets a new one.
 //!
-//! Left alone: the game's reticle (it still shows the direction), firing, every item that doesn't
-//! ask. Only the first player gets a marker (co-op: player 2 has none).
+//! - While the marker shows, the game's reticle is hidden (`hide_reticle`, `Sprite.setVisible(0)`;
+//!   the game doesn't set its visibility again): the marker replaces it. It is shown again when the
+//!   marker hides, and a new layout brings a new reticle.
+//!
+//! Left alone: the reticle's position (it still gives the ray its direction), firing, every item that
+//! doesn't ask. Only the first player gets a marker (co-op: player 2 has none).
 
 use anyhow::Result;
 use openlina_sdk::aim::{AimRay, HOOK};
@@ -43,6 +47,8 @@ fn main() {
 
 /// Mod state, kept in globals.
 struct State {
+    /// The game's reticle the mod hid (null when it hid none), to show it again.
+    hidden: RefGlobal,
     /// The layout the marker was created in.
     layout: RefGlobal,
     /// The marker object (null until shown in this layout).
@@ -52,6 +58,7 @@ struct State {
 fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     let trace = cfg.bool("trace", false)?;
     let trace_every = cfg.i64("trace_every", 30)?.max(1) as i32;
+    let hide_reticle = cfg.bool("hide_reticle", true)?;
 
     let b_item_t = code.class("fish.game.oclass.OClass_b_item")?;
     let f64_t = code.ty_f64();
@@ -59,12 +66,14 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
 
     let layout_t = code.class("fish.system.Layout")?;
     let obj_t = code.class("fish.system.ObjectClass")?;
-    let st = State { layout: code.add_global(layout_t), marker: code.add_global(obj_t) };
+    let cross_t = code.class("fish.game.oclass.OClass_crosshair_point")?;
+    let st =
+        State { layout: code.add_global(layout_t), marker: code.add_global(obj_t), hidden: code.add_global(cross_t) };
     let ray = AimRay::install(code, "ray-crosshair/ray", true)?;
-    build_tick(code, &st, &ray, trace.then_some(trace_every))
+    build_tick(code, &st, &ray, hide_reticle, trace.then_some(trace_every))
 }
 
-fn build_tick(code: &mut Code, st: &State, ray: &AimRay, trace_every: Option<i32>) -> Result<()> {
+fn build_tick(code: &mut Code, st: &State, ray: &AimRay, hide_reticle: bool, trace_every: Option<i32>) -> Result<()> {
     let hook = hooks::find(code, HOOK)?;
     let first = code.method("fish.system.Picker", "first")?;
     let set_visible = code.method("fish.system.Sprite", "setVisible")?;
@@ -84,6 +93,7 @@ fn build_tick(code: &mut Code, st: &State, ray: &AimRay, trace_every: Option<i32
     f.jeq(last, layout, same);
     f.set_global(st.layout, layout);
     f.clear_global(st.marker);
+    f.clear_global(st.hidden);
     f.place(same);
     world::jump_unless_level(&mut f, layout, hide)?;
     let tick = f.get_new(layout, "currentTick")?;
@@ -151,6 +161,18 @@ fn build_tick(code: &mut Code, st: &State, ray: &AimRay, trace_every: Option<i32
     f.set(pos, "y", my)?;
     let yes = f.const_i32(1);
     f.call_new(set_visible, &[sprite, yes])?;
+    if hide_reticle {
+        // the marker replaces the game's reticle while it shows
+        let no = f.const_i32(0);
+        f.call_new(set_visible, &[csprite, no])?;
+        if trace_every.is_some() {
+            let (was, quiet) = (f.get_global(st.hidden), f.label());
+            f.jnotnull(was, quiet);
+            f.print(&[Print::Str("[ray-crosshair] tick "), Print::Val(tick), Print::Str(": game reticle hidden")])?;
+            f.place(quiet);
+        }
+        f.set_global(st.hidden, cross);
+    }
     let anim_done = f.label();
     let anim =
         anims::ensure(&mut f, &format!("fish.game.oclass.OClass_{SPRITE_TYPE}"), ANIM, IMAGE, (SIZE, SIZE), anim_done)?;
@@ -191,6 +213,21 @@ fn build_tick(code: &mut Code, st: &State, ray: &AimRay, trace_every: Option<i32
 
     // Hide it (if there is one).
     f.place(hide);
+    if hide_reticle {
+        // give the game its reticle back
+        let (hidden, none) = (f.get_global(st.hidden), f.label());
+        f.jnull(hidden, none);
+        let hs = f.get_new(hidden, "sprite")?;
+        f.jnull(hs, none);
+        let yes = f.const_i32(1);
+        f.call_new(set_visible, &[hs, yes])?;
+        f.clear_global(st.hidden);
+        if trace_every.is_some() {
+            let t = f.get_new(layout, "currentTick")?;
+            f.print(&[Print::Str("[ray-crosshair] tick "), Print::Val(t), Print::Str(": game reticle shown")])?;
+        }
+        f.place(none);
+    }
     let marker = f.get_global(st.marker);
     f.jnull(marker, end);
     let sprite = f.get_new(marker, "sprite")?;

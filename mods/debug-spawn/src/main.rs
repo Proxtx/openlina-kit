@@ -3,6 +3,10 @@
 //! One object with `object`/`tick`/`x`/`y`/`layer`, or several with `spawns`, a list of
 //! `"<type>@<tick>:<x>,<y>"` (e.g. `["box@60:300,60", "s_ball@90:420,40"]`, layer 0).
 //!
+//! `pushes`, a list of `"<type>@<tick>:<vx>,<vy>"`: at that tick, every physics object of the type
+//! gets that velocity (`Physics.setVelocity`), e.g. to throw something the player built off the
+//! screen.
+//!
 //! A test fixture for other mods, and a minimal example of a `tick` hook handler calling game
 //! code. With `screen-wrap`, a box spawned mid-air falls through the floor and keeps wrapping
 //! from bottom to top forever.
@@ -51,6 +55,8 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
         list.iter().map(|s| parse_spawn(s)).collect::<Result<_>>()?
     };
 
+    let pushes: Vec<Spawn> = cfg.list("pushes")?.iter().map(|s| parse_spawn(s)).collect::<Result<_>>()?;
+
     let create = code.method("fish.system.Layout", "createObject")?;
     let cb_t = code.func_type(create)?.args[7];
     let bool_t = code.ty_bool();
@@ -73,6 +79,33 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
         let cb = f.reg(cb_t);
         f.op(Opcode::Null { dst: cb });
         f.call_new(create, &[layout, name, layer, x, y, no, empty, cb])?;
+        f.place(skip);
+    }
+    // pushes: x, y are the velocity
+    let set_v = f.code().method("fish.system.beh.Physics", "setVelocity")?;
+    let obj_t = f.code().class("fish.system.ObjectClass")?;
+    let sheet = f.arg(0);
+    for p in &pushes {
+        let skip = f.label();
+        let at = f.const_i32(p.tick);
+        f.jne(now, at, skip);
+        let objs = f.get_new(sheet, "physics_obj")?;
+        f.jnull(objs, skip);
+        let insts = f.get_new(objs, "insts")?;
+        let n = f.array_len(insts)?;
+        let (vx, vy) = (f.const_f64(p.x), f.const_f64(p.y));
+        f.for_range(n, |f, i| {
+            let next = f.label();
+            let o = f.array_get(insts, i, obj_t)?;
+            f.jnull(o, next);
+            let t = f.get_new(o, "type")?;
+            f.jstr_ne(t, &p.object, next)?;
+            let ph = f.get_new(o, "physics")?;
+            f.jnull(ph, next);
+            f.call_new(set_v, &[ph, vx, vy])?;
+            f.place(next);
+            Ok(())
+        })?;
         f.place(skip);
     }
     f.ret_void();

@@ -1,0 +1,28 @@
+name = "portal-gun: firing plays the game's gun shot, a teleport its port sound (sounds)"
+mods = ["portal-gun"]
+fixtures = ["trace-calls"]
+timeout = 60
+
+[options.portal-gun]
+trace = true
+
+[options.trace-calls]
+functions = ["fish.game.evsheet.EvSheet.sfx"]
+first = 80
+every = 0
+
+# the scene of shoot.toml: two portals under Lina, and she goes through
+[harness]
+level = "greendemo 1"
+seed = 3
+items = ["portal", "box"]
+inputs = ["30-45:down", "40:shoot", "50-75:right", "80-95:down", "90:shoot"]
+end_tick = 140
+
+[[expect]]
+contains = "player through blue -> orange"
+[[expect]]
+contains = "gungun_shot"
+min = 2
+[[expect]]
+contains = "gungun_port"
