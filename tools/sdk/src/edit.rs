@@ -103,6 +103,22 @@ pub fn find_field_access(code: &Code, fun: &Function, name: &str, write: bool) -
     })
 }
 
+/// Whether `op` reads the field `name` (`Field` on an object of a type that has it).
+pub fn is_field(code: &Code, fun: &Function, op: &Opcode, name: &str) -> bool {
+    match op {
+        Opcode::Field { obj, field, .. } => code.field(fun.regs[obj.0 as usize], name).is_ok_and(|f| f.0 == field.0),
+        _ => false,
+    }
+}
+
+/// Whether `op` writes the field `name` (`SetField`).
+pub fn is_set_field(code: &Code, fun: &Function, op: &Opcode, name: &str) -> bool {
+    match op {
+        Opcode::SetField { obj, field, .. } => code.field(fun.regs[obj.0 as usize], name).is_ok_and(|f| f.0 == field.0),
+        _ => false,
+    }
+}
+
 /// Assert that exactly one match was found. Use this to pin down every anchor a mod relies on,
 /// so a game update fails loudly instead of patching the wrong instruction.
 pub fn expect_one(matches: Vec<usize>, what: &str) -> Result<usize> {

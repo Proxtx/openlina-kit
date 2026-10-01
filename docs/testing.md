@@ -2,7 +2,7 @@
 
 Everything runs headless (SDL offscreen driver): no window, no human. The harness runs 16 extra game steps per
 rendered frame (`turbo`), and `lina test` runs half the cores' worth of scenarios at once: the whole suite takes
-under a minute. Steps keep their fixed length, so results are the same as in real time.
+about a minute and a half. Steps keep their fixed length, so results are the same as in real time.
 
 ## Scenarios
 
@@ -36,6 +36,11 @@ contains = "[screen-wrap] tick"
   `seed`, `items` (a temporary pool of just these items, rolled by the game's own code), `modifier` /
   `modifier_key`, `inputs` (`"60-90:right+jump"`: up down left right jump shoot switch restart), `end_tick`,
   `capture`.
+  - `inputs` and `end_tick` count ticks from the start of each layout, and inputs replay on every retry of a
+    level. `restart` only restarts the editor's level preview (both `restartLayout` calls in
+    `EvSheet_gameplay.update` check `isPreview`); in a run, a retry goes through a death and the tool selection
+    (`manager`), where level ticks stop: a scenario that dies before `end_tick` times out with that reason. Use
+    `end_total` (game steps on any screen) for those.
   - `new_run = true` plays the game's own run start instead of loading a level: the hub, then the MANAGER tool
     selection (`inputs = ["30-700:right", "1000-1010:jump"]` walk off the hub and confirm). `new_run_items`
     forces items into its roll. See `mods/swap/tests/run-start-selection.toml`.
@@ -45,12 +50,15 @@ contains = "[screen-wrap] tick"
     the pool, independent of which seed draws it; that changes with every modifier mod added).
   - `slots = ["box", "swap:2"]`: exactly these tools (optional ammo) at level tick 1; replays use it.
 - Fixtures: `debug-spawn` (objects at a tick: `object`/`tick`/`x`/`y`, or `spawns = ["box@60:300,60", …]`),
-  `trace-positions` (`[pos] tick T <type> x y` for `types` at `ticks`), `trace-calls` (calls to any function,
+  `trace-positions` (`[pos] tick T <type> x y` for `types` at `ticks`, a string like `"40-1200/40"` or `"11,300"`), `trace-calls` (calls to any function,
   with their arguments), `inspect` (any part of the game's state at a moment, see `lina probe`), or a dev mod of
   your own subscribing to `tick`.
 - `[[expect]]`: `contains` (+ `min`/`max`), `not_contains`, `position = { tick, type, x, y, within, away }` on
   `trace-positions` output; bounds instead of (or with) x/y: `position = { tick = 200, type = "box", y_lt = 110 }`
   ("still above 110", y grows downwards; also `y_gt`, `x_lt`, `x_gt`). Measure vanilla once and bound against it.
+  `away = true` inverts: with x/y, no object near that point; with only bounds, no object inside them.
+  `{version:<id>}` in `contains`/`not_contains` stands for that mod's version (mod-menu lists other mods'
+  versions without breaking when they are bumped).
   An object shows up in `trace-positions` from the tick after it was created.
 - Every run also fails on a crash, a logged Haxe exception (`Null access`, `Called from …`), a `[harness] ERROR`,
   a non-zero exit or the timeout.
@@ -64,8 +72,8 @@ Rules:
 - **Make every test able to fail.** Assert that the situation happened (e.g. `trace-calls` shows vanilla's
   function ran), not just that nothing bad was printed; test options in both directions. Check that a new test
   fails without your fix.
-- Runs are deterministic: the harness seeds every RNG from `seed`, so the same build and scenario give the same
-  items, ticks and coordinates. It prints `[harness] slot k: <item> ammo <n>` at level tick 1 and
+- Runs are deterministic: the harness seeds every RNG from `seed` (the game's `Rand` rolls, and `Math.random` /
+  `Std.random`, which mods may use), so the same build and scenario give the same items, ticks and coordinates. It prints `[harness] slot k: <item> ammo <n>` at level tick 1 and
   `[harness] layout <name> tick <t>` when the screen changes and every 1200 ticks (the tick of these lines varies
   a little between runs; everything else doesn't).
 - Scenario files can live anywhere (`lina test path/to/x.toml`), e.g. throwaway probes. `lina probe` writes one

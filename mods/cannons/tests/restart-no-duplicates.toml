@@ -1,0 +1,35 @@
+name = "cannons: after Lina dies and the level is retried, it has three cannons again, not six"
+mods = ["cannons"]
+fixtures = ["trace-positions"]
+timeout = 90
+
+[options.cannons]
+trace = true
+
+[options.trace-positions]
+types = ["cannon_base"]
+ticks = "11,100"
+
+# Walking right on greendemo 1, Lina drops into the pit and dies (tick ~297); then confirm.
+[harness]
+level = "greendemo 1"
+modifier = 0
+seed = 1
+inputs = ["10-320:right", "400-410:jump", "600-610:jump", "800-810:jump", "1000-1010:jump"]
+end_total = 4000
+
+# several attempts, each starting without cannons and getting three
+[[expect]]
+contains = "[cannons] greendemo 1 tick 10: 0 cannons already there"
+min = 3
+
+[[expect]]
+contains = "[cannons] greendemo 1 tick 10: cannon 3 at"
+min = 3
+
+[[expect]]
+not_contains = ": 3 cannons already there"
+
+[[expect]]
+contains = "[harness] layout manager"
+min = 2

@@ -14,12 +14,16 @@
 //! 4. **Frame capture**: renders the game to `Main.gifTarget` (600×338, as `Main.renderGifFrame`
 //!    does), `capturePixels().toPNG()` → `<capture_dir>/frame_1NNNN.png`.
 //! 5. **Exit** with code 0 at level tick `end_tick`.
+//! 6. **Seeded randomness**: the game's own rolls use `Rand` objects the harness seeds; `Math.random`
+//!    and `Std.random` draw from HashLink's system generator (`rnd_float`/`rnd_int` natives, one call
+//!    site each). Both calls are replaced with `harness/rnd_*`, a generator seeded from `seed`, so
+//!    scenarios replay exactly.
 //!
 //! Everything it does is printed as `[harness] …` lines, which `lina test` parses.
 
 use anyhow::{bail, ensure, Context, Result};
 use openlina_sdk::asm::{FnBuilder, Print};
-use openlina_sdk::edit::{add_reg, call, insert_ops, prepend_call, Incoming};
+use openlina_sdk::edit::{add_reg, call, expect_one, find_calls, insert_ops, prepend_call, replace_op, Incoming};
 use openlina_sdk::hlbc::opcodes::Opcode;
 use openlina_sdk::hlbc::types::{RefFun, RefGlobal, RefType, Reg};
 use openlina_sdk::{hooks, Code, ModConfig};
@@ -53,6 +57,61 @@ struct Opts {
     heartbeat: i32,
     chaos: bool,
     end_total: i32,
+}
+
+/// Replace the system generator behind `Math.random` and `Std.random` with one seeded from `seed`
+/// (a linear congruential generator; its high bits are good enough for game randomness).
+fn seed_random(code: &mut Code, seed: i32) -> Result<()> {
+    let (i32_t, f64_t) = (code.ty_i32(), code.ty_f64());
+    let state = code.add_global(i32_t);
+    // harness/rnd_next() -> I32: state = state * 1103515245 + 12345 (seeded on first use)
+    let mut f = FnBuilder::new(code, "harness/rnd_next", &[], i32_t);
+    let s = f.get_global(state);
+    let (zero, go) = (f.const_i32(0), f.label());
+    f.jne(s, zero, go);
+    f.int(s, seed.wrapping_mul(-1640531535).wrapping_add(0x5EED) | 1);
+    f.place(go);
+    let (a, c) = (f.const_i32(1103515245), f.const_i32(12345));
+    f.mul(s, s, a);
+    f.add(s, s, c);
+    f.set_global(state, s);
+    f.ret(s);
+    let next = f.finish()?;
+    // harness/rnd_int() -> I32 (Std.random masks and takes the modulo itself)
+    let mut f = FnBuilder::new(code, "harness/rnd_int", &[], i32_t);
+    let r = f.call_new(next, &[])?;
+    let (sh, out) = (f.const_i32(1), f.reg_i32());
+    f.op(Opcode::UShr { dst: out, a: r, b: sh });
+    f.ret(out);
+    let rnd_int = f.finish()?;
+    // harness/rnd_float() -> F64 in [0, 1): the top 24 bits / 2^24
+    let mut f = FnBuilder::new(code, "harness/rnd_float", &[], f64_t);
+    let r = f.call_new(next, &[])?;
+    let (sh, top) = (f.const_i32(8), f.reg_i32());
+    f.op(Opcode::UShr { dst: top, a: r, b: sh });
+    let x = f.reg_f64();
+    f.op(Opcode::ToSFloat { dst: x, src: top });
+    let scale = f.const_f64(1.0 / 16777216.0);
+    f.mul(x, x, scale);
+    f.ret(x);
+    let rnd_float = f.finish()?;
+
+    for (class, method, native, with) in
+        [("Math", "random", "rnd_float", rnd_float), ("Std", "random", "rnd_int", rnd_int)]
+    {
+        let target = code.method(class, method)?;
+        let native = code.find_fn(&format!("std.{native}")).or_else(|_| code.find_fn(native))?;
+        let fun = code.func(target)?.clone();
+        let at = expect_one(find_calls(&fun, native), &format!("{class}.{method} calls {native}"))?;
+        let Some(dst) = (match fun.ops[at] {
+            Opcode::Call1 { dst, .. } => Some(dst),
+            _ => None,
+        }) else {
+            bail!("{class}.{method}: {native} is not called with one argument")
+        };
+        replace_op(code.func_mut(target)?, at, call(dst, with, &[]));
+    }
+    Ok(())
 }
 
 fn list(cfg: &ModConfig, key: &str) -> Result<Vec<String>> {
@@ -152,6 +211,7 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     let state = code.add_global(i32_t);
 
     skip_title(code, o.start_tick, o.new_run.then_some(o.seed), state)?;
+    seed_random(code, o.seed)?;
     if o.turbo > 0 {
         turbo(code, o.turbo)?;
     }

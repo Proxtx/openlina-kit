@@ -7,6 +7,7 @@
 //! id = "screen-wrap"
 //! name = "Screen Wrap"
 //! version = "0.2.0"
+//! kit = "0.1.0"                    # openlina-kit it was made with (see `kit`); `lina pack` keeps it current
 //! section = "modifiers"            # items | modifiers | levels | general | core | dev
 //! description = "Objects leaving the screen come back on the other side."
 //! authors = ["openlina-kit"]
@@ -22,6 +23,12 @@
 //! description = "Also wrap fruits."
 //!
 //! [stats]                          # free-form, shown on the website (items: ammo, aim, ...)
+//!
+//! [[conflict]]                     # options that can't work with another mod's options
+//! with = "solid-edges"
+//! options = { always = true }      # this mod's options (all must match; none: always)
+//! with_options = { always = true } # the other mod's options (all must match; none: always)
+//! reason = "the border can't be a portal and a wall in every level"
 //! ```
 //!
 //! ```toml
@@ -60,6 +67,9 @@ pub struct ModManifest {
     pub options: BTreeMap<String, OptionSpec>,
     #[serde(default)]
     pub stats: toml::Table,
+    /// Option combinations that can't work together with another mod (`[[conflict]]`).
+    #[serde(default, rename = "conflict", skip_serializing_if = "Vec::is_empty")]
+    pub option_conflicts: Vec<OptionConflict>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,6 +77,9 @@ pub struct ModInfo {
     pub id: String,
     pub name: String,
     pub version: String,
+    /// The openlina-kit version the mod was made with (`crate::kit`); none: before kit versions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kit: Option<String>,
     pub section: Section,
     pub description: String,
     #[serde(default)]
@@ -83,6 +96,18 @@ pub struct ModInfo {
     /// not listed follow alphabetically.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub showcase: Vec<String>,
+}
+
+/// A combination of this mod's options and another mod's options that can't work. Checked
+/// wherever a pack is put together (builds, `openlina set`, the website), with the reason.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OptionConflict {
+    pub with: String,
+    #[serde(default)]
+    pub options: toml::Table,
+    #[serde(default)]
+    pub with_options: toml::Table,
+    pub reason: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -114,7 +139,7 @@ impl OptionSpec {
             | (OptionType::String, toml::Value::String(_)) => v.clone(),
             (OptionType::List, toml::Value::Array(a)) if a.iter().all(|x| x.is_str()) => v.clone(),
             (OptionType::Float, toml::Value::Integer(i)) => toml::Value::Float(*i as f64),
-            _ => bail!("option `{key}` must be {:?}, got {v}", self.kind),
+            _ => bail!("option `{key}` must be {:?} (like its default, {}), got {v}", self.kind, self.default),
         })
     }
 }
@@ -139,7 +164,19 @@ impl ModManifest {
         for (k, o) in &self.options {
             o.check(k, &o.default).with_context(|| format!("default of option `{k}`"))?;
         }
+        if let Some(k) = &self.info.kit {
+            crate::kit::KitVersion::parse(k)?;
+        }
+        for c in &self.option_conflicts {
+            self.resolve_options(&c.options).with_context(|| format!("[[conflict]] with `{}`", c.with))?;
+        }
         Ok(())
+    }
+
+    /// The kit version the mod was made with ([`crate::kit::UNVERSIONED`] if it doesn't say).
+    pub fn kit(&self) -> crate::kit::KitVersion {
+        let v = self.info.kit.as_deref().unwrap_or(crate::kit::UNVERSIONED);
+        crate::kit::KitVersion::parse(v).unwrap_or(crate::kit::KitVersion(0, 0, 0))
     }
 
     /// The options to pass to the patch: declared defaults, overridden by `user`.
@@ -221,6 +258,41 @@ pub struct PackInfoEntry {
     pub options: toml::Table,
 }
 
+/// The declared option conflicts (`[[conflict]]`) that hold between these mods with these resolved
+/// options, as messages: "solid-edges (always = true) and screen-wrap (always = true): <reason>".
+pub fn option_conflicts(mods: &[(&ModManifest, &toml::Table)]) -> Vec<String> {
+    let matches = |want: &toml::Table, have: &toml::Table| {
+        want.iter().all(|(k, v)| match (have.get(k), v) {
+            (Some(toml::Value::Float(h)), toml::Value::Integer(w)) => *h == *w as f64,
+            (Some(h), w) => h == w,
+            (None, _) => false,
+        })
+    };
+    let show = |id: &str, t: &toml::Table| {
+        if t.is_empty() {
+            id.to_string()
+        } else {
+            let parts: Vec<String> = t.iter().map(|(k, v)| format!("{k} = {v}")).collect();
+            format!("{id} ({})", parts.join(", "))
+        }
+    };
+    let mut out = Vec::new();
+    for (m, opts) in mods {
+        for c in &m.option_conflicts {
+            let Some((_, other)) = mods.iter().find(|(o, _)| o.info.id == c.with) else { continue };
+            if matches(&c.options, opts) && matches(&c.with_options, other) {
+                out.push(format!(
+                    "{} and {}: {}",
+                    show(&m.info.id, &c.options),
+                    show(&c.with, &c.with_options),
+                    c.reason
+                ));
+            }
+        }
+    }
+    out
+}
+
 /// Order in which to apply mods: every `requires`/`after` dependency first, `core` section
 /// first among equals, then by id. Fails on missing requirements, conflicts and cycles.
 pub fn resolve_order(mods: &[ModManifest]) -> Result<Vec<usize>> {
@@ -295,6 +367,30 @@ mod tests {
     fn order_reports_missing_requirements_and_cycles() {
         assert!(resolve_order(&[m("a", "items", &["core"], &[])]).is_err());
         assert!(resolve_order(&[m("a", "items", &[], &["b"]), m("b", "items", &[], &["a"])]).is_err());
+    }
+
+    #[test]
+    fn option_conflicts_need_all_options_to_match() {
+        let a = ModManifest::parse(
+            "[mod]\nid = \"a\"\nname = \"x\"\nversion = \"0.1.0\"\nsection = \"items\"\ndescription = \"\"\n\
+             [options.always]\ntype = \"bool\"\ndefault = false\n\
+             [[conflict]]\nwith = \"b\"\noptions = { always = true }\nwith_options = { n = 2.0 }\nreason = \"no\"\n",
+        )
+        .unwrap();
+        let b = m("b", "items", &[], &[]);
+        let opts = |m: &ModManifest, kv: &str| m.resolve_options(&toml::from_str(kv).unwrap()).unwrap();
+        let (on, off) = (opts(&a, "always = true"), opts(&a, ""));
+        let (two, one) = (opts(&b, "n = 2"), opts(&b, ""));
+        assert_eq!(option_conflicts(&[(&a, &on), (&b, &two)]).len(), 1);
+        assert!(option_conflicts(&[(&a, &off), (&b, &two)]).is_empty());
+        assert!(option_conflicts(&[(&a, &on), (&b, &one)]).is_empty());
+        assert!(option_conflicts(&[(&a, &on)]).is_empty());
+        // options must exist in the declaring mod
+        assert!(ModManifest::parse(
+            "[mod]\nid = \"a\"\nname = \"x\"\nversion = \"0.1.0\"\nsection = \"items\"\ndescription = \"\"\n\
+             [[conflict]]\nwith = \"b\"\noptions = { nope = true }\nreason = \"no\"\n"
+        )
+        .is_err());
     }
 
     #[test]

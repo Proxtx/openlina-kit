@@ -8,7 +8,8 @@
 //! With `screen-wrap` in the same pack (the other border rule): a level has one modifier, so two
 //! rolled ones never meet. An `always` one steps aside in levels that roll the other (a rolled
 //! solid-edges pushes objects back before screen-wrap sees them leave; an `always` solid-edges
-//! skips levels that rolled screen-wrap). Both `always` is contradictory and refuses to build.
+//! skips levels that rolled screen-wrap). Both `always` is contradictory: mod.toml declares it as a
+//! `[[conflict]]`, so builds, `openlina set` and the website refuse it with the reason.
 //!
 //! Vanilla deletes objects once they are well past the border (`EvSheet_gameplay.update`, see
 //! `mods/core`). This mod never lets them get there: on every `tick`, each object of
@@ -26,7 +27,7 @@
 //! - x in long levels and boss arenas (`bossMode`): they scroll horizontally, and vanilla only
 //!   tests top and bottom there too
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use openlina_sdk::asm::{FnBuilder, Label, Print};
 use openlina_sdk::hlbc::types::{RefType, Reg};
 use openlina_sdk::modifiers::{self, Modifier};
@@ -67,12 +68,7 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
         .iter()
         .find(|m| m.id == "screen-wrap")
         .map(|m| m.options.get("always").and_then(|v| v.as_bool()).unwrap_or(false));
-    if always && wrap_always == Some(true) {
-        bail!(
-            "solid-edges and screen-wrap both have `always = true`: the border can't be a wall and a portal in every \
-             level. Set `always = false` on one of them; it then applies in the levels that roll it."
-        );
-    }
+    // Both `always` is refused before any mod runs: `[[conflict]]` in mod.toml.
     let modifier = if always {
         None
     } else {

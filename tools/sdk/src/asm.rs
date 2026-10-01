@@ -238,6 +238,22 @@ impl<'a> FnBuilder<'a> {
         self.op(Opcode::Mul { dst, a, b });
     }
 
+    /// `dst = |src|` (F64).
+    pub fn abs(&mut self, dst: Reg, src: Reg) {
+        let (zero, done) = (self.const_f64(0.0), self.label());
+        self.mov(dst, src);
+        self.jge(src, zero, done);
+        self.sub(dst, zero, src);
+        self.place(done);
+    }
+
+    /// New F64 register with `Math.random()`: [0, 1). Seeded by the harness in scenarios, so
+    /// tests replay; random in real play.
+    pub fn random(&mut self) -> Result<Reg> {
+        let random = self.code.method("Math", "random")?;
+        self.call_new(random, &[])
+    }
+
     // --------------------------------------------------------------- fields/calls
 
     /// `dst = obj.field` (object or virtual), with a null check on `obj`.

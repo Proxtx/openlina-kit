@@ -1,0 +1,19 @@
+name = "cannons: the trace counts cannons already in the level (the retry test relies on it)"
+mods = ["cannons"]
+fixtures = ["debug-spawn"]
+timeout = 60
+
+[options.cannons]
+trace = true
+
+[options.debug-spawn]
+spawns = ["cannon_base@5:500,60"]
+
+[harness]
+level = "greendemo 1"
+modifier = 0
+seed = 1
+end_tick = 60
+
+[[expect]]
+contains = "[cannons] greendemo 1 tick 10: 1 cannons already there"

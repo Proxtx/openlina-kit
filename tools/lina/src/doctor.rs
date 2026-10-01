@@ -28,8 +28,43 @@ impl Report {
     }
 }
 
+/// The kit's version and whether this checkout is behind its upstream (fetches quietly; offline
+/// it says so). Mods made with a newer kit fail to build in an old checkout.
+fn kit_freshness(r: &Report) {
+    let v = openlina_sdk::kit::KIT_VERSION;
+    let Some(branch) = run("git", &["rev-parse", "--abbrev-ref", "HEAD"]) else {
+        r.ok(
+            "openlina-kit",
+            &format!("{v} (not a git checkout: compare with https://github.com/Proxtx/openlina-kit/releases)"),
+        );
+        return;
+    };
+    let fetched = Command::new("git")
+        .args(["fetch", "--quiet", "--tags"])
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .status()
+        .is_ok_and(|s| s.success());
+    let behind = run("git", &["rev-list", "--count", "HEAD..@{u}"]).and_then(|n| n.parse::<u32>().ok());
+    let latest = run("git", &["tag", "--list", "v*", "--sort=-v:refname"])
+        .and_then(|t| t.lines().next().map(String::from))
+        .unwrap_or_default();
+    match behind {
+        Some(0) => r.ok(
+            "openlina-kit",
+            &format!("{v} on {branch}, up to date{}", if fetched { "" } else { " (as of the last fetch; offline?)" }),
+        ),
+        Some(n) => r.warn(
+            &format!("openlina-kit {v} on {branch} is {n} commit(s) behind its upstream (latest release {latest})"),
+            "update before building others' mods: `git pull` (mods made with a newer kit don't build here)",
+        ),
+        None => r.ok("openlina-kit", &format!("{v} on {branch} (no upstream branch to compare with)")),
+    }
+}
+
 pub fn doctor(game_dir: Option<PathBuf>) -> Result<()> {
     let mut r = Report { missing: 0 };
+    println!("kit");
+    kit_freshness(&r);
     let nix = std::env::var_os("IN_NIX_SHELL").is_some();
     println!("toolchain ({})", if nix { "nix dev shell" } else { "no nix: rustup" });
     match run("cargo", &["--version"]) {

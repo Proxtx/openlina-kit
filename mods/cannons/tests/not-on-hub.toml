@@ -1,0 +1,23 @@
+name = "cannons: none on the hub or the tool selection, and the run's first level gets them"
+mods = ["cannons"]
+timeout = 120
+
+[options.cannons]
+trace = true
+
+[harness]
+new_run = true
+inputs = ["30-700:right", "1000-1010:jump", "1200-1210:jump", "1400-1410:shoot", "1600-1700:jump"]
+end_tick = 2400
+
+[[expect]]
+contains = "[harness] layout manager"
+
+[[expect]]
+not_contains = "[cannons] help"
+
+[[expect]]
+not_contains = "[cannons] manager"
+
+[[expect]]
+contains = ": cannon 3 at"

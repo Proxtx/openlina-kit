@@ -122,3 +122,8 @@ mosa-mod/                 (plain folder)
   (play → replay scenarios; harness `slots`), `openlina report` (players' problem bundle; modded runs are logged),
   `lina docs` (option tables generated from mod.toml), `docs/game/` by topic, `lina new` templates per section,
   position bounds, `roll_until_modifier`, `lina probe --harness/--set`, natives in `lina refs`/`callers`/`find_fn`.
+- **0.1.0, the first versioned release (2026-10-01):** after an agent's feedback (it built cannons and screen-wrap
+  `player` in a checkout 5 commits behind): kit versions (`kit` in mod.toml, checks in lina, openlina and on the
+  website, which refuses players' zips of packs that need an agent), declared option conflicts (`[[conflict]]`),
+  the core `player_edge` hook, `openlina_sdk::world`, seeded `Math.random`, `lina pull --force/--replace`,
+  `openlina install --replace`, `lina doctor` checks for kit updates, GitHub releases (CHANGELOG.md).

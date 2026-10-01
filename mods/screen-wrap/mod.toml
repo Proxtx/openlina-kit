@@ -1,7 +1,8 @@
 [mod]
 id = "screen-wrap"
 name = "Screen Wrap"
-version = "0.3.0"
+version = "0.4.0"
+kit = "0.1.0"
 section = "modifiers"
 description = "A new modifier: in levels that roll it, objects leaving the screen come back on the opposite side instead of being destroyed. Long levels and boss arenas wrap top and bottom only."
 authors = ["openlina-kit"]
@@ -17,6 +18,11 @@ description = "Apply in every level instead of as a rolled modifier."
 type = "bool"
 default = false
 description = "Also wrap fruits. Pushing fruits out is how levels are won, so this makes levels unwinnable."
+
+[options.player]
+type = "bool"
+default = false
+description = "Also wrap Lina: leaving the screen (falling into a pit, walking off a side) brings her back on the opposite side instead of losing the level. Her other deaths stay."
 
 [options.secondary]
 type = "bool"

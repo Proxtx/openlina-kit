@@ -25,12 +25,16 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Install a pack zip, a mod zip, or a directory holding either, then build.
+    /// Install a pack zip, a mod zip, or a directory holding either, then build. Adds to what is
+    /// installed; with --replace, the installed mods become exactly these.
     Install {
         paths: Vec<PathBuf>,
         /// Install mods the site has not reviewed yet without asking.
         #[arg(long)]
         yes: bool,
+        /// Uninstall the mods that are not in these packs ("play exactly this pack").
+        #[arg(long)]
+        replace: bool,
     },
     /// Allow an installed mod to reach outside the game (files, programs, network, Steam), after
     /// the build refused it. Only for mods you trust; the allowance ends when the mod changes.
@@ -73,31 +77,26 @@ fn main() -> Result<()> {
     let data = data_dir()?;
     let game_dir = || game::game_dir(cli.game_dir.clone());
     match cli.cmd {
-        Cmd::Install { paths, yes } => {
+        Cmd::Install { paths, yes, replace } => {
+            let mut incoming = Vec::new();
             for p in &paths {
-                install(&data, p, yes)?;
+                incoming.extend(install(&data, p, yes)?);
             }
+            if replace {
+                let pack = load_state(&data)?;
+                for e in pack.mods.iter().filter(|e| !incoming.contains(&e.id)) {
+                    remove_mod(&data, &e.id)?;
+                    println!("uninstalled {} (not in the pack)", e.id);
+                }
+            }
+            print_installed(&data, &incoming)?;
             install_self(&data)?;
             build(&data, &game_dir()?)?;
             print_launch_option(&data);
             Ok(())
         }
         Cmd::Uninstall { id } => {
-            let mut pack = load_state(&data)?;
-            let before = pack.mods.len();
-            pack.mods.retain(|e| e.id != id);
-            if pack.mods.len() == before {
-                bail!("`{id}` is not installed");
-            }
-            let dir = data.join("mods").join(&id);
-            if dir.exists() {
-                std::fs::remove_dir_all(dir)?;
-            }
-            pack.save(&data.join("modpack.toml"))?;
-            let mut trust = load_trust(&data)?;
-            if trust.remove(&id).is_some() {
-                save_trust(&data, &trust)?;
-            }
+            remove_mod(&data, &id)?;
             build(&data, &game_dir()?)
         }
         Cmd::List => {
@@ -125,6 +124,10 @@ fn main() -> Result<()> {
             e.options.insert(k.trim().to_string(), value);
             let p = Package::load(&data.join("mods").join(&id))?;
             p.manifest.resolve_options(&e.options)?;
+            // Refuse option combinations the mods declare impossible before saving anything.
+            let packages: Vec<Package> =
+                pack.mods.iter().map(|e| Package::load(&data.join("mods").join(&e.id))).collect::<Result<_>>()?;
+            openlina::check_pack(&packages, &pack, openlina::Host::Helper)?;
             pack.save(&data.join("modpack.toml"))?;
             build(&data, &game_dir()?)
         }
@@ -186,6 +189,48 @@ fn main() -> Result<()> {
     }
 }
 
+/// Remove an installed mod (files, state, trust).
+fn remove_mod(data: &Path, id: &str) -> Result<()> {
+    let mut pack = load_state(data)?;
+    let before = pack.mods.len();
+    pack.mods.retain(|e| e.id != id);
+    if pack.mods.len() == before {
+        bail!("`{id}` is not installed");
+    }
+    let dir = data.join("mods").join(id);
+    if dir.exists() {
+        std::fs::remove_dir_all(dir)?;
+    }
+    pack.save(&data.join("modpack.toml"))?;
+    let mut trust = load_trust(data)?;
+    if trust.remove(id).is_some() {
+        save_trust(data, &trust)?;
+    }
+    Ok(())
+}
+
+/// What is installed now; mods that were there before and are not in `incoming` are marked.
+fn print_installed(data: &Path, incoming: &[String]) -> Result<()> {
+    let pack = load_state(data)?;
+    println!("\ninstalled now:");
+    let mut others = 0;
+    for e in &pack.mods {
+        let version =
+            Package::load(&data.join("mods").join(&e.id)).map(|p| p.manifest.info.version).unwrap_or_default();
+        let mark = if incoming.contains(&e.id) {
+            ""
+        } else {
+            others += 1;
+            "   (installed earlier, not in this pack)"
+        };
+        println!("  {} {version}{mark}", e.id);
+    }
+    if others > 0 {
+        println!("To play exactly the pack, install it with `--replace` (or `openlina uninstall <id>`).");
+    }
+    Ok(())
+}
+
 fn load_state(data: &Path) -> Result<ModPack> {
     let p = data.join("modpack.toml");
     if p.exists() {
@@ -228,8 +273,8 @@ fn confirm(question: &str) -> Result<bool> {
     Ok(matches!(line.trim(), "y" | "Y" | "yes" | "j" | "ja"))
 }
 
-/// Install a pack or a single mod from a zip or a directory.
-fn install(data: &Path, path: &Path, yes: bool) -> Result<()> {
+/// Install a pack or a single mod from a zip or a directory; returns the ids it installed.
+fn install(data: &Path, path: &Path, yes: bool) -> Result<Vec<String>> {
     let tmp = data.join("tmp");
     if tmp.exists() {
         std::fs::remove_dir_all(&tmp)?;
@@ -264,7 +309,12 @@ fn install(data: &Path, path: &Path, yes: bool) -> Result<()> {
         bail!("{}: no mods found (expected mod.toml or mods/<id>/mod.toml)", path.display());
     }
 
-    // Refuse before changing anything if a requirement would be missing.
+    // Refuse before changing anything: mods for another openlina, missing requirements.
+    let manifests: Vec<_> = dirs.iter().map(|d| Package::load(d).map(|p| p.manifest)).collect::<Result<_>>()?;
+    let kits = openlina::kit_problems(&manifests, openlina::Host::Helper);
+    if !kits.is_empty() {
+        bail!("{}: can't be installed:\n  {}", path.display(), kits.join("\n  "));
+    }
     let state_before = load_state(data)?;
     let incoming_ids: Vec<String> =
         dirs.iter().map(|d| Package::load(d).map(|p| p.manifest.info.id)).collect::<Result<_>>()?;
@@ -320,7 +370,7 @@ fn install(data: &Path, path: &Path, yes: bool) -> Result<()> {
     std::fs::create_dir_all(data)?;
     state.save(&data.join("modpack.toml"))?;
     std::fs::remove_dir_all(&tmp).ok();
-    Ok(())
+    Ok(incoming_ids)
 }
 
 fn find_root(dir: &Path) -> Result<PathBuf> {
@@ -362,7 +412,7 @@ fn build(data: &Path, game: &Path) -> Result<()> {
         pack.mods.iter().map(|e| Package::load(&data.join("mods").join(&e.id))).collect::<Result<_>>()?;
     let input = game::read_bytecode(game)?;
     println!("building {} mod(s)", packages.len());
-    let built = openlina::build(input, &packages, &pack, &mut |l| println!("{l}"))?;
+    let built = openlina::build(input, &packages, &pack, openlina::Host::Helper, &mut |l| println!("{l}"))?;
     // Mods that make the game reach outside the game need the player's explicit allowance.
     let trust = load_trust(data)?;
     let mut refused = String::new();

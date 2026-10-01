@@ -17,6 +17,8 @@
 //! [[expect]]
 //! contains = "[screen-wrap] tick"   # lines containing this text...
 //! min = 2                           # ...at least 2 of them (default 1); `max` for an upper bound
+//! [[expect]]                        # `{version:<id>}`: that mod's version from its mod.toml
+//! contains = "SCREEN WRAP {version:screen-wrap}"
 //! [[expect]]
 //! not_contains = "Uncaught"
 //! [[expect]]                        # needs the fixture `trace-positions` (prints `[pos]` lines)
@@ -322,6 +324,26 @@ fn run(
     Ok((out.status.code(), log))
 }
 
+/// `{version:<id>}` in an expectation → that mod's version from mods/<id>/mod.toml, so a test
+/// doesn't break when another mod is bumped.
+fn with_versions(text: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(i) = rest.find("{version:") {
+        out.push_str(&rest[..i]);
+        let after = &rest[i + "{version:".len()..];
+        let Some(end) = after.find('}') else { break };
+        let id = &after[..end];
+        match openlina_sdk::manifest::ModManifest::load(&Path::new("mods").join(id).join("mod.toml")) {
+            Ok(m) => out.push_str(&m.info.version),
+            Err(_) => out.push_str(&rest[i..i + "{version:".len() + end + 1]),
+        }
+        rest = &after[end + 1..];
+    }
+    out.push_str(rest);
+    out
+}
+
 /// Check a finished run; returns the failures.
 fn check(sc: &Scenario, code: Option<i32>, log: &str) -> Vec<String> {
     let mut fails = Vec::new();
@@ -329,7 +351,16 @@ fn check(sc: &Scenario, code: Option<i32>, log: &str) -> Vec<String> {
         Some(0) => {}
         Some(124) => {
             let last = log.lines().rev().find(|l| l.starts_with("[harness] layout "));
+            let level_test = sc.harness.contains_key("level") && !sc.harness.contains_key("end_total");
+            let left_level = last.is_some_and(|l| l.starts_with("[harness] layout manager "));
             fails.push(match last {
+                Some(l) if level_test && left_level => format!(
+                    "timed out after {}s; last seen: {}. The level ended before `end_tick` (Lina died, or the level \
+                     was won: the game went to the tool selection, where level ticks stop). End earlier, or use \
+                     `end_total` (game steps on any screen)",
+                    sc.timeout,
+                    l.trim_start_matches("[harness] ")
+                ),
                 Some(l) => format!(
                     "timed out after {}s; last seen: {} (a hang or a screen waiting for input there? else set harness.end_tick)",
                     sc.timeout,
@@ -347,7 +378,7 @@ fn check(sc: &Scenario, code: Option<i32>, log: &str) -> Vec<String> {
         }
     }
     for e in &sc.expect {
-        if let Some(text) = &e.contains {
+        if let Some(text) = &e.contains.as_deref().map(with_versions) {
             let n = log.lines().filter(|l| l.contains(text.as_str())).count();
             let min = e.min.unwrap_or(1);
             if n < min {
@@ -364,7 +395,7 @@ fn check(sc: &Scenario, code: Option<i32>, log: &str) -> Vec<String> {
                 fails.push(msg);
             }
         }
-        if let Some(text) = &e.not_contains {
+        if let Some(text) = &e.not_contains.as_deref().map(with_versions) {
             if let Some(line) = log.lines().find(|l| l.contains(text.as_str())) {
                 fails.push(format!("unexpected line: {line}"));
             }

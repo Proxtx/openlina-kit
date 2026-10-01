@@ -2,6 +2,7 @@
 id = "harness"
 name = "Test Harness"
 version = "0.4.0"
+kit = "0.1.0"
 section = "dev"
 description = "Drives the game for tests and recordings without input: skips the title, loads a chosen level with chosen items and modifier, plays scripted inputs, captures frames, exits at a given tick."
 authors = ["openlina-kit"]

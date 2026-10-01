@@ -24,7 +24,8 @@ on its own; with no subscribers every hook falls through to vanilla.
 
 | hook | signature | |
 |---|---|---|
-| `tick` | `(sheet, layout) -> Void` | start of every gameplay tick (`EvSheet_gameplay.update`) |
+| `tick` | `(sheet, layout) -> Void` | start of every gameplay tick (`EvSheet_gameplay.update`): levels, and also the hub (`help`), the tool selection (`manager`) and the title screens' first ticks; `openlina_sdk::world::is_level` tells levels apart |
+| `player_edge` | `(pos, margin, sheet, player) -> Bool` | Lina (state "normal") left the screen and vanilla is about to call `player_death` (a pit, a side); return true to keep her alive. Also on the hub, where walking off the right edge starts a run |
 | `edge_exit` | `(pos, edgewith, margin, sheet, kind, physics) -> Bool` | an object left the screen and vanilla is about to delete it; kind 0 physics object, 1 coin/fruit, 2 secondary physics object; return true to keep it |
 | `modifier_pool` | `(pool, dx) -> Void` | a modifier is about to be drawn from `pool` (`LevelManager.rollRaw`/`reroll`); used by `openlina_sdk::modifiers` |
 | `modifier_icon` | `(icon) -> Bool` | the HUD modifier icon is about to be set; used by `openlina_sdk::modifiers` |
@@ -126,7 +127,8 @@ In levels that roll it, the screen border is a wall: every tick, objects crossin
 bounce (`bounce` 0.5 of the speed kept; slower than `rest_speed` 40 they stop; `friction` 0.9 of the speed along
 the border kept per tick of contact). Player, frogs and fruits (unless `coins`) stay vanilla; long levels keep x
 open; objects far off-screen stay vanilla. With screen-wrap in the pack: two rolled modifiers never meet; an
-`always` one steps aside in levels that roll the other; both `always` refuses to build. Tests: 6 scenarios, 3 of
+`always` one steps aside in levels that roll the other; both `always` is declared as a `[[conflict]]` in its
+mod.toml, so builds, `openlina set` and the website refuse it with the reason. Tests: 6 scenarios, 3 of
 them with screen-wrap. Idea by a friend of the project.
 
 Options:
@@ -191,13 +193,18 @@ modifier roll like the vanilla modifiers (also in "dx" runs), and shown in the H
 level instead. In long levels and boss arenas (`bossMode`), which scroll horizontally, only the top and bottom wrap,
 the same way vanilla only tests those edges there.
 
-Source: `mods/screen-wrap/src/main.rs`. Requires `core`. Tests: `mods/screen-wrap/tests/` (6 scenarios).
+With `player = true` Lina wraps too: instead of `player_death` at the screen edge (a pit, a side), she comes back on
+the opposite side (showcase `media/player-wraps.gif`). The hub (layout `help`) stays vanilla, since walking off its
+right edge starts a run; her other deaths (explosions) stay as well.
+
+Source: `mods/screen-wrap/src/main.rs`. Requires `core`. Tests: `mods/screen-wrap/tests/` (9 scenarios).
 
 <!-- options:screen-wrap -->
 | option | type | default | description |
 |---|---|---|---|
 | `always` | bool | `false` | Apply in every level instead of as a rolled modifier. |
 | `coins` | bool | `false` | Also wrap fruits. Pushing fruits out is how levels are won, so this makes levels unwinnable. |
+| `player` | bool | `false` | Also wrap Lina: leaving the screen (falling into a pit, walking off a side) brings her back on the opposite side instead of losing the level. Her other deaths stay. |
 | `secondary` | bool | `true` | Also wrap secondary physics objects. |
 | `max_overshoot` | float | `200.0` | Only wrap objects at most this far past the edge. Physics objects move at most 100 units per tick (the Box2D speed cap, observed in game), so keep this above 100. Parked objects sit about 1000 out. |
 | `min_tick` | int | `5` | Don't wrap during the first ticks of a layout, when levels delete objects placed off-screen. |
@@ -211,7 +218,7 @@ What stays vanilla:
   on the first ticks, are still destroyed. That's what `max_overshoot` and `min_tick` are for; without them,
   junk would drop into levels.
 
-How it works: it subscribes a handler to the core `edge_exit` hook. The handler moves the object by exactly one
+How it works: it subscribes a handler to the core `edge_exit` hook (and, with `player`, to `player_edge`). The handler moves the object by exactly one
 play-field size and returns true, so an object that just crossed the bottom limit reappears just past the top
 limit and keeps falling into view. See [game/world.md](game/world.md#screen-and-edges) for the vanilla
 edge test.
@@ -219,6 +226,35 @@ edge test.
 Verified in game (all by `lina test`): the game's roll draws it (seed 11); with the modifier a spawned box keeps
 wrapping; without it the box reaches the edge and is deleted; fruits stay vanilla unless `coins`; `always` works
 without the modifier. The HUD shows the icon.
+
+## cannons (general)
+
+Every level gets `count` (3) of the game's own cannons (`cannon_base`, created with `Layout.createObject` like level
+objects, which adds the barrel and face parts). At layout tick `tick` (10) of every gameplay layout but the hub, title
+screens and tool selection (`skip_layouts`), the span [`x_min`, `x_max`] is cut into `count` bands and one cannon
+appears at a random x in each, at height `y` (40), and falls onto what is below. Positions closer than
+`player_distance` (120) to Lina are rolled again, so no cannon drops onto her and shoots point-blank. The cannons
+behave like vanilla ones: asleep until Lina makes noise within 111 units, then they aim, charge and fire explosive
+`heavy_shot`s; with `awake = true` they start awake (showcase `media/awake-cannons.gif`). A retry after a death
+reloads the level, and the cannons come back once.
+
+Source: `mods/cannons/src/main.rs`. Requires `core`. Tests: `mods/cannons/tests/` (8 scenarios: three per level and
+the `count` option, `player_distance` both ways, none on the hub or tool selection, asleep vs `awake`, retries
+without duplicates and the trace's counter they rely on).
+
+<!-- options:cannons -->
+| option | type | default | description |
+|---|---|---|---|
+| `count` | int | `3` | Cannons added to every level (0 to 20). |
+| `awake` | bool | `false` | The cannons start awake and shoot right away. Off: like vanilla cannons, they sleep until Lina lands or bumps into something within 111 units of them. |
+| `player_distance` | float | `120.0` | Keep cannons at least this far from Lina (horizontally) when they appear, so none drops onto her and shoots point-blank. |
+| `tick` | int | `10` | Layout tick at which the cannons appear (120 ticks per second). |
+| `y` | float | `40.0` | Height at which the cannons appear (0 = top of the 338 high play field); they fall onto whatever is below. |
+| `x_min` | float | `60.0` | Left end of the span the cannons are spread over (the play field is 600 wide). |
+| `x_max` | float | `540.0` | Right end of the span. It is cut into `count` equal bands, one cannon at a random x in each. |
+| `skip_layouts` | list | `["help", "main", "first_screen", "manager"]` | Layouts that run the gameplay sheet but are not levels: the hub, title screens and tool selection. |
+| `trace` | bool | `false` | Print every cannon placed (`[cannons] <layout> tick T: cannon i at (x, y)`). |
+<!-- /options -->
 
 ## ammo-boost
 

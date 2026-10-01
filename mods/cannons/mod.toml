@@ -1,0 +1,60 @@
+[mod]
+id = "cannons"
+name = "Cannons"
+version = "0.1.0"
+kit = "0.1.0"
+section = "general"
+description = "Every level gets three of the game's own cannons. They sleep until Lina makes noise near them, then aim at her and fire explosive shots."
+authors = ["openlina-kit"]
+game_builds = ["22056877"]
+requires = ["core"]
+showcase = ["awake-cannons.gif"]
+
+[options.count]
+type = "int"
+default = 3
+description = "Cannons added to every level (0 to 20)."
+
+[options.awake]
+type = "bool"
+default = false
+description = "The cannons start awake and shoot right away. Off: like vanilla cannons, they sleep until Lina lands or bumps into something within 111 units of them."
+
+[options.player_distance]
+type = "float"
+default = 120.0
+description = "Keep cannons at least this far from Lina (horizontally) when they appear, so none drops onto her and shoots point-blank."
+
+[options.tick]
+type = "int"
+default = 10
+description = "Layout tick at which the cannons appear (120 ticks per second)."
+
+[options.y]
+type = "float"
+default = 40.0
+description = "Height at which the cannons appear (0 = top of the 338 high play field); they fall onto whatever is below."
+
+[options.x_min]
+type = "float"
+default = 60.0
+description = "Left end of the span the cannons are spread over (the play field is 600 wide)."
+
+[options.x_max]
+type = "float"
+default = 540.0
+description = "Right end of the span. It is cut into `count` equal bands, one cannon at a random x in each."
+
+[options.skip_layouts]
+type = "list"
+default = ["help", "main", "first_screen", "manager"]
+description = "Layouts that run the gameplay sheet but are not levels: the hub, title screens and tool selection."
+
+[options.trace]
+type = "bool"
+default = false
+description = "Print every cannon placed (`[cannons] <layout> tick T: cannon i at (x, y)`)."
+
+[stats]
+per_level = "3 cannons"
+behavior = "vanilla cannons"

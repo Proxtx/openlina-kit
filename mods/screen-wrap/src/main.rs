@@ -20,9 +20,18 @@
 //!
 //! Moving `sprite.position` is enough: `Physics.syncPosWithSprite` teleports the Box2D body and
 //! keeps its velocity.
+//!
+//! Lina (option `player`): vanilla doesn't delete her at the edge but calls `player_death`
+//! (`EvSheet_gameplay.update`, source L16200-16213; no `edgewith`; x only outside boss mode).
+//! The mod subscribes `screen-wrap/player` to the core `player_edge` hook, the same wrap with
+//! `edgewith` 0: in a pit she falls back in from the top, off a side she comes back on the
+//! other one. Her other death (the explosion) stays vanilla, and so does the hub (layout
+//! `help`), where walking off the right edge starts a run. Off by default: falling off the
+//! screen is how vanilla levels are lost.
 
 use anyhow::Result;
-use openlina_sdk::asm::Print;
+use openlina_sdk::asm::{FnBuilder, Label, Print};
+use openlina_sdk::hlbc::types::Reg;
 use openlina_sdk::modifiers::{self, Modifier};
 use openlina_sdk::{hooks, Code, ModConfig};
 
@@ -34,12 +43,18 @@ fn main() {
     openlina_sdk::run_mod(apply)
 }
 
+/// What both wraps share.
+struct Wrap {
+    modifier: Option<i32>,
+    max_overshoot: f64,
+    min_tick: i32,
+    trace: bool,
+}
+
 fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     let coins = cfg.bool("coins", false)?;
     let secondary = cfg.bool("secondary", true)?;
-    let trace = cfg.bool("trace", false)?;
-    let max_overshoot = cfg.f64("max_overshoot", 200.0)?;
-    let min_tick = cfg.i64("min_tick", 5)? as i32;
+    let player = cfg.bool("player", false)?;
     let always = cfg.bool("always", false)?;
     let modifier = if always {
         None
@@ -49,22 +64,17 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
             &Modifier { key: "screen-wrap", icon: "images/openlina/screen-wrap.png", size: (16.0, 16.0), in_dx: true },
         )?)
     };
+    let w = Wrap {
+        modifier,
+        max_overshoot: cfg.f64("max_overshoot", 200.0)?,
+        min_tick: cfg.i64("min_tick", 5)? as i32,
+        trace: cfg.bool("trace", false)?,
+    };
 
-    let f64_t = code.ty_f64();
-    let bool_t = code.ty_bool();
+    // Objects: the core `edge_exit` hook.
     let mut f = hooks::handler(code, "edge_exit", "screen-wrap/wrap")?;
     let (pos, ew, margin, sheet, kind) = (f.arg(0), f.arg(1), f.arg(2), f.arg(3), f.arg(4));
-    let (lo, hi, span, over) = (f.reg(f64_t), f.reg(f64_t), f.reg(f64_t), f.reg(f64_t));
-    let (x, y, nx, ny) = (f.reg(f64_t), f.reg(f64_t), f.reg(f64_t), f.reg(f64_t));
-    let moved = f.reg(bool_t);
-    let max = f.const_f64(max_overshoot);
     let fail = f.label();
-
-    // Only in levels that rolled the modifier.
-    if let Some(id) = modifier {
-        let active = modifiers::is_active(&mut f, id)?;
-        f.jfalse(active, fail);
-    }
     // Which kinds of objects to handle.
     if !coins {
         let one = f.const_i32(1);
@@ -74,10 +84,62 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
         let two = f.const_i32(2);
         f.jeq(kind, two, fail);
     }
+    wrap_body(&mut f, &w, pos, ew, margin, sheet, Some(kind), fail)?;
+    let wrap = f.finish()?;
+    hooks::subscribe(code, "edge_exit", wrap)?;
+
+    if player {
+        wrap_player(code, &w)?;
+    }
+    Ok(())
+}
+
+/// `screen-wrap/player`, subscribed to the core `player_edge(pos, margin, sheet, player)` hook.
+fn wrap_player(code: &mut Code, w: &Wrap) -> Result<()> {
+    let mut f = hooks::handler(code, "player_edge", "screen-wrap/player")?;
+    let (p, m, sh) = (f.arg(0), f.arg(1), f.arg(2));
+    let fail = f.label();
+    // The hub (layout `help`): walking off its right edge is how a run starts.
+    let (layout, go) = (f.get_new(sh, "layout")?, f.label());
+    let name = f.get_new(layout, "name")?;
+    f.jstr_ne(name, "help", go)?;
+    f.jmp(fail);
+    f.place(go);
+    let ew = f.const_f64(0.0);
+    wrap_body(&mut f, w, p, ew, m, sh, None, fail)?;
+    let guard = f.finish()?;
+    hooks::subscribe(code, "player_edge", guard)
+}
+
+/// Wrap `pos` if it is past the screen's edge by at most `max_overshoot` and return true; jump to
+/// `fail` (return false, vanilla goes on) otherwise. `kind` is printed by `trace`; None = the player.
+#[allow(clippy::too_many_arguments)]
+fn wrap_body(
+    f: &mut FnBuilder,
+    w: &Wrap,
+    pos: Reg,
+    ew: Reg,
+    margin: Reg,
+    sheet: Reg,
+    kind: Option<Reg>,
+    fail: Label,
+) -> Result<()> {
+    let f64_t = f.code().ty_f64();
+    let bool_t = f.code().ty_bool();
+    let (lo, hi, span, over) = (f.reg(f64_t), f.reg(f64_t), f.reg(f64_t), f.reg(f64_t));
+    let (x, y, nx, ny) = (f.reg(f64_t), f.reg(f64_t), f.reg(f64_t), f.reg(f64_t));
+    let moved = f.reg(bool_t);
+    let max = f.const_f64(w.max_overshoot);
+
+    // Only in levels that rolled the modifier.
+    if let Some(id) = w.modifier {
+        let active = modifiers::is_active(f, id)?;
+        f.jfalse(active, fail);
+    }
 
     let layout = f.get_new(sheet, "layout")?;
     let tick = f.get_new(layout, "currentTick")?;
-    let min = f.const_i32(min_tick);
+    let min = f.const_i32(w.min_tick);
     f.jlt(tick, min, fail);
 
     f.bool(moved, false);
@@ -123,13 +185,15 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     f.jfalse(moved, fail);
     f.set(pos, "x", nx)?;
     f.set(pos, "y", ny)?;
-    if trace {
+    if w.trace {
         let p = Print::Str;
-        f.print(&[
-            p("[screen-wrap] tick "),
-            Print::Val(tick),
-            p(" kind "),
-            Print::Val(kind),
+        let who = match kind {
+            Some(k) => vec![p(" kind "), Print::Val(k)],
+            None => vec![p(" player")],
+        };
+        let mut line = vec![p("[screen-wrap] tick "), Print::Val(tick)];
+        line.extend(who);
+        line.extend([
             p(" ("),
             Print::Val(x),
             p(", "),
@@ -139,7 +203,8 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
             p(", "),
             Print::Val(ny),
             p(")"),
-        ])?;
+        ]);
+        f.print(&line)?;
     }
     let t = f.reg(bool_t);
     f.bool(t, true);
@@ -148,6 +213,5 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     let r = f.reg(bool_t);
     f.bool(r, false);
     f.ret(r);
-    let wrap = f.finish()?;
-    hooks::subscribe(code, "edge_exit", wrap)
+    Ok(())
 }

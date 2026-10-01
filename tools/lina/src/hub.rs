@@ -13,6 +13,7 @@ use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, ensure, Context, Result};
+use openlina_sdk::kit::{KitIssue, KitVersion};
 use openlina_sdk::manifest::{ModManifest, ModPack, PackEntry};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -151,6 +152,12 @@ struct Pack {
     /// Pairs of mods that declare a conflict: the user wants them together, so make them fit.
     #[serde(default)]
     conflicts: Vec<[String; 2]>,
+    /// Option combinations the mods declare as impossible (`[[conflict]]`), with the reason.
+    #[serde(default)]
+    option_conflicts: Vec<String>,
+    /// The site's kit version (what its players' openlina runs).
+    #[serde(default)]
+    kit: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -168,6 +175,9 @@ struct PackMod {
     request: Option<String>,
     #[serde(default)]
     required_by: Vec<String>,
+    /// The kit version the mod was made with.
+    #[serde(default)]
+    kit: Option<String>,
 }
 
 /// A pack link or id → the pack's JSON URL.
@@ -186,16 +196,40 @@ fn pack_url(pack: &str) -> Result<String> {
     Ok(format!("{site}/api/packs/{pack}"))
 }
 
-pub fn pull(pack: &str, mods_dir: &Path, force: bool) -> Result<()> {
+pub fn pull(pack: &str, mods_dir: &Path, force: bool, replace: &[String]) -> Result<()> {
     let url = pack_url(pack)?;
     let raw = get(&url, None)?;
     let pack: Pack = serde_json::from_slice(&raw).with_context(|| format!("{url}: not a pack"))?;
     let work = PathBuf::from("work/pull").join(&pack.id);
     std::fs::create_dir_all(work.join("packages"))?;
     std::fs::write(work.join("pack.json"), &raw)?;
-    println!("pack {} ({} mods, game build {})", pack.id, pack.mods.len(), pack.game_build);
+    println!(
+        "pack {} ({} mods, game build {}{})",
+        pack.id,
+        pack.mods.len(),
+        pack.game_build,
+        pack.kit.as_deref().map(|k| format!(", site on openlina-kit {k}")).unwrap_or_default()
+    );
+
+    // Mods made with a newer kit need this checkout updated first.
+    let cur = KitVersion::current();
+    let newer: Vec<String> = pack
+        .mods
+        .iter()
+        .filter_map(|m| {
+            let kit = KitVersion::parse(m.kit.as_deref()?).ok()?;
+            (kit > cur).then(|| format!("{} {} (made with openlina-kit {kit})", m.id, m.version))
+        })
+        .collect();
+    ensure!(
+        newer.is_empty(),
+        "this pack needs a newer openlina-kit than this checkout ({cur}): {}.\nUpdate the kit (`git pull`), then pull \
+         again.",
+        newer.join(", ")
+    );
 
     let mut notes = Vec::new();
+    let mut ports = Vec::new();
     for m in &pack.mods {
         let bytes = get(&m.package, None)?;
         if let Some(want) = &m.sha256 {
@@ -210,13 +244,42 @@ pub fn pull(pack: &str, mods_dir: &Path, force: bool) -> Result<()> {
         }
         openlina::package::unzip(Cursor::new(&bytes), &tmp)?;
         let root = if tmp.join(&m.id).join("mod.toml").is_file() { tmp.join(&m.id) } else { tmp.clone() };
+        let theirs = ModManifest::load(&root.join("mod.toml"))?;
+        if let Some(issue) = openlina_sdk::kit::issue(&theirs, cur) {
+            match issue {
+                KitIssue::Update { .. } => bail!(
+                    "{} needs a newer openlina-kit than this checkout ({cur}): `git pull`, then pull again",
+                    issue.describe()
+                ),
+                KitIssue::Port { .. } => ports.push(issue),
+            }
+        }
         let dst = mods_dir.join(&m.id);
-        let note = if dst.join("mod.toml").is_file() && !force {
-            let local = ModManifest::load(&dst.join("mod.toml"))?;
-            if local.info.version == m.version {
-                format!("{}: have {} locally", m.id, m.version)
+        let local = if dst.join("mod.toml").is_file() { Some(ModManifest::load(&dst.join("mod.toml"))?) } else { None };
+        let take = match &local {
+            None => true,
+            Some(_) if replace.contains(&m.id) => true,
+            Some(l) => force && l.info.version != m.version,
+        };
+        let note = if !take {
+            let l = local.as_ref().expect("kept mods exist locally");
+            if l.info.version == m.version {
+                let diff = differing_files(&dst, &root)?;
+                if diff.is_empty() {
+                    format!("{}: have {} locally", m.id, m.version)
+                } else {
+                    format!(
+                        "{}: have {} locally, but the pack's {} differs in {} ({}); `--replace {}` takes the pack's",
+                        m.id,
+                        m.version,
+                        m.version,
+                        plural(diff.len(), "file"),
+                        diff.iter().take(5).cloned().collect::<Vec<_>>().join(", "),
+                        m.id
+                    )
+                }
             } else {
-                format!("{}: local {} kept, pack has {} (use --force to replace)", m.id, local.info.version, m.version)
+                format!("{}: local {} kept, pack has {} (`--force` replaces it)", m.id, l.info.version, m.version)
             }
         } else if root.join("source").is_dir() {
             match check_source(&root.join("source"), &m.id) {
@@ -288,10 +351,13 @@ pub fn pull(pack: &str, mods_dir: &Path, force: bool) -> Result<()> {
         section_requests: pack.section_requests.clone(),
     };
     modpack.save(&work.join("modpack.toml"))?;
-    std::fs::write(work.join("REQUESTS.md"), requests_md(&pack, mods_dir, &notes)?)?;
+    std::fs::write(work.join("REQUESTS.md"), requests_md(&pack, mods_dir, &notes, &ports)?)?;
 
-    let n =
-        pack.mods.iter().filter(|m| m.request.is_some()).count() + pack.section_requests.len() + pack.conflicts.len();
+    let n = pack.mods.iter().filter(|m| m.request.is_some()).count()
+        + pack.section_requests.len()
+        + pack.conflicts.len()
+        + pack.option_conflicts.len()
+        + ports.len();
     println!("\nwrote {}/{{pack.json, modpack.toml, REQUESTS.md}}", work.display());
     if n == 0 {
         println!("no change requests: build it with `lina build --pack {}/modpack.toml`", work.display());
@@ -301,7 +367,7 @@ pub fn pull(pack: &str, mods_dir: &Path, force: bool) -> Result<()> {
     Ok(())
 }
 
-fn requests_md(pack: &Pack, mods_dir: &Path, notes: &[String]) -> Result<String> {
+fn requests_md(pack: &Pack, mods_dir: &Path, notes: &[String], ports: &[KitIssue]) -> Result<String> {
     let dir = format!("work/pull/{}", pack.id);
     let mut s = format!(
         "# Pack {id}\n\n{url}\n\nPlayers' zip: {zip}\n\n## Mods\n\n{notes}\n",
@@ -329,6 +395,33 @@ fn requests_md(pack: &Pack, mods_dir: &Path, notes: &[String]) -> Result<String>
             .as_str(),
     );
     let mut any = false;
+    let cur = openlina_sdk::kit::KIT_VERSION;
+    for p in ports {
+        any = true;
+        let KitIssue::Port { id, kit, .. } = p else { continue };
+        s.push_str(&format!("### Port {id} to openlina-kit {cur}\n\n"));
+        s.push_str(&format!(
+            "{} was made for an older kit line ({}.x). Players' openlina refuses it, and `lina` won't build it until it\n\
+             is ported:\n\
+             1. Read CHANGELOG.md from {kit} up to {cur}: what changed for mods (SDK API, core hooks, the runner).\n\
+             2. Adapt `mods/{id}/`; build natively and as wasm (`lina build --mod {id}`, `--wasm`) once `kit` is set\n   \
+                to `\"{cur}\"` in its mod.toml (that tells lina the port is done).\n\
+             3. Run its scenarios (`lina test --mod {id}`, `--wasm`); look at its showcase gif again.\n\
+             4. Bump its version; publishing the port needs the user's OK (and the mod's owner or an admin).\n\n",
+            p.describe(),
+            kit.line_name()
+        ));
+        s.push_str("- [ ] done\n\n");
+    }
+    for c in &pack.option_conflicts {
+        any = true;
+        s.push_str("### Options that can't work together\n\n");
+        s.push_str(&quote(c));
+        s.push_str(
+            "Either change an option for this pack in `modpack.toml` (if the user agrees), or change the mods so the\n\
+             combination works and remove the `[[conflict]]` entry from the mod.toml that declares it.\n\n- [ ] done\n\n",
+        );
+    }
     for [a, b] in &pack.conflicts {
         any = true;
         s.push_str(&format!("### Make {a} and {b} work together\n\n"));
@@ -337,8 +430,8 @@ fn requests_md(pack: &Pack, mods_dir: &Path, notes: &[String]) -> Result<String>
              1. Find out why: the design notes of both (`mods/<id>/src/main.rs`) and what each patches. Often the\n   \
                 conflict only holds in some configurations (e.g. two modifiers never meet: a level has one).\n\
              2. Change one or both so they coexist (precedence, stepping aside, an option), then remove the\n   \
-                `conflicts` entry and bump the version. If some option combination still can't work, refuse just\n   \
-                that at build time with a clear message (e.g. `openlina_sdk::runner::pack_info`).\n\
+                `conflicts` entry and bump the version. If some option combination still can't work, declare just\n   \
+                that as a `[[conflict]]` with `options`/`with_options` and a reason in mod.toml.\n\
              3. Add a scenario with both mods (`mods = [\"{a}\", \"{b}\"]`) that shows them working together.\n\
              \nExample: `mods/solid-edges` (a modifier that combines with screen-wrap).\n\n"
         ));
@@ -372,6 +465,66 @@ fn requests_md(pack: &Pack, mods_dir: &Path, notes: &[String]) -> Result<String>
         s.push_str(&format!("\nAdded as requirements: {}.\n", required.join("; ")));
     }
     Ok(s)
+}
+
+fn plural(n: usize, what: &str) -> String {
+    format!("{n} {what}{}", if n == 1 { "" } else { "s" })
+}
+
+/// Files that differ between a local mod and a package of it (package `source/` + mod.toml,
+/// assets/, media/), as paths relative to the mod; build outputs and markers are ignored.
+fn differing_files(local: &Path, package: &Path) -> Result<Vec<String>> {
+    fn walk(dir: &Path, root: &Path, out: &mut std::collections::BTreeMap<String, Vec<u8>>) -> Result<()> {
+        if !dir.is_dir() {
+            return Ok(());
+        }
+        for e in std::fs::read_dir(dir)? {
+            let p = e?.path();
+            let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            if name.starts_with('.') || name == "target" {
+                continue;
+            }
+            if p.is_dir() {
+                walk(&p, root, out)?;
+            } else {
+                out.insert(p.strip_prefix(root)?.to_string_lossy().replace('\\', "/"), std::fs::read(&p)?);
+            }
+        }
+        Ok(())
+    }
+    let mut mine = Default::default();
+    walk(local, local, &mut mine)?;
+    let mut theirs = Default::default();
+    walk(&package.join("source"), &package.join("source"), &mut theirs)?;
+    for sub in ["assets", "media"] {
+        let mut part = Default::default();
+        walk(&package.join(sub), package, &mut part)?;
+        theirs.extend(part);
+    }
+    if let Ok(b) = std::fs::read(package.join("mod.toml")) {
+        theirs.insert("mod.toml".into(), b);
+    }
+    // `kit` is raised by `lina pack`: not a difference of the mod itself.
+    let strip_kit = |b: &Vec<u8>| -> Vec<u8> {
+        String::from_utf8_lossy(b)
+            .lines()
+            .filter(|l| !l.trim_start().starts_with("kit "))
+            .collect::<Vec<_>>()
+            .join("\n")
+            .into_bytes()
+    };
+    let mut out: Vec<String> = mine
+        .keys()
+        .chain(theirs.keys())
+        .filter(|k| match (mine.get(*k), theirs.get(*k)) {
+            (Some(a), Some(b)) if k.as_str() == "mod.toml" => strip_kit(a) != strip_kit(b),
+            (a, b) => a != b,
+        })
+        .cloned()
+        .collect();
+    out.sort();
+    out.dedup();
+    Ok(out)
 }
 
 /// A pulled mod's source must be a plain mod crate: building it must not run code on this

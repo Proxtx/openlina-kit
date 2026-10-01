@@ -7,7 +7,13 @@ description: Make, change, test and share mods for the game Mosa Lina with openl
 
 Work in an `openlina-kit` checkout (a directory with `AGENTS.md` and `tools/lina/`). If the current directory isn't
 one, look for it (`find ~ -maxdepth 6 -type d -name openlina-kit`) or ask the user; if there is none, offer to
-clone https://github.com/Proxtx/openlina-kit (ask first). The full playbook is `AGENTS.md` in the checkout: read it
+clone https://github.com/Proxtx/openlina-kit (ask first). If several exist, take the one the user names; else
+ask, or take the one with the newest commit (`git -C <dir> log -1 --format=%ci`) and say which.
+
+**Check for kit updates first, every session**: `git fetch --tags` and `git status -sb` in the checkout (or
+`./lina doctor`, which reports "N commits behind"). If it is behind, update it with `git pull --ff-only` and tell
+the user; if the checkout has uncommitted changes or the pull doesn't fast-forward, ask the user first. Mods made
+with a newer kit don't build in an old checkout (`lina` says "needs openlina-kit X or newer: `git pull`"). The full playbook is `AGENTS.md` in the checkout: read it
 before patching game code. Game knowledge: `docs/game-internals.md` (index of `docs/game/*.md`); existing mods: `docs/mods.md`; project state: `docs/PLAN.md`.
 
 ## Setup (once per machine and game version)
@@ -21,6 +27,15 @@ lina setup && lina dump && lina check   # pristine bytecode, searchable dump, va
 With nix, run everything inside `nix develop`. Without nix, Rust comes from rustup (plus
 `rustup target add wasm32-wasip1`) and ImageMagick from the system's package manager. Ask the user before
 installing or updating anything, including rustup targets or toolchains. The game must be installed (Steam, Linux). Everything runs headless.
+
+## Kit versions
+
+The kit has one version (`./lina --version`); every mod's `mod.toml` names the kit it was made with (`kit`,
+written by `lina new`, raised by `lina pack`). Within a line (`0.1.x`) everything works together. A mod made for an
+older line must be **ported** before lina builds it or players can install it: read `CHANGELOG.md` from the mod's
+kit to the current one, adapt the code, set `kit` to the current version, bump the mod's version, test (native
+and `--wasm`). The website marks such mods NEEDS AN AGENT and refuses players' zips of packs that hold them;
+`lina pull` turns them into "Port …" tasks.
 
 ## A. A new mod
 
@@ -49,20 +64,28 @@ in the SDK when a registry misses a place the game lists things, keep the scenar
 A user gives you a pack link (`https://<site>/api/packs/<id>`) or JSON from the site's export page.
 
 1. `lina pull <link>`: downloads the packages, puts the source of mods you don't have into `mods/<id>/`, writes
-   `work/pull/<pack>/modpack.toml` and `REQUESTS.md` (every request with the mod's options).
+   `work/pull/<pack>/modpack.toml` and `REQUESTS.md` (every request with the mod's options). Local mods are kept;
+   it says when the pack's differ (`--force` takes the pack's for other versions, `--replace <id>` for one mod).
+   If it says the pack needs a newer kit, update the checkout (`git pull --ff-only`) and pull again.
 2. Work through `REQUESTS.md`:
    - A request an option covers → set the option for this pack in `work/pull/<pack>/modpack.toml`. No code change.
    - Otherwise change the mod's code, **bump its version** in `mod.toml`, add a scenario proving the change, run
      `lina test --mod <id>` and `--wasm`, refresh the gif if the behavior it shows changed.
    - Section requests ("all items: …") apply to every mod of that section in the pack.
    - Conflicts ("Make A and B work together"): the user wants both. Change the mods so they coexist and drop the
-     `conflicts` entry; refuse only the option combinations that truly can't work, with a clear build error.
+     `conflicts` entry; declare only the option combinations that truly can't work as `[[conflict]]` in mod.toml
+     (`with`, `options`, `with_options`, `reason`).
+   - "Options that can't work together": change an option for this pack (if the user agrees) or the mods.
+   - "Port X to openlina-kit …": see "Kit versions" above.
    - A request you can't do safely (or that contradicts the mod's purpose): tell the user instead of guessing.
 3. Check the pack as a whole: `lina build --pack work/pull/<pack>/modpack.toml` (and `lina run` if the user
    wants to play right away).
 4. Install for the player: `lina pack --from work/pull/<pack>/modpack.toml --bundle pack-<pack>` (your local
    versions, the pack's options, requirements added), then `./openlina install
    dist/pack-<pack>.zip` (prints the Steam launch option; ask before the user changes Steam settings).
+   Installing **adds** to what the player has installed; it lists the result and marks mods from earlier
+   installs. If the user wants to play exactly this pack, use `install --replace` (say so first: it uninstalls
+   the others).
 5. Report what changed per request (option or code, versions, test results).
 
 ## C. Uploading (only with the user's OK)

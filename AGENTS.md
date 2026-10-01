@@ -12,19 +12,23 @@ shares them, `openlina` installs them for players. This file is the workflow and
 | [docs/mods.md](docs/mods.md) | the existing mods and dev fixtures, with their options |
 | [docs/PLAN.md](docs/PLAN.md) | where the project stands |
 | [docs/blind-test.md](docs/blind-test.md) | after big changes: let a fresh agent build a mod and fix what it stumbles on |
+| [CHANGELOG.md](CHANGELOG.md) | kit versions: what changed, how to port a mod to a new kit line |
 
 ## Setup (once per machine and game version)
 
+Several checkouts of the kit may exist on a machine: use the one the user names, else the most recent one, and
+keep it current (`git pull`; `lina doctor` says when it is behind GitHub). Mods made with a newer kit don't build
+in an old checkout.
+
 ```bash
-nix develop                       # optional: Rust + wasm32-wasip1, imagemagick, gifsicle. Without nix: rustup +
-                                  # `rustup target add wasm32-wasip1` + imagemagick (ask the user before installing)
-lina() { ./lina "$@"; }           # the wrapper builds the tools when needed
-lina doctor                       # checks all of the above and the game; fix what it reports
+lina() { ./lina "$@"; }           # the wrapper builds the tools when needed (inside `nix develop` if it must)
+lina doctor                       # kit version, Rust + wasm32-wasip1, ImageMagick, the game; fix what it reports
 lina setup && lina dump && lina check   # pristine bytecode, searchable dump, 0 validator problems
 ```
 
-With nix, `nix develop --no-warn-dirty -c <command>` runs one command in the shell without the "Git tree is dirty"
-warning on every call.
+Toolchain: `nix develop` (Rust with the wasm target, imagemagick, gifsicle), or rustup +
+`rustup target add wasm32-wasip1` + ImageMagick (ask the user before installing anything). `nix develop
+--no-warn-dirty -c <command>` runs one command in the shell without the "Git tree is dirty" warning.
 
 `work/` and `dist/` are git-ignored. They hold game-derived files; never commit them.
 
@@ -65,14 +69,15 @@ long inline op sequences: easier to read, validate and trace (`openlina/<name>:<
 the registry call, placeholder icons and a smoke test that runs; `levels|general|dev` with a tick hook). Look at
 the showcase mod of the section first: `portal-gun`/`swap`, `screen-wrap`/`solid-edges`, `tumble`, `mod-menu`.
 
-- `mod.toml` (format: `openlina_sdk::manifest`): id (= directory), name, version, section, description,
-  `requires = ["core"]`, options (`bool|int|float|string|list`, default, description), `[stats]` for the website,
-  `showcase` gif order.
+- `mod.toml` (format: `openlina_sdk::manifest`): id (= directory), name, version, `kit` (the kit version it was
+  made with: `lina new` writes it, `lina pack` raises it), section, description, `requires = ["core"]`, options
+  (`bool|int|float|string|list`, default, description), `[stats]` for the website, `showcase` gif order.
 - **Load order**: a mod runs after its `requires` (must be present) and `after` (if present); `core` first;
   otherwise by id. `conflicts = [...]` refuses to build with the listed mods: only for combinations that can
   never work. Mods that can't meet don't conflict (a level has one modifier); a conflict that depends on options is
-  checked in code (`runner::pack_info`, see `solid-edges`). Website packs may hold conflicting mods; `lina pull`
-  turns them into tasks.
+  declared as `[[conflict]]` (`with`, `options`, `with_options`, `reason`; see `solid-edges`), so builds,
+  `openlina set` and the website refuse just that combination with the reason. Website packs may hold
+  conflicting mods; `lina pull` turns them into tasks.
 - `src/main.rs`: `openlina_sdk::run_mod(|code, cfg| { … })`; options via `cfg.bool/i64/f64/str/list` (every
   declared option is passed, unknown ones are rejected). Its module doc comment is the design document: what
   vanilla does, what the mod changes, what it leaves alone.
@@ -94,7 +99,7 @@ Rules:
 1. `lina build --mod <id>` (`--wasm` for what players run): each mod validates what it touched and the result must
    parse. `lina fn <fn> --input work/hlboot.modded.dat` shows a patched or injected function (`swap/use`).
 2. Scenarios in `mods/<id>/tests/*.toml` that **can fail** (docs/testing.md); `lina test --mod <id>`, then
-   `lina test` (all, <1 min) and `lina test --wasm`. `-k <text>`, `--failed`.
+   `lina test` (all, ~1.5 min) and `lina test --wasm`. `-k <text>`, `--failed`.
 3. A showcase gif (`lina gif`); look at the frames before keeping it.
 4. `cargo test --release`, `cargo clippy --release`, `cargo fmt`, `lina docs --check`.
 
@@ -108,8 +113,12 @@ play becomes replay scenarios with `lina run --record`.
 - `lina login <site>`: the user logs in with a token from the site's maintainer; there is no default site, so ask.
   Saved in `~/.config/openlina/lina.toml` (600) or `$OPENLINA_CONFIG`. Never print, pass on the command line or
   commit a token.
-- `lina pull <pack link>`: mods you don't have into `mods/<id>/`, and `work/pull/<pack>/` with `modpack.toml` and
-  `REQUESTS.md` (the change requests as a to-do list).
+- `lina pull <pack link>`: mods you don't have into `mods/<id>/` (`--force`: also replace local mods of another
+  version; `--replace <id>`: this one even at the same version), and `work/pull/<pack>/` with `modpack.toml` and
+  `REQUESTS.md` (the change requests as a to-do list, plus mods to port to this kit and conflicts to resolve).
+- **Kit versions** (CHANGELOG.md): within a line (`0.1.x`) everything works together; mods made for an older
+  line must be ported (CHANGELOG.md's "Porting" notes, then `kit = "<current>"`); the website refuses players'
+  zips of packs that need that. Changing something mods can notice means a new kit version: see CHANGELOG.md.
 - `lina publish <id>`: wasm scenarios, package with source, dry-run summary; uploads only with `--yes`, **after the
   user agreed**. The skill `.claude/skills/openlina-modding` has the full workflow.
 - **Safety**: after every mod, `lina` and the player's `openlina` compare the bytecode (`openlina_sdk::caps`) and

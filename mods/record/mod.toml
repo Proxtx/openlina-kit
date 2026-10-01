@@ -2,6 +2,7 @@
 id = "record"
 name = "Record"
 version = "0.1.0"
+kit = "0.1.0"
 section = "dev"
 description = "Records play for `lina run --record`: per level attempt the level, modifier, tool slots and every input change, turned into a scenario that replays it."
 authors = ["openlina-kit"]

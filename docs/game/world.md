@@ -24,7 +24,7 @@ The edge test in `update` (L16195–16268):
 
 ```haxe
 var margin = 25;
-for (p in player.insts)                                  // player_death if outside [25,575]x[25,313]
+for (p in player.insts)  // state "normal" only: player_death if outside [25,575]x[25,313] (x only !bossMode)
 for (o in physics_obj.insts) {                           // L16219
     if (o.sprite.destroyed || (isStatic(o.physics.body) && layout.currentTick != 0)) continue;
     var pos = o.sprite.position, ew = o.edgewith;        // per-object slack
@@ -40,6 +40,9 @@ for (o in physics_obj.insts) {                           // L16219
 for (o in secondary_physics.insts)                       // same test, no edgewith, always destroy
 ```
 
+- The player test (L16200-16213) has no `edgewith`. It also runs on the hub (layout `help`), where walking off the
+  right edge is how a run starts, so mods that keep Lina on screen must leave the hub alone (screen-wrap `player`).
+  `update` calls `player_death` once more, for explosions (`setToExplode`, L10403).
 - `bossMode = currentLevel.type.isLong` when a level starts (closure fn@9188). It is also set by `prepare_boss`.
   It's true for boss arenas and for custom levels with `mld.Level.longMode`: levels wider than the screen that
   scroll horizontally. Those levels skip the left/right test.
@@ -69,6 +72,20 @@ Lina is a `physics_obj` too (`personal_gravity` like the others); her jump sets 
 high and how long she flies. A digging player's fall speed is integrated separately (L16522, `personal_gravity *
 14.76 * dt`). On greendemo 1 in vanilla, a box spawned in the air at (540, 60) is at y 124.7 170 ticks later (there is
 noticeable damping), and a jump from the ground (y 193.9) peaks 22 units up after 40 ticks.
+
+## Cannons
+
+Found by the cannons mod. A cannon is a `cannon_base` (dynamic physics body, fields `awake`, `power`,
+`timetoshoot`, `mortar`, `state`); `Layout.createObject("cannon_base", …)` also creates its container parts
+`cannon_rohr` (the barrel, with a Line of Sight behavior), `spr_cannon_face`, `spr_cannon_nody`, `spr_cannonrohr`.
+Cannons sleep (`awake = 0`). When a player makes an impact sound (`sfx_impact_cd`, update L10250-10253),
+`EvSheet_gameplay.stealth(x, y)` (fn@3748, L4086) sets `awake = 1` on every cannon within 111 units of her. Awake
+cannons (closure at L17084-17160) turn the barrel towards the nearest player, charge `power += 0.7 * dt`, play
+`cannon_prep`, and fire a `heavy_shot` (explodes) once `power > timetoshoot * 0.8`.
+
+`Math.random` (fn@664) and `Std.random` draw from HashLink's system generator (`$Std.rnd`, natives `rnd_float` /
+`rnd_int`, one call site each), not from the game's seeded `Rand`. The harness replaces both calls with its own
+generator seeded from `seed`, so scenarios that use them replay.
 
 ## Physics
 

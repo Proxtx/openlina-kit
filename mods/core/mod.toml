@@ -1,7 +1,8 @@
 [mod]
 id = "core"
 name = "OpenLina Core"
-version = "0.4.0"
+version = "0.5.0"
+kit = "0.1.0"
 section = "core"
 description = "Hook points other mods build on (tick, edge_exit, modifier_pool, modifier_icon, item_pool, item_use, loc, packs). Required by most mods; changes nothing on its own."
 authors = ["openlina-kit"]

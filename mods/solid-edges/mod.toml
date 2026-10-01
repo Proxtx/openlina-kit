@@ -1,7 +1,8 @@
 [mod]
 id = "solid-edges"
 name = "Solid Edges"
-version = "0.2.0"
+version = "0.2.1"
+kit = "0.1.0"
 section = "modifiers"
 description = "A new modifier: in levels that roll it, the screen border is a wall and objects bounce off it instead of flying off and despawning. Long levels and boss arenas keep their left and right sides open. Combines with screen-wrap (one modifier per level)."
 authors = ["openlina-kit"]
@@ -37,6 +38,12 @@ description = "Fruits bounce too. Pushing fruits out is how levels are won, so t
 type = "bool"
 default = false
 description = "Print every real bounce (not resting contact) to stdout."
+
+[[conflict]]
+with = "screen-wrap"
+options = { always = true }
+with_options = { always = true }
+reason = "the border can't be a wall and a portal in every level. Set `always = false` on one of them; it then applies in the levels that roll it."
 
 [stats]
 kind = "modifier"

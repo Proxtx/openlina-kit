@@ -39,8 +39,9 @@ pub const CORE_HOOKS: &[HookInfo] = &[
         name: "tick",
         args: "(sheet: EvSheet_gameplay, layout: Layout)",
         returns: "Void",
-        doc: "Start of every gameplay tick (`EvSheet_gameplay.update`). Runs in levels, and for the first \
-              ticks of the title screen.",
+        doc: "Start of every gameplay tick (`EvSheet_gameplay.update`). Runs in every layout with the gameplay \
+              sheet: levels, the hub (`help`), the tool selection (`manager`) and the first ticks of the title \
+              screens (`first_screen`, `main`). `openlina_sdk::world::is_level` tells levels apart.",
     },
     HookInfo {
         name: "edge_exit",
@@ -50,6 +51,15 @@ pub const CORE_HOOKS: &[HookInfo] = &[
               1 = coin (fruit; deleting it is how levels are won), 2 = secondary physics object. Return true \
               to keep it (e.g. after moving it). `physics` is the object's physics behavior (velocity: \
               getVelocityX/Y, setVelocity).",
+    },
+    HookInfo {
+        name: "player_edge",
+        args: "(pos: Vector2Default, margin: F64, sheet: EvSheet_gameplay, player: OClass_player)",
+        returns: "Bool",
+        doc: "A player in state \"normal\" is outside [margin, 600-margin]x[margin, 338-margin] (x only outside \
+              boss mode) and vanilla is about to call `player_death` (falling into a pit, walking off a side). \
+              Return true to keep her alive (e.g. after moving `pos`). Also runs on the hub (layout `help`), \
+              where walking off the right edge starts a run. Her other death (explosions) is not hooked.",
     },
     HookInfo {
         name: "modifier_pool",

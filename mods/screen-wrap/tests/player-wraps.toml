@@ -1,0 +1,42 @@
+name = "screen-wrap: with player = true, Lina falls into a pit and comes back from the top"
+mods = ["screen-wrap"]
+fixtures = ["trace-calls", "trace-positions"]
+timeout = 60
+
+[options.screen-wrap]
+always = true
+player = true
+trace = true
+
+[options.trace-calls]
+functions = ["EvSheet_gameplay.player_death"]
+
+[options.trace-positions]
+types = ["player"]
+ticks = "300-340/4"
+
+# Walking right on greendemo 1, Lina drops into the pit at x ~277 around tick 296 (vanilla: player_death).
+[harness]
+level = "greendemo 1"
+modifier = 0
+seed = 1
+inputs = ["10-700:right"]
+end_tick = 700
+
+[[expect]]
+contains = "[screen-wrap] tick"
+min = 1
+
+[[expect]]
+contains = " player ("
+
+[[expect]]
+not_contains = "player_death call"
+
+# Back in from the top: high on the screen shortly after the wrap.
+[[expect]]
+position = { tick = 304, type = "player", y_lt = 100 }
+
+[gif]
+capture = "200-500/4"
+out = "media/player-wraps.gif"

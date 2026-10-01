@@ -1,10 +1,17 @@
 #!/bin/sh
 # Run a kit tool (`./lina …`, `./openlina …`) from its release build; builds it first when it is
 # missing or older than the sources. Works with rustup (target/) and inside `nix develop`
-# (CARGO_TARGET_DIR=target/nix).
+# (CARGO_TARGET_DIR=target/nix). Outside a nix shell, without cargo or the wasm32-wasip1 target,
+# it runs itself inside `nix develop` when nix is there.
 set -e
 tool=$(basename "$0")
 root=$(cd "$(dirname "$0")" && pwd)
+if [ -z "$IN_NIX_SHELL" ] && [ -f "$root/flake.nix" ] && command -v nix >/dev/null 2>&1; then
+  if ! command -v cargo >/dev/null 2>&1 ||
+    [ ! -d "$(rustc --print sysroot 2>/dev/null)/lib/rustlib/wasm32-wasip1" ]; then
+    exec nix develop --no-warn-dirty "$root" -c "$root/$tool" "$@"
+  fi
+fi
 dir=${CARGO_TARGET_DIR:-target}
 case "$dir" in /*) ;; *) dir="$root/$dir" ;; esac
 bin="$dir/release/$tool"

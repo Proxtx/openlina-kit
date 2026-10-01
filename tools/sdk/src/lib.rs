@@ -29,6 +29,7 @@ pub mod caps;
 pub mod edit;
 pub mod hooks;
 pub mod items;
+pub mod kit;
 pub mod levels;
 pub mod manifest;
 pub mod modifiers;
@@ -36,6 +37,7 @@ pub mod physics;
 pub mod runner;
 pub mod text;
 pub mod validate;
+pub mod world;
 
 pub use runner::run_mod;
 
@@ -405,15 +407,17 @@ impl Code {
         if let Some(hook) = spec.strip_prefix("hook:") {
             return crate::hooks::find(self, hook);
         }
-        let suffix = format!(".{spec}");
+        let plain = spec.replace('$', "");
+        let suffix = format!(".{plain}");
         let found: Vec<RefFun> = self
             .bc
             .functions
             .iter()
             .map(|f| f.findex)
             .filter(|&f| {
-                let n = self.func_name(f);
-                n == spec || (!spec.contains('/') && n.ends_with(&suffix))
+                // static methods live on `pkg.$Class`: `Math.random` finds `$Math.random`
+                let n = self.func_name(f).replace('$', "");
+                n == plain || (!spec.contains('/') && n.ends_with(&suffix))
             })
             .collect();
         // Natives (`world_set_gravity`, `std.sys_time`): by name or `lib.name`.

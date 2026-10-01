@@ -1,0 +1,39 @@
+name = "cannons: a level gets three cannons at tick 10, spread over the screen"
+mods = ["cannons"]
+fixtures = ["trace-positions"]
+timeout = 60
+
+[options.cannons]
+trace = true
+
+[options.trace-positions]
+types = ["cannon_base"]
+ticks = "11,300"
+
+[harness]
+level = "greendemo 1"
+modifier = 0
+seed = 1
+end_tick = 300
+
+[[expect]]
+contains = "[cannons] greendemo 1 tick 10: cannon 3 at"
+
+[[expect]]
+contains = "[cannons] greendemo 1 tick 10: cannon"
+min = 3
+max = 3
+
+# all three exist in the game, one per band of the screen
+[[expect]]
+contains = "[pos] tick 11 cannon_base"
+min = 3
+max = 3
+
+# Lina starts at x ~124: no cannon within player_distance (120) of her; the first band's cannon
+# goes to her right
+[[expect]]
+position = { tick = 11, type = "cannon_base", x_lt = 240, away = true }
+
+[[expect]]
+position = { tick = 11, type = "cannon_base", x_gt = 380 }

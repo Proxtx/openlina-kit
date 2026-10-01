@@ -2,6 +2,7 @@
 id = "ammo-boost"
 name = "Ammo Boost"
 version = "0.1.0"
+kit = "0.1.0"
 section = "general"
 description = "Every item you get starts with more ammo: the normal ammo times `factor` (2 by default). Works for item slots and item blocks in levels."
 authors = ["openlina-kit"]

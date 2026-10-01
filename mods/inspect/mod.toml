@@ -2,6 +2,7 @@
 id = "inspect"
 name = "Inspect"
 version = "0.1.0"
+kit = "0.1.0"
 section = "dev"
 description = "Test fixture: print any part of the game's state at chosen moments, e.g. `game.itemManager.pickedItems[].type.name` at `layout:manager@200`. For probes; no mod code to write."
 authors = ["openlina-kit"]

@@ -1,0 +1,26 @@
+name = "screen-wrap: with player = true, walking off the hub's right edge still starts a run"
+mods = ["screen-wrap"]
+fixtures = ["trace-calls"]
+timeout = 120
+
+[options.screen-wrap]
+always = true
+player = true
+trace = true
+
+[options.trace-calls]
+functions = ["fish.system.LevelManager.loadCurrentLevel"]
+first = 1
+every = 0
+
+# Lina walks off the hub's right edge, the MANAGER screen rolls the tools; jump confirms.
+[harness]
+new_run = true
+inputs = ["30-700:right", "1000-1010:jump", "1200-1210:jump", "1400-1410:shoot", "1600-1700:jump"]
+end_tick = 2400
+
+[[expect]]
+contains = "[harness] layout manager"
+
+[[expect]]
+contains = "[trace-calls] fish.system.LevelManager.loadCurrentLevel call #1"

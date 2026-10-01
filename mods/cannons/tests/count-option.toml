@@ -1,0 +1,26 @@
+name = "cannons: count = 1 places one cannon"
+mods = ["cannons"]
+fixtures = ["trace-positions"]
+timeout = 60
+
+[options.cannons]
+count = 1
+trace = true
+
+[options.trace-positions]
+types = ["cannon_base"]
+ticks = "11"
+
+[harness]
+level = "greendemo 1"
+modifier = 0
+seed = 1
+end_tick = 60
+
+[[expect]]
+contains = "[pos] tick 11 cannon_base"
+min = 1
+max = 1
+
+[[expect]]
+not_contains = "cannon 2 at"

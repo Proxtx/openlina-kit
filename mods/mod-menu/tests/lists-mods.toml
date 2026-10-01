@@ -22,9 +22,9 @@ contains = "[mod-menu] added `OPENLINA MODS (4)`"
 [[expect]]
 contains = "[harness] menu: OPENLINA MODS (4)"
 [[expect]]
-contains = "[harness] menu: SCREEN WRAP 0.3.0"
+contains = "[harness] menu: SCREEN WRAP {version:screen-wrap}"
 [[expect]]
-contains = "[harness] menu: AMMO BOOST 0.1.0"
+contains = "[harness] menu: AMMO BOOST {version:ammo-boost}"
 [[expect]]
 contains = "[harness] menu:    FACTOR: 2"
 [[expect]]

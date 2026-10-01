@@ -20,6 +20,14 @@ flake.nix         dev shell: Rust + wasm32-wasip1 target, imagemagick, gifsicle 
 lina, openlina    wrappers: build (if needed) and run the tools
 ```
 
+## Versions and releases
+
+The kit has one version (SDK, `lina`, `openlina`, `core`); mods name the kit they were made with (`kit` in
+`mod.toml`). Within a line (`0.1.x`) everything works together; a new line means older mods need porting by an
+agent. [CHANGELOG.md](CHANGELOG.md) has the rules and what changed. [Releases](https://github.com/Proxtx/openlina-kit/releases)
+carry the players' `openlina` helper (Linux x86_64) and the agent skill as a zip. Keep a checkout current with
+`git pull`; `./lina doctor` says when it is behind.
+
 ## Quick start (development)
 
 With nix (`nix develop` gives Rust with the wasm target, imagemagick, gifsicle) or without it: a recent Rust from
@@ -50,7 +58,7 @@ can be combined. See [AGENTS.md](AGENTS.md) for how to write one and [docs/mods.
 
 | id | section | |
 |---|---|---|
-| `core` | core | hook points (`tick`, `edge_exit`, items, modifiers, texts, level packs); changes nothing on its own |
+| `core` | core | hook points (`tick`, `edge_exit`, `player_edge`, items, modifiers, texts, level packs); changes nothing on its own |
 | `screen-wrap` | modifiers | objects leaving the screen come back on the other side |
 | `solid-edges` | modifiers | the screen border is a wall; objects bounce off it |
 | `moon-gravity` | modifiers | weaker gravity: everything falls slower, Lina jumps higher |
@@ -59,6 +67,7 @@ can be combined. See [AGENTS.md](AGENTS.md) for how to write one and [docs/mods.
 | `tumble` | levels | Tumble: a drum of tiles that makes a quarter turn every 10 s |
 | `mod-menu` | general | pause-menu entry listing the pack's mods and options |
 | `ammo-boost` | general | more ammo for every item |
+| `cannons` | general | the game's own cannons in every level |
 | `trace-calls` | dev | print when chosen functions are called |
 | `debug-spawn` | dev | spawn an object in every level (test fixture) |
 | `harness` | dev | drive the game without input: level, items, modifier, scripted inputs, frame capture, exit (tests) |
@@ -75,7 +84,8 @@ the mods of a modpack with its options.
 A pack zip holds the `openlina` helper, `modpack.toml` and `mods/<id>/`. Players unzip it and run:
 
 ```bash
-./openlina install .        # installs into ~/.local/share/openlina, builds, prints the Steam launch option
+./openlina install .        # adds the pack to ~/.local/share/openlina (`--replace`: exactly this pack), builds,
+                            # prints the Steam launch option
 openlina run                # or play from Steam with: "<data dir>/bin/openlina" steam %command%
 openlina set screen-wrap coins=true
 openlina list | uninstall <id> | build | launch-option

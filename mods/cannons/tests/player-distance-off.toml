@@ -1,0 +1,21 @@
+name = "cannons: with player_distance = 0 the first cannon may appear right above Lina"
+mods = ["cannons"]
+fixtures = ["trace-positions"]
+timeout = 60
+
+[options.cannons]
+player_distance = 0.0
+
+[options.trace-positions]
+types = ["cannon_base"]
+ticks = "11"
+
+[harness]
+level = "greendemo 1"
+modifier = 0
+seed = 1
+end_tick = 60
+
+# one per band again: the first one left of x 220, in Lina's part of the screen
+[[expect]]
+position = { tick = 11, type = "cannon_base", x_lt = 220 }

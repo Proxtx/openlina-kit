@@ -2,6 +2,7 @@
 id = "mod-menu"
 name = "Mod Menu"
 version = "0.1.0"
+kit = "0.1.0"
 section = "general"
 description = "Adds an OPENLINA MODS entry to the pause menu that lists the installed mods, their versions and option values."
 authors = ["openlina-kit"]

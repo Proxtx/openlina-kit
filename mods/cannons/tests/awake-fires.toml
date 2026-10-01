@@ -1,0 +1,24 @@
+name = "cannons: with awake = true they shoot at a Lina who stands still"
+mods = ["cannons"]
+fixtures = ["trace-positions"]
+timeout = 60
+
+[options.cannons]
+awake = true
+
+[options.trace-positions]
+types = ["heavy_shot"]
+ticks = "20-900/20"
+
+[harness]
+level = "greendemo 1"
+modifier = 0
+seed = 1
+end_total = 2000
+
+[[expect]]
+contains = "heavy_shot"
+
+[gif]
+capture = "1-900/6"
+out = "media/awake-cannons.gif"

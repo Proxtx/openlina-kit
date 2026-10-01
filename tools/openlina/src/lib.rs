@@ -14,8 +14,9 @@ pub mod patch;
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
-use openlina_sdk::manifest::{resolve_order, ModPack, PackInfo, PackInfoEntry};
+use anyhow::{bail, Context, Result};
+use openlina_sdk::kit::{self, KitIssue, KitVersion};
+use openlina_sdk::manifest::{option_conflicts, resolve_order, ModManifest, ModPack, PackInfo, PackInfoEntry};
 
 pub use package::Package;
 pub use zip;
@@ -39,11 +40,80 @@ pub struct Built {
     pub caps: Vec<(String, Vec<openlina_sdk::caps::Finding>)>,
 }
 
+/// Who builds a pack, for the wording of what to do when it can't be built.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Host {
+    /// `lina` in a kit checkout.
+    Kit,
+    /// The players' `openlina`.
+    Helper,
+}
+
+/// Why mods can't be used by this tool (kit `KIT_VERSION`), worded for `host`; empty if they can.
+pub fn kit_problems<'a>(mods: impl IntoIterator<Item = &'a ModManifest>, host: Host) -> Vec<String> {
+    let cur = KitVersion::current();
+    kit::issues(mods, cur)
+        .into_iter()
+        .map(|i| match (&i, host) {
+            (KitIssue::Port { id, kit, .. }, Host::Kit) => format!(
+                "{} was made for openlina-kit {}; this kit is {cur}, which changed what mods rely on. Port it: \
+                 CHANGELOG.md lists the changes since {kit}; then set `kit = \"{cur}\"` in mods/{id}/mod.toml",
+                i.describe(),
+                kit.line_name()
+            ),
+            (KitIssue::Update { kit, .. }, Host::Kit) => {
+                format!("{} needs openlina-kit {kit} or newer; this checkout is {cur}: `git pull`", i.describe())
+            }
+            (KitIssue::Port { kit, .. }, Host::Helper) => format!(
+                "{} was made for an older openlina ({}.x); this openlina is {cur}. An agent with openlina-kit can \
+                 update it: give it the pack link (`lina pull <link>`)",
+                i.describe(),
+                kit.line_name()
+            ),
+            (KitIssue::Update { kit, .. }, Host::Helper) => format!(
+                "{} needs openlina {kit} or newer (this is {cur}): download the pack zip again (it comes with the \
+                 current openlina) or get openlina from https://github.com/Proxtx/openlina-kit/releases",
+                i.describe()
+            ),
+        })
+        .collect()
+}
+
+/// Refuse a pack this tool can't build: mods for another kit version, conflicting options.
+pub fn check_pack(packages: &[Package], pack: &ModPack, host: Host) -> Result<()> {
+    let kits = kit_problems(packages.iter().map(|p| &p.manifest), host);
+    if !kits.is_empty() {
+        bail!("{}", kits.join("\n"));
+    }
+    let user_options = |id: &str| pack.mods.iter().find(|e| e.id == id).map(|e| e.options.clone()).unwrap_or_default();
+    let resolved: Vec<toml::Table> = packages
+        .iter()
+        .map(|p| p.manifest.resolve_options(&user_options(&p.manifest.info.id)))
+        .collect::<Result<_>>()?;
+    let pairs: Vec<_> = packages.iter().map(|p| &p.manifest).zip(&resolved).collect();
+    let clashes = option_conflicts(&pairs);
+    if !clashes.is_empty() {
+        bail!(
+            "these options can't work together:\n  {}\nChange one of the options{}",
+            clashes.join("\n  "),
+            if host == Host::Helper { " (`openlina set <mod> <option>=<value>`)" } else { "" }
+        );
+    }
+    Ok(())
+}
+
 /// Apply `packages` (any order; they are sorted by their dependencies) to `input` with the
-/// options from `pack`. Reports one line per mod to `log`.
-pub fn build(input: Vec<u8>, packages: &[Package], pack: &ModPack, log: &mut dyn FnMut(String)) -> Result<Built> {
+/// options from `pack`. Reports one line per mod to `log`. Refuses what [`check_pack`] refuses.
+pub fn build(
+    input: Vec<u8>,
+    packages: &[Package],
+    pack: &ModPack,
+    host: Host,
+    log: &mut dyn FnMut(String),
+) -> Result<Built> {
     let manifests: Vec<_> = packages.iter().map(|p| p.manifest.clone()).collect();
     let order = resolve_order(&manifests)?;
+    check_pack(packages, pack, host)?;
     let user_options = |id: &str| pack.mods.iter().find(|e| e.id == id).map(|e| e.options.clone()).unwrap_or_default();
     let mut info = PackInfo::default();
     for &i in &order {

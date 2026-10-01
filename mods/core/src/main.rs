@@ -24,11 +24,18 @@
 //!
 //! Each of the three calls is guarded with `if (edge_exit(...)) skip the call;`. With no
 //! subscriber the hook returns false and the game behaves exactly as vanilla.
+//!
+//! ## `player_edge(pos, margin, sheet, player) -> Bool`
+//! Before the objects, the same `update` tests the players (source L16200-16213): a player in
+//! state "normal" outside [25,575]x[25,313] (x only outside boss mode, no `edgewith`) gets
+//! `player_death(playerId)`. That call is guarded the same way; `update`'s other `player_death`
+//! call (explosions, L10403) is not. It runs on the hub too (layout `help`), where walking off the
+//! right edge is how a run starts.
 
 use anyhow::{bail, ensure, Context, Result};
 use openlina_sdk::edit::{
-    add_reg, call, call_target, expect_one, find_calls, find_field_access, insert_ops, insert_ops_with_exits,
-    next_match, prev_match, Exit, Incoming,
+    add_reg, call, call_target, expect_one, find_calls, find_field_access, insert_ops, insert_ops_with_exits, is_field,
+    is_set_field, next_match, prev_match, Exit, Incoming,
 };
 use openlina_sdk::hlbc::opcodes::Opcode;
 use openlina_sdk::hlbc::types::{Function, RefFun, Reg};
@@ -130,6 +137,21 @@ fn apply(code: &mut Code) -> Result<()> {
         insert_ops_with_exits(f, s.site, ops, &[Exit { op: jump, target: s.site + 1 }], Incoming::ToInserted);
     }
 
+    // ---- player_edge: its site comes before the three above, so its indices are still valid
+    let p = player_site(code, &fun)?;
+    ensure!(sites.iter().all(|s| s.site > p.site), "the player edge test is not before the object loops");
+    let player_t = fun.regs[p.player.0 as usize];
+    let player_edge = hooks::define(code, "player_edge", &[pos_t, f64_t, sheet_t, player_t], bool_t)?;
+    let f = code.func_mut(update)?;
+    let ok = add_reg(f, bool_t);
+    insert_ops_with_exits(
+        f,
+        p.site,
+        vec![call(ok, player_edge, &[p.pos, p.margin, p.sheet, p.player]), Opcode::JTrue { cond: ok, offset: 0 }],
+        &[Exit { op: 1, target: p.site + 1 }],
+        Incoming::ToInserted,
+    );
+
     // ---- tick at the start of update(this, layout)
     let dst = add_reg(f, void);
     insert_ops(f, 0, vec![call(dst, tick, &[Reg(0), Reg(1)])], Incoming::ToOriginal);
@@ -138,6 +160,42 @@ fn apply(code: &mut Code) -> Result<()> {
     item_hooks(code)?;
     packs_hook(code)?;
     loc_hook(code)
+}
+
+/// The edge test's `player_death` call and the hook's arguments.
+struct PlayerSite {
+    site: usize,
+    pos: Reg,
+    margin: Reg,
+    sheet: Reg,
+    player: Reg,
+}
+
+fn player_site(code: &mut Code, fun: &Function) -> Result<PlayerSite> {
+    let death = code.method(SHEET, "player_death")?;
+    // update calls player_death twice: explosions (L10403) and the edge test (L16213), which comes
+    // right after the `.bossMode` read of its x test.
+    let sites: Vec<usize> = find_calls(fun, death)
+        .into_iter()
+        .filter(|&c| (c.saturating_sub(12)..c).any(|i| is_field(code, fun, &fun.ops[i], "bossMode")))
+        .collect();
+    let site = expect_one(sites, "update calls player_death() right after a `.bossMode` read (the edge test)")?;
+    let boss = prev_match(fun, site, |op| is_field(code, fun, op, "bossMode")).unwrap();
+    let Opcode::Field { obj: sheet, .. } = fun.ops[boss] else { unreachable!() };
+    let (_, args) = call_target(&fun.ops[site]).unwrap();
+    ensure!(args[0] == sheet, "player_death() is not called on the sheet whose `.bossMode` is tested");
+    // pos = player.sprite.position, then the y test `338 - margin`.
+    let pos_op = prev_match(fun, site, |op| is_field(code, fun, op, "position")).context("player `.position`")?;
+    ensure!(site - pos_op <= 40, "player `.position` read is {} ops before player_death()", site - pos_op);
+    let Opcode::Field { dst: pos, obj: sprite, .. } = fun.ops[pos_op] else { bail!("`.position` is not a Field") };
+    let sprite_load = prev_match(fun, pos_op, |op| matches!(op, Opcode::Field { dst, .. } if *dst == sprite))
+        .context("player `.sprite` load")?;
+    ensure!(is_field(code, fun, &fun.ops[sprite_load], "sprite"), "`.position` is not read from a `.sprite`");
+    let Opcode::Field { obj: player, .. } = fun.ops[sprite_load] else { unreachable!() };
+    let margin = margin_after(fun, pos_op)?;
+    ensure!(fun.regs[margin.0 as usize] == code.ty_f64(), "margin is not an F64");
+    ensure!(fun.regs[sheet.0 as usize] == code.class(SHEET)?, "player_death()'s `this` is not the gameplay sheet");
+    Ok(PlayerSite { site, pos, margin, sheet, player })
 }
 
 /// `packs(packManager)`: in the PackManager constructor, right after the local and downloaded
@@ -315,22 +373,8 @@ fn modifier_hooks(code: &mut Code) -> Result<()> {
     Ok(())
 }
 
-fn is_set_field(code: &Code, fun: &Function, op: &Opcode, name: &str) -> bool {
-    match op {
-        Opcode::SetField { obj, field, .. } => code.field(fun.regs[obj.0 as usize], name).is_ok_and(|f| f.0 == field.0),
-        _ => false,
-    }
-}
-
 fn calls(op: &Opcode, target: RefFun) -> bool {
     call_target(op).is_some_and(|(f, _)| f == target)
-}
-
-fn is_field(code: &Code, fun: &Function, op: &Opcode, name: &str) -> bool {
-    match op {
-        Opcode::Field { obj, field, .. } => code.field(fun.regs[obj.0 as usize], name).is_ok_and(|f| f.0 == field.0),
-        _ => false,
-    }
 }
 
 /// The `pos = sprite.position` read right before the `edgewith` read.

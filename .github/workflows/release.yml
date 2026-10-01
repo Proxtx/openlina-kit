@@ -1,0 +1,48 @@
+# A release per version tag (`v0.1.0`): the players' `openlina` helper for Linux x86_64 and the agent
+# skill as a zip, with the version's CHANGELOG.md section as notes. See CHANGELOG.md for when to bump.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # The oldest supported Ubuntu: the helper then runs on any newer glibc.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The tag matches the kit version
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME but Cargo.toml says $version"; exit 1; }
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Rust
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+
+      - name: Test the SDK
+        run: cargo test --release -p openlina-sdk
+
+      - name: Build openlina
+        run: cargo build --release -p openlina
+
+      - name: Assets
+        run: |
+          mkdir out
+          cp target/release/openlina "out/openlina-$VERSION-linux-x86_64"
+          (cd .claude/skills && zip -r "../../out/openlina-modding-skill-$VERSION.zip" openlina-modding)
+          (cd out && sha256sum * > SHA256SUMS)
+          # notes: this version's CHANGELOG.md section
+          awk -v v="## $VERSION " 'index($0, v) == 1 { on = 1; next } /^## / { on = 0 } on' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "no CHANGELOG.md section for $VERSION"; exit 1; }
+          printf '\n---\n`openlina-%s-linux-x86_64`: the players'"'"' helper (rename it to `openlina`, `chmod +x`). `openlina-modding-skill-%s.zip`: the agent skill (Claude: Settings > Capabilities > Skills). Mods and the SDK: clone the repository at this tag.\n' "$VERSION" "$VERSION" >> notes.md
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" out/* --title "openlina-kit $VERSION" --notes-file notes.md

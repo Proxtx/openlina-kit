@@ -63,6 +63,56 @@ fn target_dir() -> PathBuf {
     std::env::var_os("CARGO_TARGET_DIR").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("target"))
 }
 
+/// Refuse mods made for another kit version before the compiler fails on them less clearly.
+fn check_kits(all: &[(PathBuf, ModManifest)], ids: &[String]) -> Result<()> {
+    let problems = openlina::kit_problems(
+        all.iter().filter(|(_, m)| ids.contains(&m.info.id)).map(|(_, m)| m),
+        openlina::Host::Kit,
+    );
+    ensure!(problems.is_empty(), "{}", problems.join("\n"));
+    Ok(())
+}
+
+/// Raise `kit` in a mod.toml to this kit's version (the kit that builds and tests the package);
+/// returns the old value if it changed. Only the `kit` line is touched.
+pub fn stamp_kit(path: &Path) -> Result<Option<String>> {
+    let text = std::fs::read_to_string(path)?;
+    let m = ModManifest::parse(&text).with_context(|| format!("in {}", path.display()))?;
+    let cur = openlina_sdk::kit::KitVersion::current();
+    if m.info.kit.is_some() && m.kit() >= cur {
+        return Ok(None);
+    }
+    let line = format!("kit = \"{cur}\"");
+    let mut out = Vec::new();
+    let (mut section, mut done) = (String::new(), false);
+    for l in text.lines() {
+        let t = l.trim();
+        if t.starts_with('[') {
+            section = t.to_string();
+        }
+        if section == "[mod]" && !done && (t.starts_with("kit ") || t.starts_with("kit=")) {
+            out.push(line.clone());
+            done = true;
+            continue;
+        }
+        out.push(l.to_string());
+        if section == "[mod]"
+            && !done
+            && m.info.kit.is_none()
+            && (t.starts_with("version ") || t.starts_with("version="))
+        {
+            out.push(line.clone());
+            done = true;
+        }
+    }
+    ensure!(done, "{}: no `version` line in [mod] to put `kit` after", path.display());
+    let mut new = out.join("\n");
+    new.push('\n');
+    ensure!(ModManifest::parse(&new)?.kit() == cur, "{}: could not set `kit`", path.display());
+    std::fs::write(path, new)?;
+    Ok(Some(m.info.kit.unwrap_or_else(|| "none".into())))
+}
+
 /// `cargo build --release` the given mod crates, natively or for wasm32-wasip1.
 fn cargo_build(ids: &[String], wasm: bool) -> Result<()> {
     let mut cmd = Command::new("cargo");
@@ -134,12 +184,11 @@ pub fn build(game_dir: &Path, pack_path: &Path, only: &[String], wasm: bool, out
     Ok(())
 }
 
-/// Build the mods of `pack` from mods/, apply them to the pristine bytecode and create the
-/// overlay game directory `overlay`. Returns the patched bytecode.
 /// Compile the mods with these ids: natively (or wasm with `wasm`); mods pulled from a site
 /// always as wasm, since they only ever run sandboxed.
 pub fn compile(ids: &[String], wasm: bool) -> Result<()> {
     let all = all_mods()?;
+    check_kits(&all, ids)?;
     let mut own = Vec::new();
     let mut foreign = Vec::new();
     for id in ids {
@@ -196,7 +245,7 @@ pub fn build_pack(
         .collect();
     let input = std::fs::read(ORIG).context("run `lina setup` first")?;
     log(format!("building {} mod(s){}", packages.len(), if wasm { " (wasm)" } else { "" }));
-    let built = openlina::build(input, &packages, pack, log)?;
+    let built = openlina::build(input, &packages, pack, openlina::Host::Kit, log)?;
     let mut refused = Vec::new();
     for (id, findings) in &built.caps {
         let p = packages.iter().find(|p| &p.manifest.info.id == id).expect("built mods are in the pack");
@@ -292,7 +341,18 @@ pub fn pack(ids: &[String], bundle: Option<&str>, from: Option<&ModPack>, out: &
         }
     }
     let id_list: Vec<String> = chosen.iter().map(|(_, m)| m.info.id.clone()).collect();
+    check_kits(&all, &id_list)?;
     cargo_build(&id_list, true)?;
+    // A package says which kit built it.
+    for (dir, _) in &chosen {
+        if let Some(old) = stamp_kit(&dir.join("mod.toml"))? {
+            println!(
+                "{}: kit {old} -> {} (the kit that builds this package)",
+                dir.join("mod.toml").display(),
+                openlina_sdk::kit::KIT_VERSION
+            );
+        }
+    }
     std::fs::create_dir_all(out)?;
 
     // Stage each package: mod.toml, patch.wasm, assets/, media/.

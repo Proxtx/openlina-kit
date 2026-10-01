@@ -2,6 +2,7 @@
 id = "tumble"
 name = "Tumble"
 version = "0.1.0"
+kit = "0.1.0"
 section = "levels"
 description = "A level that turns: a drum of tiles makes a quarter turn every 10 seconds. Get the fruit out through the gap."
 authors = ["openlina-kit"]

@@ -1,0 +1,20 @@
+name = "cannons: asleep by default, they don't shoot while Lina stands still far away"
+mods = ["cannons"]
+fixtures = ["trace-positions"]
+timeout = 60
+
+[options.trace-positions]
+types = ["heavy_shot", "cannon_base"]
+ticks = "20-900/20"
+
+[harness]
+level = "greendemo 1"
+modifier = 0
+seed = 1
+end_tick = 900
+
+[[expect]]
+contains = "cannon_base"
+
+[[expect]]
+not_contains = "heavy_shot"

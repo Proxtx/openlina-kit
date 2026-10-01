@@ -2,6 +2,7 @@
 id = "debug-spawn"
 name = "Debug Spawn"
 version = "0.1.0"
+kit = "0.1.0"
 section = "dev"
 description = "Test fixture: spawn objects at fixed ticks of every gameplay layout."
 authors = ["openlina-kit"]

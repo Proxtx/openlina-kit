@@ -146,6 +146,7 @@ const MANIFEST: &str = r#"[mod]
 id = "{id}"
 name = "{name}"
 version = "0.1.0"
+kit = "{kit}"
 section = "{section}"
 description = "TODO"
 authors = []
@@ -327,7 +328,11 @@ pub fn new_mod(section: &str, id: &str) -> Result<()> {
         _ => (MAIN_TICK, SMOKE_TEST, ""),
     };
     let fill = |t: &str| {
-        t.replace("{extra_options}", options).replace("{id}", id).replace("{name}", &name).replace("{section}", section)
+        t.replace("{extra_options}", options)
+            .replace("{kit}", openlina_sdk::kit::KIT_VERSION)
+            .replace("{id}", id)
+            .replace("{name}", &name)
+            .replace("{section}", section)
     };
     ModManifest::parse(&fill(MANIFEST))?; // validates the id
     for sub in ["src", "media", "tests", "art", "assets/images/openlina"] {

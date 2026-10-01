@@ -237,9 +237,12 @@ enum Cmd {
         /// Where to put the source of pulled mods.
         #[arg(long, default_value = "mods")]
         mods_dir: PathBuf,
-        /// Replace local mods of the same id with the pack's version.
+        /// Replace local mods whose version differs from the pack's.
         #[arg(long)]
         force: bool,
+        /// Replace this local mod with the pack's, even at the same version (repeatable).
+        #[arg(long = "replace")]
+        replace: Vec<String>,
     },
     /// Upload a mod to the site you logged in to: runs its scenarios (wasm), packages it with its
     /// source, shows what would be uploaded. Uploads only with --yes (ask the user first).
@@ -343,7 +346,7 @@ fn main() -> Result<()> {
         Cmd::Check { input } => build::check(&input),
         Cmd::Doctor => doctor::doctor(cli.game_dir.clone()),
         Cmd::Login { site, token } => hub::login(&site, token),
-        Cmd::Pull { pack, mods_dir, force } => hub::pull(&pack, &mods_dir, force),
+        Cmd::Pull { pack, mods_dir, force, replace } => hub::pull(&pack, &mods_dir, force, &replace),
         Cmd::Publish { id, yes, no_test } => hub::publish(game_dir, &id, yes, !no_test),
     }
 }
