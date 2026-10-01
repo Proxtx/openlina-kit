@@ -14,7 +14,7 @@ jobs:
     # The oldest supported Ubuntu: the helper then runs on any newer glibc.
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: The tag matches the kit version
         run: |
