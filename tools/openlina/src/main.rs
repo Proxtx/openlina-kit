@@ -78,9 +78,14 @@ fn main() -> Result<()> {
     let game_dir = || game::game_dir(cli.game_dir.clone());
     match cli.cmd {
         Cmd::Install { paths, yes, replace } => {
+            // every given pack counts for the others' requirements, whatever the order
+            let mut given = Vec::new();
+            for p in &paths {
+                given.extend(ids_in(&data, p)?);
+            }
             let mut incoming = Vec::new();
             for p in &paths {
-                incoming.extend(install(&data, p, yes)?);
+                incoming.extend(install(&data, p, yes, &given)?);
             }
             if replace {
                 let pack = load_state(&data)?;
@@ -273,8 +278,48 @@ fn confirm(question: &str) -> Result<bool> {
     Ok(matches!(line.trim(), "y" | "Y" | "yes" | "j" | "ja"))
 }
 
+/// The mod folders of a pack (`mods/<id>/`) or the single mod at `root`.
+fn mod_dirs(root: &Path) -> Result<Vec<PathBuf>> {
+    let mut dirs = Vec::new();
+    if root.join("mods").is_dir() {
+        for e in std::fs::read_dir(root.join("mods"))? {
+            let p = e?.path();
+            if p.join("mod.toml").is_file() {
+                dirs.push(p);
+            }
+        }
+    } else if root.join("mod.toml").is_file() {
+        dirs.push(root.to_path_buf());
+    }
+    Ok(dirs)
+}
+
+/// The ids of the mods in a pack or mod (zip or directory), without installing anything.
+fn ids_in(data: &Path, path: &Path) -> Result<Vec<String>> {
+    let scan = data.join("tmp-scan");
+    if scan.exists() {
+        std::fs::remove_dir_all(&scan)?;
+    }
+    let src = if path.is_dir() {
+        path.to_path_buf()
+    } else {
+        std::fs::create_dir_all(&scan)?;
+        let f = std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?;
+        package::unzip(f, &scan).with_context(|| format!("extracting {}", path.display()))?;
+        scan.clone()
+    };
+    let ids = mod_dirs(&find_root(&src)?)?
+        .iter()
+        .map(|d| Package::load(d).map(|p| p.manifest.info.id))
+        .collect::<Result<_>>();
+    if scan.exists() {
+        std::fs::remove_dir_all(&scan)?;
+    }
+    ids
+}
+
 /// Install a pack or a single mod from a zip or a directory; returns the ids it installed.
-fn install(data: &Path, path: &Path, yes: bool) -> Result<Vec<String>> {
+fn install(data: &Path, path: &Path, yes: bool, given: &[String]) -> Result<Vec<String>> {
     let tmp = data.join("tmp");
     if tmp.exists() {
         std::fs::remove_dir_all(&tmp)?;
@@ -294,17 +339,7 @@ fn install(data: &Path, path: &Path, yes: bool) -> Result<Vec<String>> {
     } else {
         ModPack::default()
     };
-    let mut dirs = Vec::new();
-    if root.join("mods").is_dir() {
-        for e in std::fs::read_dir(root.join("mods"))? {
-            let p = e?.path();
-            if p.join("mod.toml").is_file() {
-                dirs.push(p);
-            }
-        }
-    } else if root.join("mod.toml").is_file() {
-        dirs.push(root.clone());
-    }
+    let dirs = mod_dirs(&root)?;
     if dirs.is_empty() {
         bail!("{}: no mods found (expected mod.toml or mods/<id>/mod.toml)", path.display());
     }
@@ -321,7 +356,7 @@ fn install(data: &Path, path: &Path, yes: bool) -> Result<Vec<String>> {
     for d in &dirs {
         let p = Package::load(d)?;
         for r in &p.manifest.info.requires {
-            if !incoming_ids.contains(r) && !state_before.mods.iter().any(|e| &e.id == r) {
+            if !incoming_ids.contains(r) && !given.contains(r) && !state_before.mods.iter().any(|e| &e.id == r) {
                 bail!(
                     "`{}` requires `{r}`, which is neither installed nor in {}. Install a pack that \
                      contains it (e.g. `lina pack {r} {} --bundle my-pack`), or install `{r}` first.",

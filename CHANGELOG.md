@@ -18,6 +18,11 @@ Maintainers: bump the version in the commit that changes something mods can noti
 `v<version>` and push the tag; the release workflow builds `openlina` and the skill zip. Then update the website
 (rebuild it against the new kit, replace its helpers) before uploading mods made with the new kit.
 
+## Unreleased
+
+- `openlina install a.zip b.zip`: a mod that requires one from a later zip of the same command installs (it was
+  refused unless the required mod came first).
+
 ## 0.1.2 (2026-10-01)
 
 - **SDK**: `sound` (`play`: the game's sound effects by name, or a mod's own from `assets/media/`; unknown names are
