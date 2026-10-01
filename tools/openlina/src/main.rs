@@ -365,6 +365,10 @@ fn install(data: &Path, path: &Path, yes: bool) -> Result<Vec<String>> {
             }
             None => state.mods.push(entry.unwrap_or(PackEntry { id: id.clone(), ..Default::default() })),
         }
+        // The state records the installed version, whatever the pack said.
+        if let Some(e) = state.mods.iter_mut().find(|e| e.id == id) {
+            e.version = Some(pkg.manifest.info.version.clone());
+        }
         println!("installed {id} {}", pkg.manifest.info.version);
     }
     std::fs::create_dir_all(data)?;

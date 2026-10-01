@@ -18,6 +18,10 @@ Maintainers: bump the version in the commit that changes something mods can noti
 `v<version>` and push the tag; the release workflow builds `openlina` and the skill zip. Then update the website
 (rebuild it against the new kit, replace its helpers) before uploading mods made with the new kit.
 
+## Unreleased
+
+- `openlina install` records the installed version of reinstalled mods in its state (it kept the old one).
+
 ## 0.1.0 (2026-10-01)
 
 The first versioned release. Mods without `kit` in `mod.toml` (everything published before) count as 0.1.0 and
