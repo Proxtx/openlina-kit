@@ -104,6 +104,12 @@ mods/<id>/assets/images/x.png` (game sprites; paths relative to where you run it
 mods/<id>/media/icon.png` (website icon). `lina sprite --palette` lists the game palette; `--scale 16` writes a
 preview, `--scale 2` a large item icon.
 
+Images from elsewhere: the game reads only **8-bit PNGs** (and 16-bit ones without a palette). A 1-, 2- or 4-bit PNG
+(small palettes; image optimizers write them) throws `Unsupported png format <bits>/<type>` while the game starts and
+leaves it frozen on a black screen. `lina build` converts such files in the overlay and warns, `lina pack` and the
+website refuse them (`magick f.png PNG32:f.png` fixes one), players' `openlina` converts them
+(`openlina_sdk::assets`). `lina sprite` writes 8-bit RGBA.
+
 ## The player's side
 
 `lina pack <id>` writes `dist/<id>-<version>.zip`. To try the player flow, bundle it (requirements are added) and

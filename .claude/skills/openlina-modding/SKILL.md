@@ -48,6 +48,7 @@ and `--wasm`). The website marks such mods NEEDS AN AGENT and refuses players' z
 3. Options for every tunable, a `trace` option, `[stats]` in `mod.toml` for the website, the design notes as the
    module doc comment.
 4. Graphics as text grids: `art/*.toml` → `lina sprite … --out assets/images/…` (game) and `media/icon.png` (site).
+   Other images in `assets/` must be 8-bit PNGs (`magick f.png PNG32:f.png`): `lina pack` refuses others.
 5. Tests (docs/testing.md): scenarios in `tests/*.toml` that can fail (`lina test --mod <id>`, then `lina test`
    and `--wasm`; `-k`, `--failed`), a showcase gif
    (`lina gif mods/<id>/tests/<x>.toml`); look at the frames in `work/gif/frames/` before keeping it.

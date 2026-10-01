@@ -13,6 +13,7 @@
 | `levels` | `LevelPack::from_toml` + `register`: level packs built in code (core `packs` hook); `current_level_name`, `jump_unless_in_pack` |
 | `text` | `set(key, value)`: texts the game looks up (`Localisation.loc`), e.g. `TOOL_<NAME>` item labels |
 | `anims` | `ensure` / `ensure_frames`: an animation from mod images in an object class's animation map |
+| `assets` | `png_problem` / `png_problems`: images in `assets/` the game can't load (only 8-bit PNGs, and 16-bit without a palette; others freeze it while starting) |
 | `physics` | `RayCast`: the nearest object on a line (Box2D `world_ray_cast`), e.g. line of sight; `fraction` for the hit point |
 | `aim` | `AimRay` (the ray from Lina through the reticle to the next surface, with the hit point, `before` to step back from it), `shooter` (in `item_use`), `show_crosshair` (the `ray-crosshair` marker for an item) |
 | `world` | inside handlers: `is_level` / `jump_unless_level` (the `tick` hook also runs on the hub, title and tool selection: `NOT_LEVELS`), `player_pos` (Lina's x, y), `spawn` / `spawn_on` (create an object like levels do, on a layer), `count` (instances of a type) |

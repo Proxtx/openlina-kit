@@ -29,6 +29,10 @@ Maintainers: bump the version in the commit that changes something mods can noti
 - Scenarios may set options for mods that come in as requirements; portal-gun's and ray-crosshair's traces print
   `[pos]` lines for `position` expectations.
 - `openlina install` records the installed version of reinstalled mods in its state (it kept the old one).
+- **Images the game can't load** (1-, 2- or 4-bit PNGs in `assets/`: the game freezes on a black screen while
+  starting): `openlina_sdk::assets` has the game's rule; `lina pack` and the website refuse such files with the fix,
+  `lina build` and players' `openlina` convert them to 8-bit RGBA in the overlay (packages already on a site keep
+  working).
 
 ## 0.1.0 (2026-10-01)
 

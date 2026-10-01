@@ -272,7 +272,9 @@ pub fn build_pack(
     for p in &packages {
         assets.extend(p.assets()?);
     }
-    overlay::create(game_dir, overlay, &bytes, &assets)?;
+    for note in overlay::create(game_dir, overlay, &bytes, &assets)? {
+        log(format!("  warning: {note}; `lina pack` refuses the file until it is fixed"));
+    }
     Ok(bytes)
 }
 
@@ -342,6 +344,7 @@ pub fn pack(ids: &[String], bundle: Option<&str>, from: Option<&ModPack>, out: &
     }
     let id_list: Vec<String> = chosen.iter().map(|(_, m)| m.info.id.clone()).collect();
     check_kits(&all, &id_list)?;
+    check_pngs(&chosen)?;
     cargo_build(&id_list, true)?;
     // A package says which kit built it.
     for (dir, _) in &chosen {
@@ -411,6 +414,19 @@ pub fn pack(ids: &[String], bundle: Option<&str>, from: Option<&ModPack>, out: &
         println!("wrote {} (run `./openlina install .` inside it)", zip_path.display());
     }
     std::fs::remove_dir_all(&stage)?;
+    Ok(())
+}
+
+/// Refuse to package images the game can't load (`openlina_sdk::assets`): it freezes on start.
+fn check_pngs(chosen: &[(PathBuf, ModManifest)]) -> Result<()> {
+    let mut bad = String::new();
+    for (dir, _) in chosen {
+        for (rel, why) in openlina_sdk::assets::png_problems(&dir.join("assets"))? {
+            let file = dir.join("assets").join(&rel).display().to_string();
+            bad.push_str(&format!("  {file}: {why}\n    fix: {}\n", openlina_sdk::assets::png_fix(&file)));
+        }
+    }
+    ensure!(bad.is_empty(), "images the game can't load (it would freeze on a black screen while starting):\n{bad}");
     Ok(())
 }
 

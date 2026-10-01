@@ -441,7 +441,9 @@ fn build(data: &Path, game: &Path) -> Result<()> {
     for p in &packages {
         assets.extend(p.assets()?);
     }
-    overlay::create(game, &data.join("game"), &bytes, &assets)?;
+    for note in overlay::create(game, &data.join("game"), &bytes, &assets)? {
+        println!("  note: {note}");
+    }
     println!("ready: {} ({} asset file(s))", data.join("game").display(), assets.len());
     Ok(())
 }

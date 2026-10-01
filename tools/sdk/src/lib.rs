@@ -26,6 +26,7 @@ pub use toml;
 pub mod aim;
 pub mod anims;
 pub mod asm;
+pub mod assets;
 pub mod caps;
 pub mod edit;
 pub mod hooks;

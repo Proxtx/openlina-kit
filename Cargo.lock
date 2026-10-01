@@ -1145,6 +1145,7 @@ dependencies = [
  "anyhow",
  "clap",
  "openlina-sdk",
+ "png",
  "serde",
  "sha2",
  "toml",

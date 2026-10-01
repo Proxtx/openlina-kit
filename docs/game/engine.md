@@ -65,3 +65,13 @@ sprite's graphic to `layout.scene` (an `h2d.Layers`) at that index. Still, a spr
 10 was drawn under the vine it overlapped (found by the ray-crosshair mod): don't rely on layers to draw over level
 objects; place markers next to them instead.
 
+
+## Image files
+
+Images are read by Heaps' `hxd.res.Image`. `getInfo` (Image.hx:126-134) reads the PNG header and accepts bit depth 8
+(every color type, palettes included) and 16 (grayscale, RGB, gray+alpha, RGBA); everything else throws
+`Unsupported png format <bits>/<color type>(<path>)`. At startup `editor.Editor.loadTiles` → `prepareClassTiles`
+(Editor.hx:590, 795, from `Main.init` Main.hx:350) reads the pixels of every object image, mod images in
+`fish/game/res/images/` included, so one 4-bit PNG stops `Main.init`: the window stays black with a grey bar, the
+process keeps running (found with the item mod vector-piranha). `openlina_sdk::assets::png_problem` is this rule;
+see docs/testing.md "Graphics" for what the tools do about it.
