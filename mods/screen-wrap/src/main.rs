@@ -19,8 +19,9 @@
 //!   (`coinedgecheck` destroys it) or with the delete tool: the fruit's destroy listener (closure in
 //!   `setupEvents`, L9490) calls `coin_fn(touched = 0)` and sets `state = 1` when it wasn't collected
 //!   yet and isn't glitched. The mod does the same for a fruit that wraps, so pushing a fruit off the
-//!   screen still collects it; it just comes back on the other side, already collected. Glitched
-//!   fruits stay vanilla: until every player touched them they go back to their spawn.
+//!   screen still collects it; it just comes back on the other side, already collected and looking
+//!   like a touched fruit (`collected_look`: the darker model). Glitched fruits stay vanilla: until
+//!   every player touched them they go back to their spawn.
 //! - Frogs (`frogs`, kind 3): vanilla raises `frogland_count` for a live frog (they show up in
 //!   "greenfrogs 1") and then deletes it; the count still rises on every crossing. The frog the
 //!   player steers in frog mode (`sheet.frogMode`, `frog.playerControlled`, `is_fat == 0`) is left to
@@ -28,10 +29,13 @@
 //!
 //! Joined objects (`joined`): step ladders, bamboo, tentacles, vines… are several bodies held by
 //! Box2D joints. Wrapping one piece alone would tear it across the screen, so the handler walks the
-//! joints (`body_get_joint_list`, `joint_get_body_a/b`) to the whole group (owners found among
-//! `physics_obj` and `secondary_physics`, at most `MAX_GROUP` pieces). Pieces past the edge are kept
-//! while the group's centre is on screen; when the centre crosses, every piece moves by the same
-//! offset, so the joints stay as they were. Groups held by something that can't move (a static or
+//! joints to the whole group (`openlina_sdk::joints::collect`: owners found among `physics_obj` and
+//! `secondary_physics`, at most `joints::MAX_GROUP` pieces). Pieces past the edge are kept
+//! while any piece is still on screen; once the last one is past the edge (each with vanilla's slack,
+//! `edgewith` = sprite width + height), every piece moves by the same offset: the leading piece to
+//! just outside the opposite edge (plus the last piece's overshoot). The group comes in leading end
+//! first and slides in, however long it is (a shift by one screen would put a long bamboo's leading
+//! end deep inside the screen), and the joints stay as they were. For one piece this is its own wrap. Groups held by something that can't move (a static or
 //! kinematic body: a vine hanging from the ceiling, a bridge between tiles), by Lina, or by a body
 //! the mod can't find are left to vanilla (the piece outside is deleted).
 //!
@@ -57,15 +61,11 @@ use openlina_sdk::asm::{FnBuilder, Label, Print};
 use openlina_sdk::hlbc::opcodes::Opcode;
 use openlina_sdk::hlbc::types::Reg;
 use openlina_sdk::modifiers::{self, Modifier};
-use openlina_sdk::{hooks, Code, ModConfig};
+use openlina_sdk::{hooks, joints, Code, ModConfig};
 
 /// Play-field size in layout units, hardcoded in the game's edge test.
 const SCREEN_W: f64 = 600.0;
 const SCREEN_H: f64 = 338.0;
-/// The most pieces a joined group may have (bigger ones are left to vanilla).
-const MAX_GROUP: i32 = 64;
-/// `b2BodyType`: only dynamic bodies move.
-const DYNAMIC_BODY: i32 = 2;
 
 fn main() {
     openlina_sdk::run_mod(apply)
@@ -140,6 +140,7 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
         f.call_new(coin_fn, &[sheet, touched_ref])?;
         let one = f.const_f64(1.0);
         f.set(coin, "state", one)?;
+        collected_look(&mut f, coin)?;
         if w.trace {
             f.print(&[Print::Str("[screen-wrap] tick "), Print::Val(tick), Print::Str(" fruit collected")])?;
         }
@@ -238,6 +239,43 @@ fn guards(f: &mut FnBuilder, w: &Wrap, sheet: Reg, fail: Label) -> Result<Reg> {
     let min = f.const_i32(w.min_tick);
     f.jlt(tick, min, fail);
     Ok(tick)
+}
+
+/// A fruit collected by leaving the screen looks and floats like a touched one (vanilla
+/// `tryTouchCoin`, fn@3752 L4219-4222): its `spr_coin` shows the animation + `"_collected"` (the
+/// darker model) from its first frame, the fruit's own sprite frame 1, `personal_gravity` 0.125.
+fn collected_look(f: &mut FnBuilder, coin: Reg) -> Result<()> {
+    let map_get = f.code().method("haxe.ds.StringMap", "get")?;
+    let concat = f.code().method("String", "__add__")?;
+    let set_anim = f.code().method("fish.system.Sprite", "set_anim")?;
+    let spr_t = f.code().class("fish.game.oclass.OClass_spr_coin")?;
+    let done = f.label();
+    let container = f.get_new(coin, "container")?;
+    f.jnull(container, done);
+    let insts = f.get_new(container, "insts")?;
+    f.jnull(insts, done);
+    let key = f.string_obj("spr_coin")?;
+    let found = f.call_new(map_get, &[insts, key])?;
+    let spr = f.cast(found, spr_t);
+    f.jnull(spr, done);
+    let sprite = f.get_new(spr, "sprite")?;
+    f.jnull(sprite, done);
+    let anim = f.get_new(sprite, "anim")?;
+    f.jnull(anim, done);
+    let suffix = f.string_obj("_collected")?;
+    let collected = f.call_new(concat, &[anim, suffix])?;
+    f.call_new(set_anim, &[sprite, collected])?;
+    let zero_i = f.const_i32(0);
+    f.set(sprite, "animFrame", zero_i)?;
+    let zero_f = f.const_f64(0.0);
+    f.set(sprite, "frameTime", zero_f)?;
+    f.place(done);
+    let own = f.get_new(coin, "sprite")?;
+    let one_i = f.const_i32(1);
+    f.set(own, "animFrame", one_i)?;
+    let gravity = f.const_f64(0.125);
+    f.set(coin, "personal_gravity", gravity)?;
+    Ok(())
 }
 
 fn ret_bool(f: &mut FnBuilder, v: bool) {
@@ -352,8 +390,8 @@ fn wrap_one(
     Ok(())
 }
 
-/// The object leaving is joined to others: wrap the whole group, or keep the piece while the
-/// group's centre is on screen (returns true either way), or `fail` (vanilla) when the group is
+/// The object leaving is joined to others: wrap the whole group, or keep the piece while part of
+/// the group is on screen (returns true either way), or `fail` (vanilla) when the group is
 /// held by something that can't move. Jumps to `single` when the object has no joints.
 #[allow(clippy::too_many_arguments)]
 fn wrap_group(
@@ -366,109 +404,89 @@ fn wrap_group(
     fail: Label,
     single: Label,
 ) -> Result<()> {
-    let code = f.code();
-    let joint_list = code.native("body_get_joint_list")?;
-    let body_a = code.native("joint_get_body_a")?;
-    let body_b = code.native("joint_get_body_b")?;
-    let body_type = code.native("body_get_type")?;
-    let alloc_array = code.native("alloc_array")?;
-    let obj_t = code.class("fish.system.ObjectClass")?;
-
+    let obj_t = f.code().class("fish.system.ObjectClass")?;
     f.jnull(physics, single);
-    let body = f.get_new(physics, "body")?;
-    f.jnull(body, single);
-    let first = f.call_new(joint_list, &[body])?;
-    let joint_list_t = f.reg_type(first);
-    f.jnull(first, single);
     let owner = f.get_new(physics, "owner")?;
     f.jnull(owner, fail);
-
-    // Breadth-first over the joints: members[0..n].
-    let ty = f.type_value(obj_t);
-    let cap = f.const_i32(MAX_GROUP);
-    let members = f.call_new(alloc_array, &[ty, cap])?;
-    let (n, i, zero) = (f.reg_i32(), f.reg_i32(), f.const_i32(0));
-    f.op(Opcode::SetArray { array: members, index: zero, src: owner });
-    f.int(n, 1);
-    f.int(i, 0);
+    // the whole group (`openlina_sdk::joints`); alone: the single wrap
     let held = f.label(); // something that can't move holds the group
-    let (outer, collected) = (f.label(), f.label());
-    let m = f.reg(obj_t);
-    let edge = f.reg(joint_list_t);
-    f.place(outer);
-    f.jge(i, n, collected);
-    f.op(Opcode::GetArray { dst: m, array: members, index: i });
-    f.op(Opcode::Incr { dst: i });
-    let mphys = f.get_new(m, "physics")?;
-    f.jnull(mphys, outer);
-    let mbody = f.get_new(mphys, "body")?;
-    f.jnull(mbody, outer);
-    f.call(edge, joint_list, &[mbody]);
-    let inner = f.label();
-    f.place(inner);
-    f.jnull(edge, outer);
-    let joint = f.get_new(edge, "joint")?;
-    let next = f.get_new(edge, "next")?;
-    f.mov(edge, next);
-    f.jnull(joint, inner);
-    for end in [body_a, body_b] {
-        let skip = f.label();
-        let other = f.call_new(end, &[joint])?;
-        f.jnull(other, skip);
-        let t = f.call_new(body_type, &[other])?;
-        let dynamic = f.const_i32(DYNAMIC_BODY);
-        f.jne(t, dynamic, held);
-        let o = owner_of(f, sheet, other, held)?;
-        let otype = f.get_new(o, "type")?;
-        let not_player = f.label();
-        f.jstr_ne(otype, "player", not_player)?;
-        f.jmp(held);
-        f.place(not_player);
-        // already a member?
-        let (k, scan, add) = (f.reg_i32(), f.label(), f.label());
-        let km = f.reg(obj_t);
-        f.int(k, 0);
-        f.place(scan);
-        f.jge(k, n, add);
-        f.op(Opcode::GetArray { dst: km, array: members, index: k });
-        f.op(Opcode::Incr { dst: k });
-        f.jeq(km, o, skip);
-        f.jmp(scan);
-        f.place(add);
-        f.jge(n, cap, held);
-        f.op(Opcode::SetArray { array: members, index: n, src: o });
-        f.op(Opcode::Incr { dst: n });
-        f.place(skip);
-    }
-    f.jmp(inner);
+    let g = joints::collect(f, sheet, owner, held)?;
+    let (members, n) = (g.members, g.n);
+    let one = f.const_i32(1);
+    f.jle(n, one, single);
 
-    // The centre of the group.
-    f.place(collected);
-    let (sx, sy, cx, cy, nf) = (f.reg_f64(), f.reg_f64(), f.reg_f64(), f.reg_f64(), f.reg_f64());
-    f.float(sx, 0.0);
-    f.float(sy, 0.0);
-    f.for_range(n, |f, k| {
-        let o = f.reg(obj_t);
-        f.op(Opcode::GetArray { dst: o, array: members, index: k });
-        let p = f.get_new(o, "sprite")?;
-        let p = f.get_new(p, "position")?;
-        let (x, y) = (f.get_new(p, "x")?, f.get_new(p, "y")?);
-        f.add(sx, sx, x);
-        f.add(sy, sy, y);
-        Ok(())
-    })?;
-    f.op(Opcode::ToSFloat { dst: nf, src: n });
-    f.op(Opcode::SDiv { dst: cx, a: sx, b: nf });
-    f.op(Opcode::SDiv { dst: cy, a: sy, b: nf });
-    let no_slack = f.const_f64(0.0);
-    let (nx, ny, moved) = wrapped(f, w, cx, cy, no_slack, margin, sheet, fail)?;
-    let shift = f.label();
-    f.jtrue(moved, shift);
-    // the centre is still on screen: keep the piece, the group stays together
+    // The group wraps as a whole, once its last piece is past an edge (each piece's slack is
+    // vanilla's `edgewith`, sprite width + height).
+    let (dx, dy) = (f.reg_f64(), f.reg_f64());
+    f.float(dx, 0.0);
+    f.float(dy, 0.0);
+    let max = f.const_f64(w.max_overshoot);
+    for (field, size, d) in [("y", SCREEN_H, dy), ("x", SCREEN_W, dx)] {
+        let done = f.label();
+        if size == SCREEN_W {
+            let boss = f.get_new(sheet, "bossMode")?;
+            f.jtrue(boss, done);
+        }
+        // over_hi = min(v - hi): how far the last piece is past the far edge (> 0: all are);
+        // lead_lo = min(lo - v): the leading piece, furthest out, measured from the near edge.
+        // Mirrored for the near edge: over_lo = min(lo - v), lead_hi = max(hi - v).
+        let (over_hi, lead_lo, over_lo, lead_hi) = (f.reg_f64(), f.reg_f64(), f.reg_f64(), f.reg_f64());
+        f.float(over_hi, f64::MAX);
+        f.float(lead_lo, f64::MAX);
+        f.float(over_lo, f64::MAX);
+        f.float(lead_hi, f64::MIN);
+        f.for_range(n, |f, k| {
+            let o = f.reg(obj_t);
+            f.op(Opcode::GetArray { dst: o, array: members, index: k });
+            let sp = f.get_new(o, "sprite")?;
+            let (sw, sh) = (f.get_new(sp, "width")?, f.get_new(sp, "height")?);
+            let ew = f.reg_f64();
+            f.add(ew, sw, sh);
+            let p = f.get_new(sp, "position")?;
+            let v = f.get_new(p, field)?;
+            let (hi, lo, t) = (f.reg_f64(), f.reg_f64(), f.reg_f64());
+            f.float(hi, size);
+            f.sub(hi, hi, margin);
+            f.add(hi, hi, ew);
+            f.mov(lo, margin);
+            f.sub(lo, lo, ew);
+            for (dst, x, y, keep_smaller) in
+                [(over_hi, v, hi, true), (lead_lo, lo, v, true), (over_lo, lo, v, true), (lead_hi, hi, v, false)]
+            {
+                let skip = f.label();
+                f.sub(t, x, y);
+                if keep_smaller {
+                    f.jge(t, dst, skip);
+                } else {
+                    f.jle(t, dst, skip);
+                }
+                f.mov(dst, t);
+                f.place(skip);
+            }
+            Ok(())
+        })?;
+        // Every piece moves by the same offset: the leading piece to just outside the opposite
+        // edge, plus the last piece's overshoot. The group comes in leading end first and slides
+        // in, however long it is; for a single piece this is exactly its own wrap.
+        let (zero_f, up) = (f.const_f64(0.0), f.label());
+        f.jle(over_hi, zero_f, up);
+        // all past the far edge (bottom / right): in again at the near one
+        f.jlt(max, over_hi, fail);
+        f.add(d, lead_lo, over_hi);
+        f.jmp(done);
+        f.place(up);
+        f.jle(over_lo, zero_f, done);
+        // all past the near edge (top / left)
+        f.jlt(max, over_lo, fail);
+        f.sub(d, lead_hi, over_lo);
+        f.place(done);
+    }
+    let (shift, zero_f) = (f.label(), f.const_f64(0.0));
+    f.jne(dx, zero_f, shift);
+    f.jne(dy, zero_f, shift);
+    // part of the group is still on screen: keep the piece, the group stays together
     if w.trace {
         let otype = f.get_new(owner, "type")?;
-        let first_member = f.reg(obj_t);
-        f.op(Opcode::GetArray { dst: first_member, array: members, index: zero });
         let k1 = f.const_i32(1);
         let other = f.reg(obj_t);
         f.op(Opcode::GetArray { dst: other, array: members, index: k1 });
@@ -489,21 +507,7 @@ fn wrap_group(
 
     // Move every piece by the same offset.
     f.place(shift);
-    let (dx, dy) = (f.reg_f64(), f.reg_f64());
-    f.sub(dx, nx, cx);
-    f.sub(dy, ny, cy);
-    f.for_range(n, |f, k| {
-        let o = f.reg(obj_t);
-        f.op(Opcode::GetArray { dst: o, array: members, index: k });
-        let p = f.get_new(o, "sprite")?;
-        let p = f.get_new(p, "position")?;
-        let (x, y) = (f.get_new(p, "x")?, f.get_new(p, "y")?);
-        f.add(x, x, dx);
-        f.add(y, y, dy);
-        f.set(p, "x", x)?;
-        f.set(p, "y", y)?;
-        Ok(())
-    })?;
+    joints::shift(f, &g, dx, dy)?;
     if w.trace {
         let otype = f.get_new(owner, "type")?;
         f.print(&[
@@ -513,14 +517,10 @@ fn wrap_group(
             Print::Val(n),
             Print::Str(" with "),
             Print::Val(otype),
-            Print::Str(", centre ("),
-            Print::Val(cx),
+            Print::Str(" moved by ("),
+            Print::Val(dx),
             Print::Str(", "),
-            Print::Val(cy),
-            Print::Str(") -> ("),
-            Print::Val(nx),
-            Print::Str(", "),
-            Print::Val(ny),
+            Print::Val(dy),
             Print::Str(")"),
         ])?;
     }
@@ -539,37 +539,4 @@ fn wrap_group(
     }
     f.jmp(fail);
     Ok(())
-}
-
-/// The object whose physics body is `body`, among `physics_obj` and `secondary_physics`; jumps to
-/// `none` when there is none.
-fn owner_of(f: &mut FnBuilder, sheet: Reg, body: Reg, none: Label) -> Result<Reg> {
-    let obj_t = f.code().class("fish.system.ObjectClass")?;
-    let found = f.reg(obj_t);
-    let done = f.label();
-    for picker in ["physics_obj", "secondary_physics"] {
-        let next_picker = f.label();
-        let p = f.get_new(sheet, picker)?;
-        f.jnull(p, next_picker);
-        let insts = f.get_new(p, "insts")?;
-        f.jnull(insts, next_picker);
-        let len = f.array_len(insts)?;
-        f.for_range(len, |f, k| {
-            let miss = f.label();
-            let o = f.array_get(insts, k, obj_t)?;
-            f.jnull(o, miss);
-            let ph = f.get_new(o, "physics")?;
-            f.jnull(ph, miss);
-            let b = f.get_new(ph, "body")?;
-            f.jne(b, body, miss);
-            f.mov(found, o);
-            f.jmp(done);
-            f.place(miss);
-            Ok(())
-        })?;
-        f.place(next_picker);
-    }
-    f.jmp(none);
-    f.place(done);
-    Ok(found)
 }

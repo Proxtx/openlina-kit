@@ -8,7 +8,7 @@ trace = true
 
 [options.trace-positions]
 types = ["cannon_base"]
-ticks = "11,100"
+ticks = "11,120"
 
 # Walking right on greendemo 1, Lina drops into the pit and dies (tick ~297); then confirm.
 [harness]
@@ -24,7 +24,7 @@ contains = "[cannons] greendemo 1 tick 10: 0 cannons already there"
 min = 3
 
 [[expect]]
-contains = "[cannons] greendemo 1 tick 10: cannon 3 at"
+contains = "[cannons] greendemo 1 tick 100: cannon 3 at"
 min = 3
 
 [[expect]]

@@ -56,7 +56,7 @@ struct Opts {
 fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     let o = Opts {
         bounce: cfg.f64("bounce", 0.5)?,
-        friction: cfg.f64("friction", 0.9)?,
+        friction: cfg.f64("friction", 1.0)?,
         rest_speed: cfg.f64("rest_speed", 40.0)?,
         coins: cfg.bool("coins", false)?,
         trace: cfg.bool("trace", false)?,

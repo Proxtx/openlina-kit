@@ -1,8 +1,8 @@
 [mod]
 id = "screen-wrap"
 name = "Screen Wrap"
-version = "0.5.0"
-kit = "0.1.2"
+version = "0.5.1"
+kit = "0.1.3"
 section = "modifiers"
 description = "A new modifier: in levels that roll it, objects leaving the screen come back on the opposite side instead of being destroyed. Long levels and boss arenas wrap top and bottom only."
 authors = ["openlina-kit"]
@@ -27,7 +27,7 @@ description = "Also wrap frogs. A live frog leaving still counts as landed (they
 [options.joined]
 type = "bool"
 default = true
-description = "Wrap objects joined to others (step ladders, bamboo, tentacles, chains) as a whole: pieces past the edge stay until the group's centre crosses, then every piece moves together. Groups held by level geometry or by Lina are left to vanilla."
+description = "Wrap objects joined to others (step ladders, bamboo, tentacles, chains) as a whole: pieces past the edge stay until the whole group is off the screen, then every piece moves together and the group comes in at the opposite edge like a single object. Groups held by level geometry or by Lina are left to vanilla."
 
 [options.player]
 type = "bool"
@@ -52,7 +52,7 @@ description = "Don't wrap during the first ticks of a layout, when levels delete
 [options.trace]
 type = "bool"
 default = false
-description = "Print `[screen-wrap] tick T kind K (x, y) -> (x', y')` for every wrap, `group of N with <type>, centre (x, y) -> (x', y')` for joined objects and `<type> is held by something that can't move` when a group is left to vanilla."
+description = "Print `[screen-wrap] tick T kind K (x, y) -> (x', y')` for every wrap, `group of N with <type> moved by (dx, dy)` for joined objects and `<type> is held by something that can't move` when a group is left to vanilla."
 
 [stats]
 kind = "modifier"

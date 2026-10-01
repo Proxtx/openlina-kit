@@ -1,8 +1,8 @@
 [mod]
 id = "solid-edges"
 name = "Solid Edges"
-version = "0.2.2"
-kit = "0.1.2"
+version = "0.3.0"
+kit = "0.1.3"
 section = "modifiers"
 description = "A new modifier: in levels that roll it, the screen border is a wall and objects bounce off it instead of flying off and despawning. Long levels and boss arenas keep their left and right sides open. Combines with screen-wrap (one modifier per level)."
 authors = ["openlina-kit"]
@@ -21,8 +21,8 @@ description = "Share of the speed kept when bouncing off the border (0 = stop de
 
 [options.friction]
 type = "float"
-default = 0.9
-description = "Speed along the border kept per tick of contact (1 = frictionless sliding)."
+default = 1.0
+description = "Speed along the border kept per tick of contact (1, the default: frictionless sliding, as the border has no friction; 0.9 brakes objects sliding along it)."
 
 [options.rest_speed]
 type = "float"

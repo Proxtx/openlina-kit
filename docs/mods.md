@@ -42,11 +42,13 @@ Source: `mods/core/src/main.rs`.
 
 A new item, **Portal Gun** (`portal`, 4 ammo, long aim): each shot places a blue, then an orange portal on the
 next surface along Lina's aim within `range` (400), half a portal in front of it, inside the play field; the
-`ray-crosshair` marker shows that surface while the gun is selected. Only level geometry takes portals: a box,
+`ray-crosshair` mod puts the game's reticle on that surface while the gun is selected. Only level geometry takes portals: a box,
 fruit or vine segment in the way blocks the shot, and with nothing in range it fizzles (`mid_air`: the portal goes
 to the end of the range instead). Any moving object that gets within `radius`
 (14) of one portal comes out of the other, pushed out along its direction of travel with its velocity kept;
-Lina too. Portals reset every level. Firing plays the game's gun sound (`gungun_shot`), a teleport its port sound
+Lina too. Joined objects (step ladders, bamboo, unicycles; `openlina_sdk::joints`) go through as a whole, placed in
+front of the exit along the direction of travel (`joined-teleport.toml`); one held by something that can't move
+teleports just the touching piece. Portals reset every level. Firing plays the game's gun sound (`gungun_shot`), a teleport its port sound
 (`gungun_port`; `sounds`, through `openlina_sdk::sound`). Pool entry, HUD icon and label via `openlina_sdk::items`
 (icons in the vanilla style, `art/icon.toml` 12x12 and `art/icon-big.toml` 24x24); portals are `Sprite15` objects
 with the mod's own animations (`assets/images/openlina/portal-*.png`, drawn from `art/*.toml`).
@@ -78,13 +80,16 @@ Lina was (velocities kept). If nothing is hit, nothing happens, and the shot is 
 everything with a Box2D fixture: boxes, fruits, frogs, vines, enemies, the other player in co-op, and (`walls =
 "swap"`, default) static level geometry too: the tile goes where Lina stood and stays solid there (a box dropped on
 it lands on it). `walls = "block"`: a wall in between means no swap; `"pass"`: the ray goes through walls and only
-movable objects count. Firing plays the game's teleporter sounds (`shoot_telebox`, then `tele_telebox` for the
+movable objects count. Joined objects (step ladders, bamboo, unicycles; `openlina_sdk::joints`) trade places as a
+whole: every piece moves by the same offset, the group's centre to where Lina stood, and Lina goes to the piece that
+was hit (`joined-swap.toml`); one held by something that can't move swaps just that piece. Firing plays the game's
+teleporter sounds (`shoot_telebox`, then `tele_telebox` for the
 swap; `sounds`, through `openlina_sdk::sound`).
 
 The ray is the game's own Box2D ray cast (native `world_ray_cast`, as used by the Line of Sight behavior
 `fish.system.beh.LOS`) through `openlina_sdk::aim::AimRay`: the nearest hit, Lina herself skipped. While Swap is
-selected, the `ray-crosshair` marker shows where that ray stops (`swap-box.toml` checks that it sits on the box
-before the shot). Pool entry, HUD
+selected, the `ray-crosshair` mod puts the game's reticle where that ray stops (`swap-box.toml` checks that it sits
+on the box before the shot). Pool entry, HUD
 icon and label via `openlina_sdk::items`; icons in the vanilla style: `art/icon.toml` (12x12, `assets/…/swap.png`, the
 HUD) and `art/icon-big.toml` (24x24, `swap-big.png` for the tool selection and the editor, and the website icon).
 
@@ -100,7 +105,7 @@ roll drew swap goes on into the first level.
 | `walls` | string | `"swap"` | Static level geometry (tiles, walls) on the ray: `swap` trades places with it like with anything else (the tile goes where Lina stood), `block` stops the ray (nothing is swapped), `pass` lets the ray through to the movable objects behind. |
 | `check_ticks` | int | `12` | With trace: how many ticks after a swap to print where both objects really are (a check for tests). |
 | `sounds` | bool | `true` | Play the game's teleporter sounds: `shoot_telebox` when Swap fires, `tele_telebox` when it swaps. |
-| `trace` | bool | `false` | Print every shot (`[swap] tick T: ray …`, `player (x, y) <-> box (x, y)`, `nothing in line of sight`, `blocked by <type>`, with the ammo left) and the check after each swap (`[swap] check: … near the object's old spot: true`). |
+| `trace` | bool | `false` | Print every shot (`[swap] tick T: ray …`, `player (x, y) <-> box (x, y)`, `nothing in line of sight`, `blocked by <type>`, with the ammo left) and the check after each swap (`[swap] check: player at (x, y) near the object's old spot: true`, `object … near where it was sent: true`) and `<type> moves with its group of N` for joined objects. |
 <!-- /options -->
 
 Tests (`mods/swap/tests/`, 10 scenarios): in the pool with 3 shots; `ammo` option; a box right of Lina is swapped
@@ -138,8 +143,8 @@ Options:
 
 A modifier (key `solid-edges`, HUD icon from `art/modifier.toml`); with `always = true` it applies in every level.
 In levels that roll it, the screen border is a wall: every tick, objects crossing the visible play field are pushed back inside and
-bounce (`bounce` 0.5 of the speed kept; slower than `rest_speed` 40 they stop; `friction` 0.9 of the speed along
-the border kept per tick of contact). Player, frogs and fruits (unless `coins`) stay vanilla; long levels keep x
+bounce (`bounce` 0.5 of the speed kept; slower than `rest_speed` 40 they stop; objects slide along the border
+without friction, `friction` below 1 brakes them). Player, frogs and fruits (unless `coins`) stay vanilla; long levels keep x
 open; objects far off-screen stay vanilla. With screen-wrap in the pack: two rolled modifiers never meet; an
 `always` one steps aside in levels that roll the other; both `always` is declared as a `[[conflict]]` in its
 mod.toml, so builds, `openlina set` and the website refuse it with the reason. Tests: 6 scenarios, 3 of
@@ -152,7 +157,7 @@ Options:
 |---|---|---|---|
 | `always` | bool | `false` | Apply in every level instead of as a rolled modifier (then it steps aside in levels that roll screen-wrap). |
 | `bounce` | float | `0.5` | Share of the speed kept when bouncing off the border (0 = stop dead, 1 = perfectly elastic). |
-| `friction` | float | `0.9` | Speed along the border kept per tick of contact (1 = frictionless sliding). |
+| `friction` | float | `1.0` | Speed along the border kept per tick of contact (1, the default: frictionless sliding, as the border has no friction; 0.9 brakes objects sliding along it). |
 | `rest_speed` | float | `40.0` | Impacts slower than this stop instead of bouncing (avoids jitter while resting on the border). |
 | `coins` | bool | `false` | Fruits bounce too. Pushing a fruit off the screen collects it in vanilla; bouncing fruits can then only be collected by touching them. |
 | `trace` | bool | `false` | Print every real bounce (not resting contact) to stdout. |
@@ -185,30 +190,30 @@ without the modifier; `factor = 0.25` (16 units); the game's roll draws it (seed
 
 ## ray-crosshair (general)
 
-A utility for item mods: while Lina holds an item that asks for it, a small ring marks where her aim meets the next
-surface, the first tile, wall or object along the direction of the game's reticle within the item's range. The
-marker replaces the game's reticle while it shows (`hide_reticle`; the reticle still gives the direction, and comes
-back for every other item). Item mods opt in with `openlina_sdk::aim::show_crosshair(code, item,
-range)` and `requires = ["core", "ray-crosshair"]`, and fire with the same `aim::AimRay`, so they act exactly where
-the marker is: swap and portal-gun do. With nothing in range, or another item selected, the marker is hidden. Only
-the first player gets one.
+A utility for item mods: while Lina holds an item that asks for it, the game's own reticle (the "+") reaches as far
+as the item does: it sits on the first tile, wall or object along the aim within the item's range, or, with nothing
+in range, at the end of the range, kept inside the visible play field (below the HUD bar) so it still shows the
+direction. There is no second crosshair. Item mods opt in with `openlina_sdk::aim::show_crosshair(code, item,
+range)` and `requires = ["core", "ray-crosshair"]`, and fire with the same `aim::AimRay` from Lina through the
+reticle, so they act where it is: swap and portal-gun do. Every other item keeps vanilla's reticle.
 
-How it works: it defines the number hook `ray_crosshair_range(slot) -> F64` (item mods return their range for their
-item). On every level tick it finds the selected slot (the `b_item` whose `nr` is Lina's `item_selected`), asks the
-hook, casts the ray from Lina through the reticle (`world_ray_cast`, static bodies included, Lina excluded) and
-moves its marker (a `Sprite15`) there, half its size back along the ray: level objects are drawn over sprites that
-overlap them. Showcase `media/marker.gif`.
+How it works: vanilla already places the reticle with a ray (`EvSheet_gameplay.update`, L10879-10936): for the aim
+types short, mid and long it casts the `gun`'s line of sight (`LOS.castRay`, only the `solid` family) towards an aim
+point a fixed offset from Lina (`short_aim_point`, `mid_aim_point`, `max_aim_point`, about 100 units) and puts the
+reticle on the hit or on the aim point. The mod defines the number hook `ray_crosshair_range(slot) -> F64` (item
+mods return their range for their item) and guards that cast: when the hook gives the selected slot a range, it casts
+`AimRay` instead (Box2D, tiles and objects, Lina excluded) from the gun along the same direction, places the reticle
+and skips vanilla's cast. Aim types without a ray (short2, mid2, long2, shoot, remote) are left alone. Showcase
+`media/reticle.gif`.
 
-Source: `mods/ray-crosshair/src/main.rs`. Requires `core`. Tests: `mods/ray-crosshair/tests/` (the marker in front
-of the vine, by position; hidden for other items and back; on the floor when aiming down, hidden for the sky; the
-showcase; the game's reticle hidden while the marker shows and back after switching items). `trace` also prints the
-marker as `[pos] tick T ray-crosshair x y` for `position` expectations.
+Source: `mods/ray-crosshair/src/main.rs`. Requires `core`. Tests: `mods/ray-crosshair/tests/` (the reticle on the
+vine, by position; vanilla for other items and back; on the floor when aiming down, below the HUD bar for the sky;
+the showcase). `trace` also prints the reticle as `[pos] tick T ray-crosshair x y` for `position` expectations.
 
 <!-- options:ray-crosshair -->
 | option | type | default | description |
 |---|---|---|---|
-| `hide_reticle` | bool | `true` | Hide the game's own aim reticle while the marker shows (it comes back for every other item). Off: both show. |
-| `trace` | bool | `false` | Print what the aim hits every `trace_every` ticks (`[ray-crosshair] tick T: aim hits <type> at (x, y)`, or `marker hidden`) and the marker as `[pos] tick T ray-crosshair x y` (for `position` expectations). |
+| `trace` | bool | `false` | Print where the reticle goes every `trace_every` ticks (`[ray-crosshair] tick T: reticle on <type> at (x, y)` or `reticle at the end of the range (x, y)`) and the reticle as `[pos] tick T ray-crosshair x y` (for `position` expectations). |
 | `trace_every` | int | `30` | With trace: print every this many level ticks. |
 <!-- /options -->
 
@@ -242,13 +247,17 @@ right edge starts a run; her other deaths (explosions) stay as well.
 
 What leaving the screen does in vanilla still happens, then the object wraps instead of disappearing:
 - **Fruits** (`coins`): pushing a fruit off the screen collects it (vanilla: deleting a fruit collects it, through
-  its destroy listener); the mod collects it the same way and wraps it, already collected. Glitched fruits stay
-  vanilla.
+  its destroy listener); the mod collects it the same way and wraps it, already collected, looking and floating like
+  a touched fruit (as `tryTouchCoin` does: `spr_coin` shows its animation + `_collected`, the darker model;
+  `personal_gravity` 0.125). Glitched fruits stay vanilla.
 - **Frogs** (`frogs`): a live frog leaving still counts as landed (`frogland_count`); the frog you steer in frog mode
   stays vanilla, since losing it loses the level. The frog item (`s_frog`) is an ordinary physics object and wraps.
 - **Joined objects** (`joined`): step ladders, bamboo, tentacles and the like are several bodies held by Box2D
-  joints. The mod follows the joints to the whole group and moves every piece by the same offset once the
-  group's centre crosses an edge, so nothing is torn across the screen (pieces past the edge are kept until then).
+  joints. The mod follows the joints to the whole group (`openlina_sdk::joints`) and moves every piece by the same
+  offset once the whole group is off the screen, so nothing is torn across the screen (pieces past the edge are
+  kept until then). The offset puts the group's leading piece just outside the opposite edge, so it slides in
+  leading end first like a single object, however long it is (each piece with the game's slack, `edgewith`;
+  `long-group-slides-in.toml`: a 10-piece bamboo).
   Groups held by level geometry (a vine hanging from the ceiling) or by Lina stay vanilla.
 
 Source: `mods/screen-wrap/src/main.rs`. Requires `core` (0.6.0: frogs). Tests: `mods/screen-wrap/tests/` (12
@@ -260,12 +269,12 @@ scenarios).
 | `always` | bool | `false` | Apply in every level instead of as a rolled modifier. |
 | `coins` | bool | `true` | Also wrap fruits. A fruit pushed off the screen is still collected, as in vanilla, and then comes back on the other side (already collected). Glitched fruits stay vanilla (back to their spawn until every player touched them). |
 | `frogs` | bool | `true` | Also wrap frogs. A live frog leaving still counts as landed (they show up in the frog level), every time it crosses. The frog you steer in frog mode is left to vanilla: losing it still loses the level. |
-| `joined` | bool | `true` | Wrap objects joined to others (step ladders, bamboo, tentacles, chains) as a whole: pieces past the edge stay until the group's centre crosses, then every piece moves together. Groups held by level geometry or by Lina are left to vanilla. |
+| `joined` | bool | `true` | Wrap objects joined to others (step ladders, bamboo, tentacles, chains) as a whole: pieces past the edge stay until the whole group is off the screen, then every piece moves together and the group comes in at the opposite edge like a single object. Groups held by level geometry or by Lina are left to vanilla. |
 | `player` | bool | `false` | Also wrap Lina: leaving the screen (falling into a pit, walking off a side) brings her back on the opposite side instead of losing the level. Her other deaths stay. |
 | `secondary` | bool | `true` | Also wrap secondary physics objects. |
 | `max_overshoot` | float | `200.0` | Only wrap objects at most this far past the edge. Physics objects move at most 100 units per tick (the Box2D speed cap, observed in game), so keep this above 100. Parked objects sit about 1000 out. |
 | `min_tick` | int | `5` | Don't wrap during the first ticks of a layout, when levels delete objects placed off-screen. |
-| `trace` | bool | `false` | Print `[screen-wrap] tick T kind K (x, y) -> (x', y')` for every wrap, `group of N with <type>, centre (x, y) -> (x', y')` for joined objects and `<type> is held by something that can't move` when a group is left to vanilla. |
+| `trace` | bool | `false` | Print `[screen-wrap] tick T kind K (x, y) -> (x', y')` for every wrap, `group of N with <type> moved by (dx, dy)` for joined objects and `<type> is held by something that can't move` when a group is left to vanilla. |
 <!-- /options -->
 
 What stays vanilla:
@@ -290,7 +299,8 @@ wraps, once (`coins = false`: vanilla); the frog item wraps; a step ladder throw
 Every level gets `count` (3) of the game's own cannons (`cannon_base`, created with `Layout.createObject` like level
 objects, which adds the barrel and face parts). At layout tick `tick` (10) of every gameplay layout but the hub, title
 screens and tool selection (`skip_layouts`), the span [`x_min`, `x_max`] is cut into `count` bands and one cannon
-appears at a random x in each, at height `y` (40), and falls onto what is below. Positions closer than
+appears at a random x in each, one after another (`stagger`, 45 ticks apart), at height `y` (4, hidden behind the
+HUD bar), and falls into view onto what is below. Positions closer than
 `player_distance` (120) to Lina are rolled again, so no cannon drops onto her and shoots point-blank. The cannons
 behave like vanilla ones: asleep until Lina makes noise within 111 units, then they aim, charge and fire explosive
 `heavy_shot`s; with `awake = true` they start awake (showcase `media/awake-cannons.gif`). A retry after a death
@@ -306,8 +316,9 @@ without duplicates and the trace's counter they rely on).
 | `count` | int | `3` | Cannons added to every level (0 to 20). |
 | `awake` | bool | `false` | The cannons start awake and shoot right away. Off: like vanilla cannons, they sleep until Lina lands or bumps into something within 111 units of them. |
 | `player_distance` | float | `120.0` | Keep cannons at least this far from Lina (horizontally) when they appear, so none drops onto her and shoots point-blank. |
-| `tick` | int | `10` | Layout tick at which the cannons appear (120 ticks per second). |
-| `y` | float | `40.0` | Height at which the cannons appear (0 = top of the 338 high play field); they fall onto whatever is below. |
+| `tick` | int | `10` | Layout tick at which the first cannon appears (120 ticks per second). |
+| `stagger` | int | `45` | Ticks between one cannon and the next (120 per second), so they drop in one after another. 0: all at once. |
+| `y` | float | `4.0` | Height at which the cannons appear (0 = top of the 338 high play field; the HUD bar hides y < 23, so at the default they fall into view); they fall onto whatever is below. Above -7 the game deletes them at once. |
 | `x_min` | float | `60.0` | Left end of the span the cannons are spread over (the play field is 600 wide). |
 | `x_max` | float | `540.0` | Right end of the span. It is cut into `count` equal bands, one cannon at a random x in each. |
 | `skip_layouts` | list | `["help", "main", "first_screen", "manager"]` | Layouts that run the gameplay sheet but are not levels: the hub, title screens and tool selection. |

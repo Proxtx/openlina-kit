@@ -1,0 +1,35 @@
+name = "portal-gun: a step ladder (6 pieces held by joints) goes through the portals as a whole"
+mods = ["portal-gun"]
+fixtures = ["trace-positions", "debug-spawn"]
+timeout = 60
+
+[options.portal-gun]
+trace = true
+preset = "200,185,450,60"     # blue where Lina builds the ladder, orange high up on the right
+
+[options.debug-spawn]
+spawns = ["box@5:-1000,-1000"]          # (the fixture's own box, parked out of the way)
+
+[options.trace-positions]
+types = ["stepladder"]
+ticks = "140,160"
+
+[harness]
+level = "greendemo 1"
+seed = 1
+items = ["stepladder"]
+inputs = ["60:shoot"]
+end_tick = 200
+
+# Lina builds the ladder into the blue portal; all six pieces come out at orange together
+[[expect]]
+contains = "stepladder goes through with its group of 6"
+[[expect]]
+contains = "stepladder through blue -> orange"
+[[expect]]
+position = { tick = 140, type = "stepladder", x_gt = 300, away = true }
+[[expect]]
+contains = "[pos] tick 160 stepladder"
+min = 6
+[[expect]]
+position = { tick = 160, type = "stepladder", x_lt = 400, away = true }

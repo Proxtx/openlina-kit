@@ -1,4 +1,4 @@
-name = "ray-crosshair: the marker follows the aim: the floor when aiming down, nothing in the sky"
+name = "ray-crosshair: the reticle follows the aim: the floor when aiming down, the screen's edge for the sky"
 mods = ["portal-gun"]
 timeout = 60
 
@@ -14,11 +14,14 @@ inputs = ["30-65:down", "70-110:up"]
 end_tick = 120
 
 [[expect]]
-contains = "[ray-crosshair] tick 20: aim hits fern at ("      # forward: the vine
+contains = "[ray-crosshair] tick 20: reticle on fern at ("      # forward: the vine
 [[expect]]
-contains = ": aim hits tile_short at ("                  # down: the tile under Lina
+contains = ": reticle on tile_short at ("                  # down: the tile under Lina
+# the reticle on the tile, at Lina's feet (she stands at about y 194, the tile's top at 201)
 [[expect]]
-contains = "[ray-crosshair] tick 100: marker hidden"  # up: nothing within range
-# the marker sits on the tile, just above it (Lina stands at about y 194, the tile's top at 201)
+position = { tick = 60, type = "ray-crosshair", y_gt = 195, y_lt = 206, x_gt = 110, x_lt = 135 }
+# up: nothing within range; the reticle stops below the HUD bar, so it stays visible
 [[expect]]
-position = { tick = 60, type = "ray-crosshair", y_gt = 190, y_lt = 198, x_gt = 110, x_lt = 135 }
+contains = "[ray-crosshair] tick 100: reticle at the end of the range ("
+[[expect]]
+position = { tick = 100, type = "ray-crosshair", y_gt = 31, y_lt = 33 }

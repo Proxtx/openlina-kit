@@ -15,7 +15,7 @@ y = 400.0
 
 [options.inspect]
 at = ["tick:25", "tick:200"]
-print = ["@coin[].state"]
+print = ["@coin[].state", "@coin[].personal_gravity", "@spr_coin[].sprite.anim"]
 
 [harness]
 level = "greendemo 1"
@@ -36,3 +36,10 @@ contains = "[inspect] tick:200 @coin[0].state = 0"
 [[expect]]
 contains = "fruit collected"
 max = 1
+# ...and looks and floats like a touched fruit (the darker model; vanilla tryTouchCoin)
+[[expect]]
+contains = "[inspect] tick:200 @spr_coin[1].sprite.anim = blue_collected"
+[[expect]]
+contains = "[inspect] tick:200 @coin[1].personal_gravity = 0.125"
+[[expect]]
+contains = "[inspect] tick:200 @spr_coin[0].sprite.anim = green"

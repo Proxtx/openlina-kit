@@ -1,4 +1,4 @@
-name = "screen-wrap: a step ladder (6 pieces held by joints) wraps as a whole when its centre crosses"
+name = "screen-wrap: a step ladder (6 pieces held by joints) wraps as a whole once it is off the screen"
 mods = ["screen-wrap"]
 fixtures = ["debug-spawn"]
 timeout = 60
@@ -19,9 +19,9 @@ items = ["stepladder"]
 inputs = ["60:shoot"]
 end_tick = 480
 
-# all six pieces move together: out at the top (centre above the screen), in at the bottom
+# all six pieces move together: out at the top, in at the bottom (dy: the screen's height and more)
 [[expect]]
-contains = "group of 6 with stepladder, centre (2"
+contains = "group of 6 with stepladder moved by (0, 3"
 # ...and never one piece alone
 [[expect]]
 not_contains = " kind 0 ("

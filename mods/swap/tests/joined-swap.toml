@@ -1,0 +1,39 @@
+name = "swap: firing at a step ladder (6 pieces held by joints) swaps Lina with the whole ladder"
+mods = ["swap"]
+fixtures = ["trace-positions", "debug-spawn"]
+timeout = 60
+
+[options.swap]
+trace = true
+
+[options.debug-spawn]
+spawns = ["box@5:-1000,-1000"]          # (the fixture's own box, parked out of the way)
+
+[options.trace-positions]
+types = ["stepladder"]
+ticks = "250,280"
+
+# Lina builds a step ladder in front of her (x ~200), switches to Swap, steps back and fires at it
+[harness]
+level = "greendemo 1"
+seed = 1
+items = ["stepladder", "swap"]
+inputs = ["60:shoot", "150:switch", "160-175:left", "200-202:right", "260:shoot"]
+end_tick = 300
+
+[[expect]]
+contains = "stepladder moves with its group of 6"
+[[expect]]
+contains = "[swap] check: player at ("
+[[expect]]
+contains = "near the object's old spot: true"
+[[expect]]
+contains = "near where it was sent: true"
+# before: all six pieces in front of Lina; after: all six around her old spot (x ~111), none left behind
+[[expect]]
+position = { tick = 250, type = "stepladder", x_lt = 190, away = true }
+[[expect]]
+contains = "[pos] tick 280 stepladder"
+min = 6
+[[expect]]
+position = { tick = 280, type = "stepladder", x_gt = 150, away = true }

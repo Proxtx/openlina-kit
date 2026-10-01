@@ -17,7 +17,11 @@
 //! - Teleporting: a `tick` handler checks every object of `physics_obj` (which includes the
 //!   player): within `radius` of one portal, it is moved out of the other portal, offset along
 //!   its direction of travel so it doesn't fall straight back in. Moving `sprite.position` keeps
-//!   the Box2D velocity. A short per-object cooldown stops ping-ponging.
+//!   the Box2D velocity. A short per-object cooldown stops ping-ponging. Joined objects (step
+//!   ladders, bamboo, unicycles: bodies held by Box2D joints, `openlina_sdk::joints`) go through as
+//!   a whole: every piece by the same offset, the group in front of the exit along the direction
+//!   of travel (its rearmost piece where the touching one would come out), so no piece ends up
+//!   behind the exit portal. A group held by something that can't move teleports just the piece.
 //! - Portals reset on every new level (layout tick 1). `preset` places both at level start.
 //!
 //! Static bodies (`physics.immovable`) never teleport.
@@ -28,7 +32,7 @@ use openlina_sdk::hlbc::opcodes::Opcode;
 use openlina_sdk::hlbc::types::{RefGlobal, RefType, Reg};
 use openlina_sdk::items::{self, Aim, Item};
 use openlina_sdk::sound::{self, Sound};
-use openlina_sdk::{aim, anims, hooks, Code, ModConfig};
+use openlina_sdk::{aim, anims, hooks, joints, Code, ModConfig};
 
 const ITEM: &str = "portal";
 const COOLDOWN: i32 = 45;
@@ -408,8 +412,61 @@ fn build_tick(code: &mut Code, st: &State, place: openlina_sdk::hlbc::types::Ref
             f.add(ex, ex, px[other]);
             f.mul(ey, ny, exit_dist);
             f.add(ey, ey, py[other]);
+            // a joined object (step ladder, bamboo, unicycle…) goes through as a whole: every piece
+            // by the same offset, the group placed in front of the exit along the direction of
+            // travel (its rearmost piece where this one would come out); a group held by something
+            // that can't move (a vine on the ceiling, Lina) teleports just this piece
+            let (held, through) = (f.label(), f.label());
+            let group = joints::collect(f, sheet, obj, held)?;
+            // the rearmost piece along the direction of travel: tmin = min (p_i - p) . n (<= 0)
+            let tmin = f.reg(f64_t);
+            f.float(tmin, 0.0);
+            f.for_range(group.n, |f, j| {
+                let m = joints::member(f, &group, j)?;
+                let mp = f.get_new(m, "sprite")?;
+                let mp = f.get_new(mp, "position")?;
+                let (mx, my) = (f.get_new(mp, "x")?, f.get_new(mp, "y")?);
+                let (a, b) = (f.reg(f64_t), f.reg(f64_t));
+                f.sub(a, mx, x);
+                f.mul(a, a, nx);
+                f.sub(b, my, y);
+                f.mul(b, b, ny);
+                f.add(a, a, b);
+                let keep = f.label();
+                f.jge(a, tmin, keep);
+                f.mov(tmin, a);
+                f.place(keep);
+                Ok(())
+            })?;
+            let (gdx, gdy, back) = (f.reg(f64_t), f.reg(f64_t), f.reg(f64_t));
+            f.sub(gdx, ex, x);
+            f.mul(back, nx, tmin);
+            f.sub(gdx, gdx, back);
+            f.sub(gdy, ey, y);
+            f.mul(back, ny, tmin);
+            f.sub(gdy, gdy, back);
+            joints::shift(f, &group, gdx, gdy)?;
+            if o.trace {
+                let alone = f.label();
+                let one = f.const_i32(1);
+                f.jle(group.n, one, alone);
+                let ty = f.get_new(obj, "type")?;
+                f.print(&[
+                    Print::Str("[portal-gun] tick "),
+                    Print::Val(tick),
+                    Print::Str(" "),
+                    Print::Val(ty),
+                    Print::Str(" goes through with its group of "),
+                    Print::Val(group.n),
+                ])?;
+                f.place(alone);
+            }
+            f.jmp(through);
+            f.place(held);
             f.set(pos, "x", ex)?;
             f.set(pos, "y", ey)?;
+            f.place(through);
+            let (ex, ey) = (f.get_new(pos, "x")?, f.get_new(pos, "y")?);
             set_g(f, st.cool_uid, uid);
             set_g(f, st.cool_tick, tick);
             if o.sounds {

@@ -1,12 +1,13 @@
 //! Aiming along the crosshair: the ray from Lina through the game's reticle to the first thing it
-//! hits, and the `ray-crosshair` marker that shows that point while an item is selected.
+//! hits, and the `ray-crosshair` mod that puts the reticle on that point while an item is selected.
 //!
-//! The game's reticle (`crosshair_point`) is a fixed offset from Lina per held direction
-//! (docs/game/input.md), so it only gives a direction. [`AimRay::cast`] follows that direction
-//! up to a range with the game's own Box2D ray cast ([`crate::physics::RayCast`]) and returns the
-//! nearest object and the point where the ray meets it. The `ray-crosshair` mod draws a marker at
-//! that point every tick for the items that ask for it ([`show_crosshair`]); items that fire with
-//! the same [`AimRay`] act exactly where the marker is.
+//! Vanilla's reticle (`crosshair_point`) stops at level geometry within about 100 units of Lina
+//! (an aim point a fixed offset away per held direction, docs/game/input.md). [`AimRay::cast`]
+//! follows that direction up to a range with the game's own Box2D ray cast
+//! ([`crate::physics::RayCast`]) and returns the nearest object and the point where the ray meets
+//! it. For the items that ask ([`show_crosshair`]), the `ray-crosshair` mod places the game's
+//! reticle with the same ray, up to the item's range; items that fire with [`AimRay`] from Lina
+//! through the reticle act where it is.
 //!
 //! ```ignore
 //! aim::show_crosshair(code, "swap", 400.0)?;          // mod.toml: requires = ["core", "ray-crosshair"]
@@ -62,7 +63,7 @@ pub struct AimHit {
 
 impl AimHit {
     /// New registers: the point `d` layout units before the hit, back towards the shooter (in
-    /// front of the surface, where a marker or an object fits without overlapping it).
+    /// front of the surface, where an object fits without overlapping it).
     pub fn before(&self, f: &mut FnBuilder, d: f64) -> (Reg, Reg) {
         let dist = f.const_f64(-d);
         let (x, y) = (f.reg_f64(), f.reg_f64());

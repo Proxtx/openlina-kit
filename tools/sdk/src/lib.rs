@@ -31,6 +31,7 @@ pub mod caps;
 pub mod edit;
 pub mod hooks;
 pub mod items;
+pub mod joints;
 pub mod kit;
 pub mod levels;
 pub mod manifest;

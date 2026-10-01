@@ -6,7 +6,7 @@ timeout = 60
 [options.swap]
 trace = true
 
-# the marker shows the box before the shot
+# the game's reticle shows the box before the shot
 [options.ray-crosshair]
 trace = true
 trace_every = 10
@@ -26,7 +26,7 @@ inputs = ["60:shoot"]
 end_tick = 150
 
 [[expect]]
-contains = "[ray-crosshair] tick 50: aim hits box at ("
+contains = "[ray-crosshair] tick 50: reticle on box at ("
 # the ray hit the box, not something else, and the shot was used
 [[expect]]
 contains = ") <-> box ("
@@ -44,7 +44,7 @@ contains = "near the object's old spot: true"
 [[expect]]
 contains = "[swap] check: object box at"
 [[expect]]
-contains = "near the player's old spot: true"
+contains = "near where it was sent: true"
 [[expect]]
 not_contains = "old spot: false"
 

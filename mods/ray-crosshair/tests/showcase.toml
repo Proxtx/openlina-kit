@@ -1,4 +1,4 @@
-name = "ray-crosshair: showcase: the marker shows what Swap will hit"
+name = "ray-crosshair: showcase: the game's reticle shows what Swap will hit"
 mods = ["swap"]
 fixtures = ["debug-spawn"]
 timeout = 60
@@ -20,19 +20,19 @@ y = 185.0
 level = "greendemo 1"
 seed = 3
 items = ["swap", "box"]
-# down: the floor; forward: the box; shoot: Lina and the box trade places; up: the sky (no marker)
+# down: the floor; forward: the box; shoot: Lina and the box trade places; up: the sky (the reticle at the edge of the screen)
 inputs = ["20-55:down", "100:shoot", "130-160:up"]
 end_tick = 180
 
 [[expect]]
-contains = ": aim hits tile_short at ("
+contains = ": reticle on tile_short at ("
 [[expect]]
-contains = ": aim hits box at ("
+contains = ": reticle on box at ("
 [[expect]]
 contains = ") <-> box ("
 [[expect]]
-contains = "marker hidden"
+contains = "reticle at the end of the range"
 
 [gif]
 capture = "15-180/2"
-out = "media/marker.gif"
+out = "media/reticle.gif"

@@ -1,4 +1,4 @@
-name = "ray-crosshair: the marker hides when the selected item didn't ask for it, and comes back"
+name = "ray-crosshair: only items that asked get the long reticle; it comes back when switching back"
 mods = ["swap"]
 timeout = 60
 
@@ -15,10 +15,11 @@ inputs = ["45-48:switch", "85-88:switch"]
 end_tick = 140
 
 [[expect]]
-contains = "[ray-crosshair] tick 40: aim hits fern at ("
+contains = "[ray-crosshair] tick 40: reticle on fern at ("
+# the box didn't ask: vanilla places the reticle, the mod prints nothing
 [[expect]]
-contains = "[ray-crosshair] tick 60: marker hidden"
+not_contains = "[ray-crosshair] tick 60:"
 [[expect]]
-contains = "[ray-crosshair] tick 80: marker hidden"
+not_contains = "[ray-crosshair] tick 80:"
 [[expect]]
-contains = "[ray-crosshair] tick 120: aim hits fern at ("
+contains = "[ray-crosshair] tick 120: reticle on fern at ("

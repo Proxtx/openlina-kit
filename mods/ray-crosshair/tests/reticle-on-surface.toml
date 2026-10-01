@@ -1,0 +1,23 @@
+name = "ray-crosshair: with Swap selected, the game's reticle sits on the first surface along the aim"
+mods = ["swap"]                      # requires ray-crosshair
+timeout = 60
+
+[options.ray-crosshair]
+trace = true
+trace_every = 20
+
+[harness]
+level = "greendemo 1"
+seed = 1
+items = ["swap", "box"]
+end_tick = 60
+
+# Lina starts at about (124, 194) aiming right, slightly up: the vine in the middle stops the ray
+# (vanilla's reticle would sit about 100 units in front of her, at x ~ 220)
+[[expect]]
+contains = "[ray-crosshair] tick 40: reticle on fern at ("
+# on the vine's left edge (about x 282), at Lina's aim height
+[[expect]]
+position = { tick = 40, type = "ray-crosshair", x_gt = 276, x_lt = 288, y_gt = 160, y_lt = 180 }
+[[expect]]
+not_contains = "end of the range"

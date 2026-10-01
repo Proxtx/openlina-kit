@@ -31,4 +31,4 @@ not_contains = "blocked by"
 [[expect]]
 contains = "near the object's old spot: true"
 [[expect]]
-contains = "near the player's old spot: true"
+contains = "near where it was sent: true"

@@ -1,4 +1,4 @@
-name = "cannons: a level gets three cannons at tick 10, spread over the screen"
+name = "cannons: a level gets three cannons, one after another from tick 10, spread over the screen, falling into view"
 mods = ["cannons"]
 fixtures = ["trace-positions"]
 timeout = 60
@@ -8,7 +8,7 @@ trace = true
 
 [options.trace-positions]
 types = ["cannon_base"]
-ticks = "11,300"
+ticks = "11,101,300"
 
 [harness]
 level = "greendemo 1"
@@ -16,24 +16,36 @@ modifier = 0
 seed = 1
 end_tick = 300
 
+# one after another, `stagger` (45) ticks apart
 [[expect]]
-contains = "[cannons] greendemo 1 tick 10: cannon 3 at"
-
+contains = "[cannons] greendemo 1 tick 10: cannon 1 at"
 [[expect]]
-contains = "[cannons] greendemo 1 tick 10: cannon"
-min = 3
+contains = "[cannons] greendemo 1 tick 55: cannon 2 at"
+[[expect]]
+contains = "[cannons] greendemo 1 tick 100: cannon 3 at"
+[[expect]]
+contains = ": cannon"
 max = 3
 
 # all three exist in the game, one per band of the screen
 [[expect]]
 contains = "[pos] tick 11 cannon_base"
+max = 1
+[[expect]]
+contains = "[pos] tick 101 cannon_base"
 min = 3
 max = 3
+
+# the first starts hidden behind the HUD bar (y < 23) and slides into view (about 20 units in the first second)
+[[expect]]
+position = { tick = 11, type = "cannon_base", y_lt = 10 }
+[[expect]]
+position = { tick = 300, type = "cannon_base", y_lt = 23, away = true }
 
 # Lina starts at x ~124: no cannon within player_distance (120) of her; the first band's cannon
 # goes to her right
 [[expect]]
-position = { tick = 11, type = "cannon_base", x_lt = 240, away = true }
+position = { tick = 101, type = "cannon_base", x_lt = 240, away = true }
 
 [[expect]]
-position = { tick = 11, type = "cannon_base", x_gt = 380 }
+position = { tick = 101, type = "cannon_base", x_gt = 380 }

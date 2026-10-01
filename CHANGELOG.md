@@ -18,10 +18,29 @@ Maintainers: bump the version in the commit that changes something mods can noti
 `v<version>` and push the tag; the release workflow builds `openlina` and the skill zip. Then update the website
 (rebuild it against the new kit, replace its helpers) before uploading mods made with the new kit.
 
-## Unreleased
+## 0.1.3 (2026-10-02)
 
+- **SDK**: `joints` (joined objects, bodies held by Box2D joints: `collect` the whole group from one piece, or jump
+  to `held` when a static body or Lina holds it; `shift`, `centre`, `member`, `owner_of`).
+- **Mods**:
+  - ray-crosshair 0.3.0 extends the game's own reticle instead of drawing a marker: for the items that ask, it sits
+    on the first tile, wall or object along the aim within the item's range (vanilla: level geometry within about
+    100 units), or at the end of the range, kept below the HUD bar. In real play the game showed its hidden reticle
+    again, so two crosshairs appeared; now there is only the game's. `hide_reticle` is gone; the hook and
+    `aim::show_crosshair` are unchanged.
+  - swap 0.5.0 and portal-gun 0.5.0 move joined objects (step ladders, bamboo, unicycles…) as a whole: Swap trades
+    places with the whole group (its centre to Lina's spot), a portal sends the whole group through, placed in front
+    of the exit.
+  - screen-wrap 0.5.1: joined objects wrap once the whole group is off the screen and slide in at the opposite edge
+    leading end first (they wrapped by their centre and reappeared well inside the screen; a long bamboo popped up
+    whole); uses `joints`. A fruit collected by wrapping looks and floats like a touched one (the darker model,
+    `_collected`).
+  - solid-edges 0.3.0: frictionless along the border again (`friction` default 1; 0.9 since 0.2.0).
+  - cannons 0.2.0: the cannons drop in one after another (`stagger`, 45 ticks) and start hidden behind the HUD bar
+    (`y` 4), falling into view instead of popping up in the play field.
 - `openlina install a.zip b.zip`: a mod that requires one from a later zip of the same command installs (it was
   refused unless the required mod came first).
+- **Docs**: where the game puts its reticle (an aim point and a ray from the `gun`, docs/game/input.md).
 
 ## 0.1.2 (2026-10-01)
 

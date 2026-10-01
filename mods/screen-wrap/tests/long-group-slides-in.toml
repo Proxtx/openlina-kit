@@ -1,0 +1,41 @@
+name = "screen-wrap: a long bamboo (10 joined pieces) leaving at the bottom slides in at the top, leading end first, instead of popping up whole"
+mods = ["screen-wrap"]
+fixtures = ["trace-positions", "debug-spawn"]
+timeout = 90
+
+[options.screen-wrap]
+always = true
+trace = true
+
+# Lina fires the bamboo (it grows to 10 `snake_body` pieces); at tick 300 it is flung up and to
+# the right, and comes back down through the bottom (tick ~692)
+[options.debug-spawn]
+spawns = ["box@5:-1000,-1000"]          # (the fixture's own box, parked out of the way)
+pushes = ["snake_body@300:150,-700"]
+
+[options.trace-positions]
+types = ["snake_body"]
+ticks = "689,695,780"
+
+[harness]
+level = "greendemo 1"
+seed = 1
+items = ["bamboo"]
+inputs = ["60:shoot"]
+end_tick = 800
+
+[[expect]]
+contains = "group of 10 with snake_body moved by (0, -4"
+# just before: the whole bamboo at or below the bottom edge (it wraps once its last piece is out)
+[[expect]]
+position = { tick = 689, type = "snake_body", y_lt = 330, away = true }
+# just after: all of it still above the play field (a shift by one screen height would have put
+# its leading end ~100 units deep into the screen)
+[[expect]]
+position = { tick = 695, type = "snake_body", y_gt = 25, away = true }
+# and later it is in view
+[[expect]]
+position = { tick = 780, type = "snake_body", y_gt = 40, y_lt = 120 }
+[[expect]]
+contains = "[pos] tick 780 snake_body"
+min = 10

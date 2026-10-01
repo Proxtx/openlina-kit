@@ -1,8 +1,8 @@
 [mod]
 id = "swap"
 name = "Swap"
-version = "0.4.0"
-kit = "0.1.2"
+version = "0.5.0"
+kit = "0.1.3"
 section = "items"
 description = "A new item: fire a ray along your aim and trade places with the first object it hits. Lina goes where the object was, the object goes where Lina was."
 authors = ["openlina-kit"]
@@ -43,7 +43,7 @@ description = "Play the game's teleporter sounds: `shoot_telebox` when Swap fire
 [options.trace]
 type = "bool"
 default = false
-description = "Print every shot (`[swap] tick T: ray …`, `player (x, y) <-> box (x, y)`, `nothing in line of sight`, `blocked by <type>`, with the ammo left) and the check after each swap (`[swap] check: … near the object's old spot: true`)."
+description = "Print every shot (`[swap] tick T: ray …`, `player (x, y) <-> box (x, y)`, `nothing in line of sight`, `blocked by <type>`, with the ammo left) and the check after each swap (`[swap] check: player at (x, y) near the object's old spot: true`, `object … near where it was sent: true`) and `<type> moves with its group of N` for joined objects."
 
 [stats]
 ammo = 3

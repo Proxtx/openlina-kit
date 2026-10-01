@@ -50,7 +50,7 @@ Toolchain: `nix develop` (Rust with the wasm target, imagemagick, gifsicle), or 
 
 Prefer, in order:
 
-1. **A registry or hook of the SDK** (`items`, `modifiers`, `levels`, `text`, `anims`, `sound`, `aim`; `hooks::handler` +
+1. **A registry or hook of the SDK** (`items`, `modifiers`, `levels`, `text`, `anims`, `sound`, `aim`, `joints`; `hooks::handler` +
    `hooks::subscribe` on the `core` hooks, `lina hooks`). Several mods can use the same hook without knowing about
    each other. A registry must cover every place the game lists that kind of thing: see the checklists in
    docs/sdk.md.

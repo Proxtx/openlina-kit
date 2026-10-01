@@ -8,6 +8,7 @@
 | `asm::FnBuilder` | new functions: registers (`reg`, `reg_f64`/`reg_i32`/`reg_bool`), labels, jumps, constants, arithmetic (`add`, `sub`, `mul`, `abs`, `random`), `get`/`get_new`/`set` fields, `call`/`call_new`, `static_obj`, `new_obj`, `cast`, `string_obj`, `string_of`, `print`, arrays (`array_len`, `array_get`, `new_array_obj`, `empty_f64_array`, `for_range`), `jstr_ne`, `exit`, globals (`get_global`, `set_global`, `clear_global`), `static_closure` |
 | `edit` | `find*`, `find_calls`, `find_field_access`, `is_field`/`is_set_field`, `expect_one`, `next_match`/`prev_match`, `replace_op`, `insert_ops`, `insert_ops_with_exits`, `guard_op`, `prepend_call`, `remove_ops`, `add_reg` |
 | `hooks` | `CORE_HOOKS`, `find`, `signature`, `handler`, `subscribe`, `define` (`lina hooks` lists them); notify, handled (Bool), value (object) and number (F64, negative = not mine) hooks; any mod can define hooks for others |
+| `joints` | joined objects (bodies held by Box2D joints: step ladders, bamboo, unicycles): `collect` the whole group from one piece (jumps to `held` when a static body or Lina holds it), `shift` every piece, `centre`, `member`, `owner_of` (a body's object) |
 | `items` | `register` an item (see the checklist below), `is_item`, `crosshair_pos`; behavior in an `item_use` handler |
 | `modifiers` | `register` a modifier (pool + HUD icon), `is_active`, `id_of`, `current_modifier` |
 | `levels` | `LevelPack::from_toml` + `register`: level packs built in code (core `packs` hook); `current_level_name`, `jump_unless_in_pack` |
@@ -16,7 +17,7 @@
 | `assets` | `png_problem` / `png_problems`: images in `assets/` the game can't load (only 8-bit PNGs, and 16-bit without a palette; others freeze it while starting) |
 | `physics` | `RayCast`: the nearest object on a line (Box2D `world_ray_cast`), e.g. line of sight; `fraction` for the hit point |
 | `sound` | `play(f, sheet, &Sound::new("gungun_shot").volume(-3.0).pitch(0.2))`: the game's sound effects (`res/media/`, listed in docs/game/engine.md) or a mod's own (`assets/media/<name>.wav`) |
-| `aim` | `AimRay` (the ray from Lina through the reticle to the next surface, with the hit point, `before` to step back from it), `shooter` (in `item_use`), `show_crosshair` (the `ray-crosshair` marker for an item) |
+| `aim` | `AimRay` (the ray from Lina through the reticle to the next surface, with the hit point, `before` to step back from it), `shooter` (in `item_use`), `show_crosshair` (the `ray-crosshair` mod's long reticle for an item) |
 | `world` | inside handlers: `is_level` / `jump_unless_level` (the `tick` hook also runs on the hub, title and tool selection: `NOT_LEVELS`), `player_pos` (Lina's x, y), `spawn` / `spawn_on` (create an object like levels do, on a layer), `count` (instances of a type) |
 | `kit` | `KIT_VERSION`, `KitVersion` (lines), `issue`/`issues`: which mods a tool of this kit can run (CHANGELOG.md) |
 | `runner` | `run_mod` (the `main` of every mod), `pack_info` (every mod of the pack with its options) |

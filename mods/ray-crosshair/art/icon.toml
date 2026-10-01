@@ -1,23 +1,26 @@
-# Website icon, 12x12: the marker on a wall.
+# Website icon, 16x16: the game's reticle (pale white "+", dark drop shadow) where the aim meets a wall.
 [palette]
 k = "#0d0d0d"
-w = "#ffffff"
-o = "#e8883a"
+w = "#ebfafa"
 g = "#5e6175"
 d = "#a8a8a8"
 
 [[frame]]
 pixels = """
-........gggg
-...kwwwkgddg
-..kw...wgddg
-.kw.....wddg
-.w......wddg
-.w...o..wddg
-.w......wddg
-.kw.....wddg
-..kw...wgddg
-...kwwwkgddg
-........gddg
-........gggg
+...........ggggg
+...........gdddg
+.....ww....gdddg
+....wwww...gdddg
+...kwwww...gdddg
+..wwwwwwww.gdddg
+.wwwwwwwwwwgdddg
+kwwwwwwwwwwgdddg
+kkwwwwwwww.gdddg
+.kkkwwwwk..gdddg
+...kwwww...gdddg
+...kkww....gdddg
+....kk.....gdddg
+...........gdddg
+...........gdddg
+...........ggggg
 """

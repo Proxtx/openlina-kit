@@ -13,7 +13,10 @@
 //! same call levels and the editor use for physics objects. The span [`x_min`, `x_max`] is cut
 //! into `count` equal bands and each cannon gets a random x in its own band (`Math.random`: new
 //! spots on every attempt; the harness seeds it in tests), all at height `y`; they fall onto
-//! whatever is below them. A cannon that would land on Lina wakes up at once and shoots her point-blank, so an x closer than
+//! whatever is below them. They drop in one after another, `stagger` ticks apart, and start at
+//! y 4, hidden behind the HUD bar (which covers y < 23), so they fall into view instead of popping
+//! up in the play field; the game's edge test would only delete them above y -7 (margin 25 minus
+//! `edgewith` 32). A cannon that would land on Lina wakes up at once and shoots her point-blank, so an x closer than
 //! `player_distance` to her (horizontally, at that tick) is rolled again, up to 8 times, then
 //! moved `player_distance` to her right (or left, if that leaves the span). With `awake` they
 //! start awake and shoot without being woken first.
@@ -36,7 +39,9 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     ensure!((0..=20).contains(&count), "count must be 0 to 20, got {count}");
     let tick = cfg.i64("tick", 10)? as i32;
     ensure!(tick >= 1, "tick must be at least 1, got {tick}");
-    let (x_min, x_max, y) = (cfg.f64("x_min", 60.0)?, cfg.f64("x_max", 540.0)?, cfg.f64("y", 40.0)?);
+    let stagger = cfg.i64("stagger", 45)? as i32;
+    ensure!(stagger >= 0, "stagger must be 0 or more, got {stagger}");
+    let (x_min, x_max, y) = (cfg.f64("x_min", 60.0)?, cfg.f64("x_max", 540.0)?, cfg.f64("y", 4.0)?);
     ensure!(x_min <= x_max, "x_min ({x_min}) is larger than x_max ({x_max})");
     let awake = cfg.bool("awake", false)?;
     let distance = cfg.f64("player_distance", 120.0)?;
@@ -47,14 +52,15 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     code.field(cannon_t, "awake")?;
 
     // tick(sheet, layout):
-    //   if (layout.currentTick != tick || skip.contains(layout.name)) return;
-    //   for each band i: spawn("cannon_base", lo_i + random() * band, y), away from Lina
+    //   if (currentTick isn't one of the cannons' ticks || skip.contains(layout.name)) return;
+    //   for each band i, at tick + i * stagger: spawn("cannon_base", lo_i + random() * band, y), away from Lina
     let mut f = hooks::handler(code, "tick", "cannons/spawn")?;
     let (sheet, layout) = (f.arg(0), f.arg(1));
     let done = f.label();
     let now = f.get_new(layout, "currentTick")?;
-    let at = f.const_i32(tick);
-    f.jne(now, at, done);
+    let (first, last) = (f.const_i32(tick), f.const_i32(tick + (count.max(1) as i32 - 1) * stagger));
+    f.jlt(now, first, done);
+    f.jlt(last, now, done);
     let name = f.get_new(layout, "name")?;
     for s in &skip {
         let next = f.label();
@@ -70,6 +76,8 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
 
     if trace {
         // cannons already in the layout (a retry that kept them would show 3 here)
+        let not_first = f.label();
+        f.jne(now, first, not_first);
         let n = world::count(&mut f, sheet, "cannon_base")?;
         f.print(&[
             Print::Str("[cannons] "),
@@ -80,13 +88,16 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
             Print::Val(n),
             Print::Str(" cannons already there"),
         ])?;
+        f.place(not_first);
     }
 
     let (dist, max_x) = (f.const_f64(distance), f.const_f64(x_max));
     let (dx, tries, alt) = (f.reg_f64(), f.reg_i32(), f.reg_f64());
     let (max_tries, inc) = (f.const_i32(8), f.const_i32(1));
     for i in 0..count {
-        let (roll, placed) = (f.label(), f.label());
+        let (roll, placed, later) = (f.label(), f.label(), f.label());
+        let at = f.const_i32(tick + i as i32 * stagger);
+        f.jne(now, at, later);
         f.int(tries, 0);
         f.place(roll);
         let r = f.random()?;
@@ -127,6 +138,7 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
                 Print::Str(")"),
             ])?;
         }
+        f.place(later);
     }
     f.place(done);
     f.ret_void();

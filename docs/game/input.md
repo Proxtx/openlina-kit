@@ -28,3 +28,11 @@ the frame and sets the held actions, which is how the harness plays scripted inp
   direction, not a rotating reticle. Nothing held: forward, about 10° up (≈ (97, -16) from Lina); `up` (also
   `up+right`): about 76° up (≈ (24, -97)); `down`: nearly straight down. Releasing the key returns to forward, so
   scripted inputs must hold the direction on the shoot tick (`"36-52:up", "50:shoot"`).
+- **Where the reticle goes** (`EvSheet_gameplay.update`, L10879-10936; found by the ray-crosshair mod): the offsets
+  above are aim points (`short_aim_point`, `mid_aim_point`, `max_aim_point`, pinned to Lina), picked by the item's
+  `aimType` (1 short, 3 mid, 5 long). For those types the game casts the `gun`'s line of sight (`LOS.castRay`,
+  obstacles: the `solid` family, so boxes and fruits don't stop it) from the gun to the aim point and puts the
+  reticle (`crosshair_point`) on the hit, or on the aim point. A few vanilla items (ball3, bell, board, …) take a
+  longer branch with a padding. The other aim types (2, 4, 6) put the reticle on the aim point without a ray.
+  Something in real play (not in harness runs) sets the reticle's sprite visible again, so hiding it with
+  `Sprite.setVisible(0)` from a tick handler doesn't last.

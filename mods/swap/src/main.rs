@@ -22,9 +22,15 @@
 //!   nothing is swapped. `pass`: the ray passes through static bodies, only movable objects count.
 //! - Swapping writes both `sprite.position`s; `Physics.syncPosWithSprite` then moves the Box2D
 //!   bodies (a teleport). Velocities are kept, like the portal gun's teleports.
+//! - Joined objects (step ladders, bamboo, unicycles, tentacles: bodies held by Box2D joints) move
+//!   as a whole (`openlina_sdk::joints`): every piece by the same offset, the group's centre to
+//!   where Lina stood (its pieces around it as they were; Lina goes to the piece that was hit). A
+//!   group held by something that can't move (a static body, Lina) swaps only the piece that was
+//!   hit, as a single object.
 //! - `trace` prints every shot (`[swap] tick T: player (x, y) <-> box (x, y)`, `nothing in line of
 //!   sight`, `blocked by <type>`, each with the ammo left) and, `check_ticks` later, where both
-//!   really are compared with the other's old spot (`[swap] check: …`), read back from the game
+//!   really are compared with where they were sent (`[swap] check: …`: Lina to the object's old
+//!   spot, the object to hers, or with its group around it), read back from the game
 //!   after the physics ran, so tests can see that the swap held.
 //!
 //! Left alone: every other item, ammo handling (the game decrements before `item_use`), what
@@ -37,7 +43,7 @@ use openlina_sdk::asm::{FnBuilder, Print};
 use openlina_sdk::hlbc::types::{RefGlobal, Reg};
 use openlina_sdk::items::{self, Aim, Item};
 use openlina_sdk::sound::{self, Sound};
-use openlina_sdk::{aim, hooks, Code, ModConfig};
+use openlina_sdk::{aim, hooks, joints, Code, ModConfig};
 
 const ITEM: &str = "swap";
 /// A swap check counts as "at the old spot" within this distance (layout units).
@@ -68,7 +74,8 @@ struct Opts {
 
 /// Mod state, kept in globals.
 struct State {
-    /// The last swap, for the trace check: tick, both objects and their old positions.
+    /// The last swap, for the trace check: tick, both objects, where the object was sent and Lina's
+    /// new spot (the object's old one).
     swap_tick: RefGlobal,
     swapped: RefGlobal,
     player: RefGlobal,
@@ -221,8 +228,41 @@ fn build_use(code: &mut Code, st: &State, ray: &aim::AimRay, o: &Opts) -> Result
     f.jnull(bsprite, handled);
     let bpos = f.get_new(bsprite, "position")?;
     let (bx, by) = (f.get_new(bpos, "x")?, f.get_new(bpos, "y")?);
+    // a joined object (step ladder, bamboo, unicycle…) moves as a whole, every piece by the same
+    // offset, its centre to where Lina stood (a single object: itself); one held by something that
+    // can't move (a vine on the ceiling, Lina herself) swaps just the piece that was hit
+    let (held, moved) = (f.label(), f.label());
+    // where the piece that was hit goes (for the trace check)
+    let (ex, ey) = (f.reg_f64(), f.reg_f64());
+    let group = joints::collect(&mut f, sheet, best, held)?;
+    let (gx, gy) = joints::centre(&mut f, &group)?;
+    let (dx, dy) = (f.reg_f64(), f.reg_f64());
+    f.sub(dx, px, gx);
+    f.sub(dy, py, gy);
+    joints::shift(&mut f, &group, dx, dy)?;
+    f.add(ex, bx, dx);
+    f.add(ey, by, dy);
+    if o.trace {
+        let alone = f.label();
+        let one = f.const_i32(1);
+        f.jle(group.n, one, alone);
+        f.print(&[
+            Print::Str("[swap] tick "),
+            Print::Val(tick),
+            Print::Str(": "),
+            Print::Val(btype),
+            Print::Str(" moves with its group of "),
+            Print::Val(group.n),
+        ])?;
+        f.place(alone);
+    }
+    f.jmp(moved);
+    f.place(held);
     f.set(bpos, "x", px)?;
     f.set(bpos, "y", py)?;
+    f.mov(ex, px);
+    f.mov(ey, py);
+    f.place(moved);
     f.set(ppos, "x", bx)?;
     f.set(ppos, "y", by)?;
     if o.sounds {
@@ -249,7 +289,7 @@ fn build_use(code: &mut Code, st: &State, ray: &aim::AimRay, o: &Opts) -> Result
         f.set_global(st.swap_tick, tick);
         f.set_global(st.swapped, best);
         f.set_global(st.player, player);
-        for (g, v) in st.old.iter().zip([px, py, bx, by]) {
+        for (g, v) in st.old.iter().zip([ex, ey, bx, by]) {
             f.set_global(*g, v);
         }
     }
@@ -324,7 +364,7 @@ fn build_check(code: &mut Code, st: &State, o: &Opts) -> Result<()> {
             Print::Val(nx),
             Print::Str(", "),
             Print::Val(ny),
-            Print::Str(&format!(") near {whose} old spot: ")),
+            Print::Str(&format!(") near {whose}: ")),
             Print::Val(is_near),
             Print::Str(" (distance "),
             Print::Val(d),
@@ -332,8 +372,8 @@ fn build_check(code: &mut Code, st: &State, o: &Opts) -> Result<()> {
         ])?;
         Ok(())
     };
-    report(&mut f, "", player, old[2], old[3], "the object's")?;
-    report(&mut f, "object ", swapped, old[0], old[1], "the player's")?;
+    report(&mut f, "", player, old[2], old[3], "the object's old spot")?;
+    report(&mut f, "object ", swapped, old[0], old[1], "where it was sent")?;
     f.place(end);
     f.ret_void();
     let h = f.finish()?;
