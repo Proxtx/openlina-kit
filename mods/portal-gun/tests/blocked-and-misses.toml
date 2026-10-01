@@ -1,0 +1,21 @@
+name = "portal-gun: something movable in the way blocks the shot; nothing in range fizzles"
+mods = ["portal-gun"]
+timeout = 60
+
+[options.portal-gun]
+trace = true
+
+[harness]
+level = "greendemo 1"
+seed = 3
+items = ["portal", "box"]
+# forward: the vine (movable segments); up: the sky
+inputs = ["40:shoot", "50-75:up", "70:shoot"]
+end_tick = 100
+
+[[expect]]
+contains = "[portal-gun] blocked by fern: no portal"
+[[expect]]
+contains = "[portal-gun] no surface within range: no portal"
+[[expect]]
+not_contains = "[portal-gun] placed"

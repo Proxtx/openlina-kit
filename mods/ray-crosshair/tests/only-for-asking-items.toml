@@ -1,0 +1,24 @@
+name = "ray-crosshair: the marker hides when the selected item didn't ask for it, and comes back"
+mods = ["swap"]
+timeout = 60
+
+[options.ray-crosshair]
+trace = true
+trace_every = 20
+
+[harness]
+level = "greendemo 1"
+seed = 1
+items = ["swap", "box"]
+# switch to the box (slot 2), then on to slot 3 (swap again; the 3rd slot holds the first item)
+inputs = ["45-48:switch", "85-88:switch"]
+end_tick = 140
+
+[[expect]]
+contains = "[ray-crosshair] tick 40: aim hits fern at ("
+[[expect]]
+contains = "[ray-crosshair] tick 60: marker hidden"
+[[expect]]
+contains = "[ray-crosshair] tick 80: marker hidden"
+[[expect]]
+contains = "[ray-crosshair] tick 120: aim hits fern at ("

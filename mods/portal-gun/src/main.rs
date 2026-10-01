@@ -4,9 +4,14 @@
 //! - The item type `portal` is added to the item pool with `openlina_sdk::items::register`
 //!   (HUD icon `assets/images/openlina/portal-gun.png`).
 //! - Firing: an `item_use` handler. The game has already decremented the ammo. The crosshair
-//!   (`items::crosshair_pos`) is the aiming reticle just in front of Lina, so the portal goes
-//!   `range` units from Lina through the reticle, clamped to the play field. Returning true skips
-//!   the game's own item behaviors.
+//!   (`items::crosshair_pos`) is the aiming reticle just in front of Lina, so the shot follows
+//!   Lina -> reticle (`openlina_sdk::aim::AimRay`, tiles and objects stop it) to the next surface
+//!   within `range`, and the portal goes half a portal in front of it, clamped to the play field.
+//!   The `ray-crosshair` mod marks that surface while the gun is selected. Only level geometry
+//!   (`physics.immovable`: tiles, walls) takes portals: when something movable is hit first (a box,
+//!   a fruit, the segments of a vine), or nothing within range, the shot fizzles (`mid_air`: with
+//!   nothing in range, the portal goes to the end of the range instead).
+//!   Returning true skips the game's own item behaviors.
 //! - Portals are plain `Sprite15` objects (`Layout.createObject(layout, "Sprite15", …)`) showing
 //!   our own animations (`openlina_sdk::anims`), kept in globals with the portal positions.
 //! - Teleporting: a `tick` handler checks every object of `physics_obj` (which includes the
@@ -22,10 +27,12 @@ use openlina_sdk::asm::{FnBuilder, Print};
 use openlina_sdk::hlbc::opcodes::Opcode;
 use openlina_sdk::hlbc::types::{RefGlobal, RefType, Reg};
 use openlina_sdk::items::{self, Aim, Item};
-use openlina_sdk::{anims, hooks, Code, ModConfig};
+use openlina_sdk::{aim, anims, hooks, Code, ModConfig};
 
 const ITEM: &str = "portal";
 const COOLDOWN: i32 = 45;
+/// A placed portal's center is this far in front of the surface the shot hit (half a portal).
+const IN_FRONT: f64 = 8.0;
 const COLORS: [&str; 2] = ["blue", "orange"];
 /// A plain decorative object type (only the sprite behavior) that `Layout.createObject` can
 /// create (plain `Sprite` is not registered in `ObjectClasses.createInstance`).
@@ -49,6 +56,7 @@ struct State {
 struct Opts {
     radius: f64,
     range: f64,
+    mid_air: bool,
     preset: Option<[f64; 4]>,
     trace: bool,
 }
@@ -65,7 +73,8 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     };
     let o = Opts {
         radius: cfg.f64("radius", 14.0)?,
-        range: cfg.f64("range", 160.0)?,
+        range: cfg.f64("range", 400.0)?,
+        mid_air: cfg.bool("mid_air", false)?,
         preset,
         trace: cfg.bool("trace", false)?,
     };
@@ -97,7 +106,9 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
         cool_tick: g(code, i32_t),
     };
     let place = build_place(code, &st, &o)?;
-    build_use(code, &st, place, &o)?;
+    aim::show_crosshair(code, ITEM, o.range)?;
+    let ray = aim::AimRay::install(code, "portal-gun/ray", true)?;
+    build_use(code, &st, &ray, place, &o)?;
     build_tick(code, &st, place, &o)
 }
 
@@ -175,6 +186,16 @@ fn build_place(code: &mut Code, st: &State, o: &Opts) -> Result<openlina_sdk::hl
                 Print::Val(y),
                 Print::Str(")"),
             ])?;
+            // in the format of the `trace-positions` fixture, for `position` expectations
+            let tick = f.get_new(layout, "currentTick")?;
+            f.print(&[
+                Print::Str("[pos] tick "),
+                Print::Val(tick),
+                Print::Str(&format!(" portal-{} ", COLORS[k])),
+                Print::Val(x),
+                Print::Str(" "),
+                Print::Val(y),
+            ])?;
         }
         f.place(other);
     }
@@ -183,42 +204,53 @@ fn build_place(code: &mut Code, st: &State, o: &Opts) -> Result<openlina_sdk::hl
 }
 
 /// `item_use`: fire the portal gun.
-fn build_use(code: &mut Code, st: &State, place: openlina_sdk::hlbc::types::RefFun, o: &Opts) -> Result<()> {
-    let (bool_t, f64_t) = (code.ty_bool(), code.ty_f64());
-    let first = code.method("fish.system.Picker", "first")?;
-    let player_t = code.class("fish.game.oclass.OClass_player")?;
-    let sqrt = code.native("math_sqrt")?;
+fn build_use(
+    code: &mut Code,
+    st: &State,
+    ray: &aim::AimRay,
+    place: openlina_sdk::hlbc::types::RefFun,
+    o: &Opts,
+) -> Result<()> {
+    let bool_t = code.ty_bool();
     let mut f = hooks::handler(code, "item_use", "portal-gun/use")?;
     let (slot, sheet, player_picker, cross) = (f.arg(0), f.arg(1), f.arg(2), f.arg(3));
     let (not_mine, handled) = (f.label(), f.label());
     items::is_item(&mut f, slot, ITEM, not_mine)?;
     let (cx, cy) = items::crosshair_pos(&mut f, cross, handled)?;
-    // The crosshair is the aiming reticle just in front of Lina: fire along Lina -> reticle,
-    // `range` far, kept inside the play field.
-    f.jnull(player_picker, handled);
-    let p_dyn = f.call_new(first, &[player_picker])?;
-    let player = f.cast(p_dyn, player_t);
-    f.jnull(player, handled);
-    let psprite = f.get_new(player, "sprite")?;
-    let ppos = f.get_new(psprite, "position")?;
-    let (px, py) = (f.get_new(ppos, "x")?, f.get_new(ppos, "y")?);
-    let (dx, dy, d2, t, len) = (f.reg(f64_t), f.reg(f64_t), f.reg(f64_t), f.reg(f64_t), f.reg(f64_t));
-    f.sub(dx, cx, px);
-    f.sub(dy, cy, py);
-    f.mul(d2, dx, dx);
-    f.mul(t, dy, dy);
-    f.add(d2, d2, t);
-    let eps = f.const_f64(0.01);
-    f.jle(d2, eps, handled);
-    f.call(len, sqrt, &[d2]);
+    // The reticle is just in front of Lina: follow Lina -> reticle to the next surface within
+    // `range` (what `ray-crosshair` shows), and put the portal half a portal in front of it.
+    let (player, px, py) = aim::shooter(&mut f, player_picker, handled)?;
+    let layout = f.get_new(sheet, "layout")?;
     let range = f.const_f64(o.range);
-    let (x, y) = (f.reg(f64_t), f.reg(f64_t));
-    f.op(Opcode::SDiv { dst: x, a: dx, b: len });
-    f.mul(x, x, range);
-    f.add(x, x, px);
-    f.op(Opcode::SDiv { dst: y, a: dy, b: len });
-    f.mul(y, y, range);
-    f.add(y, y, py);
+    let hit = ray.cast(&mut f, layout, (px, py), (cx, cy), range, Some(player), handled)?;
+    let (x, y) = hit.before(&mut f, IN_FRONT);
+    let (surface, solid) = (f.label(), f.label());
+    f.jnotnull(hit.obj, surface);
+    if o.mid_air {
+        // nothing within range: at the end of the range
+        f.mov(x, hit.x);
+        f.mov(y, hit.y);
+        f.jmp(solid);
+    } else {
+        if o.trace {
+            f.print(&[Print::Str("[portal-gun] no surface within range: no portal")])?;
+        }
+        f.jmp(handled);
+    }
+    f.place(surface);
+    // only level geometry takes portals: something movable in the way blocks the shot
+    let physics = f.get_new(hit.obj, "physics")?;
+    let blocked = f.label();
+    f.jnull(physics, blocked);
+    let immovable = f.get_new(physics, "immovable")?;
+    f.jtrue(immovable, solid);
+    f.place(blocked);
+    if o.trace {
+        let kind = f.get_new(hit.obj, "type")?;
+        f.print(&[Print::Str("[portal-gun] blocked by "), Print::Val(kind), Print::Str(": no portal")])?;
+    }
+    f.jmp(handled);
+    f.place(solid);
     for (v, lo, hi) in [(x, 37.0, 563.0), (y, 41.0, 297.0)] {
         let (ok_lo, ok_hi) = (f.label(), f.label());
         let (l, h) = (f.const_f64(lo), f.const_f64(hi));
@@ -229,7 +261,6 @@ fn build_use(code: &mut Code, st: &State, place: openlina_sdk::hlbc::types::RefF
         f.mov(v, h);
         f.place(ok_hi);
     }
-    let layout = f.get_new(sheet, "layout")?;
     let which = get_g(&mut f, st.next);
     let void = f.code().ty_void();
     let r = f.reg(void);

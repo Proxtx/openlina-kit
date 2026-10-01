@@ -18,6 +18,8 @@ sources listed in the debug info; findexes (`fn@N`) refer to this build. Index: 
   (`if (slot.item.type.name == "unbox") … else if …`, comparing against the game's string constants). Its
   environment enum holds the sheet, the player picker and the player's aim pickers (crosshair_point, gun, …,
   max_aim_point, mid_aim_point, short_aim_point). The crosshair is the reticle just in front of Lina.
+- **The selected item**: the HUD slot (`b_item`, picker `sheet.b_item`) whose `nr` (1..4, F64) equals the player's
+  `item_selected` (found by the ray-crosshair mod; `switch` moves to the next slot).
 - Item types come from `OClass_item` objects (`NAME`, `ammo`, `aim_type`) via `ItemManager.initBaseItems`; aim
   types: shoot 0, short 1, short2 2, mid 3, mid2 4, long 5, long2 6, remote 7. The HUD icon is the `item_icon`
   object's animation named after the item; the HUD label is the text `TOOL_<NAME>` (from `loc.dat`, an xlsx).

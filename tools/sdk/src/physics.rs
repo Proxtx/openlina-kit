@@ -120,4 +120,10 @@ impl RayCast {
         f.clear_global(self.ignore);
         Ok(f.get_global(self.best))
     }
+
+    /// After [`cast`](Self::cast): a new register with how far along the ray the hit is (0 = `from`,
+    /// 1 = `to`; 1 when nothing was hit).
+    pub fn fraction(&self, f: &mut FnBuilder) -> Reg {
+        f.get_global(self.frac)
+    }
 }

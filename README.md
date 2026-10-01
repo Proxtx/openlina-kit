@@ -64,6 +64,7 @@ can be combined. See [AGENTS.md](AGENTS.md) for how to write one and [docs/mods.
 | `moon-gravity` | modifiers | weaker gravity: everything falls slower, Lina jumps higher |
 | `portal-gun` | items | Portal Gun: shoot two portals, objects and Lina pass through |
 | `swap` | items | Swap: trade places with the first object in line of sight |
+| `ray-crosshair` | general | utility: marks where the aim meets the next surface (used by swap and portal-gun) |
 | `tumble` | levels | Tumble: a drum of tiles that makes a quarter turn every 10 s |
 | `mod-menu` | general | pause-menu entry listing the pack's mods and options |
 | `ammo-boost` | general | more ammo for every item |

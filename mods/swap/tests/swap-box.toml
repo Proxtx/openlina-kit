@@ -6,6 +6,11 @@ timeout = 60
 [options.swap]
 trace = true
 
+# the marker shows the box before the shot
+[options.ray-crosshair]
+trace = true
+trace_every = 10
+
 # a box on the platform to the right of Lina (she starts at about 122, 194, aiming right)
 [options.debug-spawn]
 object = "box"
@@ -20,6 +25,8 @@ items = ["swap", "box"]
 inputs = ["60:shoot"]
 end_tick = 150
 
+[[expect]]
+contains = "[ray-crosshair] tick 50: aim hits box at ("
 # the ray hit the box, not something else, and the shot was used
 [[expect]]
 contains = ") <-> box ("

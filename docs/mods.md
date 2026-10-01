@@ -40,15 +40,19 @@ Source: `mods/core/src/main.rs`.
 
 ## portal-gun (items)
 
-A new item, **Portal Gun** (`portal`, 4 ammo, long aim): each shot places a blue, then an orange portal
-`range` (160) units from Lina along her aim, inside the play field. Any moving object that gets within `radius`
+A new item, **Portal Gun** (`portal`, 4 ammo, long aim): each shot places a blue, then an orange portal on the
+next surface along Lina's aim within `range` (400), half a portal in front of it, inside the play field; the
+`ray-crosshair` marker shows that surface while the gun is selected. Only level geometry takes portals: a box,
+fruit or vine segment in the way blocks the shot, and with nothing in range it fizzles (`mid_air`: the portal goes
+to the end of the range instead). Any moving object that gets within `radius`
 (14) of one portal comes out of the other, pushed out along its direction of travel with its velocity kept;
 Lina too. Portals reset every level. Pool entry, HUD icon and label via `openlina_sdk::items`; portals are
 `Sprite15` objects with the mod's own animations (`assets/images/openlina/portal-*.png`, drawn from `art/*.toml`).
 
-Options: `ammo`, `radius`, `range`, `preset` (`"ax,ay,bx,by"`: place both portals at level start, for tests and
-showcases), `trace`. Tests: in the pool; firing places blue then orange along the aim; a box loops through
-the portals (showcase `media/loop.gif`).
+Options: `ammo`, `radius`, `range`, `mid_air`, `preset` (`"ax,ay,bx,by"`: place both portals at level start, for
+tests and showcases), `trace`. Tests: in the pool; two shots down place blue then orange on the platform under Lina
+(she then goes through); the vine blocks a shot and the sky makes one fizzle; `mid_air`; a box loops through the
+portals (showcase `media/loop.gif`).
 
 Options:
 
@@ -57,9 +61,10 @@ Options:
 |---|---|---|---|
 | `ammo` | int | `4` | Portal shots per level. |
 | `radius` | float | `14.0` | How close to a portal's center an object must get to go through. |
-| `range` | float | `160.0` | How far from Lina, along the aim, a portal lands (kept inside the play field). |
+| `range` | float | `400.0` | How far the shot reaches from Lina along the aim: the portal lands on the first surface within this distance (kept inside the play field). Only level geometry takes portals; a box or other movable object in the way blocks the shot. |
+| `mid_air` | bool | `false` | With no surface within `range`, place the portal in mid-air at the end of the range. Off: the shot fizzles. |
 | `preset` | string | `""` | Place both portals when a level starts: "ax,ay,bx,by" (tests, showcases). |
-| `trace` | bool | `false` | Print portal placements and teleports to stdout. |
+| `trace` | bool | `false` | Print portal placements (also as `[pos] tick T portal-blue x y`), shots that place nothing, and teleports. |
 <!-- /options -->
 
 ## swap (items)
@@ -72,11 +77,13 @@ through walls and only movable objects count. Anything with a Box2D fixture can 
 vines, enemies, the other player in co-op.
 
 The ray is the game's own Box2D ray cast (native `world_ray_cast`, as used by the Line of Sight behavior
-`fish.system.beh.LOS`) through `openlina_sdk::physics::RayCast`: the nearest hit, Lina herself skipped. Pool entry, HUD
+`fish.system.beh.LOS`) through `openlina_sdk::aim::AimRay`: the nearest hit, Lina herself skipped. While Swap is
+selected, the `ray-crosshair` marker shows where that ray stops (`swap-box.toml` checks that it sits on the box
+before the shot). Pool entry, HUD
 icon and label via `openlina_sdk::items`; icon drawn from `art/icon.toml` (`assets/…/swap.png`, and at 2× as
 `swap-big.png` for the tool selection and the editor).
 
-Source: `mods/swap/src/main.rs`. Requires `core`. `tests/run-start-selection.toml` checks that a run start whose tool
+Source: `mods/swap/src/main.rs`. Requires `core` and `ray-crosshair`. `tests/run-start-selection.toml` checks that a run start whose tool
 roll drew swap goes on into the first level.
 
 <!-- options:swap -->
@@ -168,6 +175,32 @@ Tests (`mods/moon-gravity/tests/`, 6 scenarios, positions read by `trace-positio
 ticks instead of vanilla's 65; without the modifier the box and a jump match vanilla exactly and nothing is printed;
 Lina's jump peaks 45 units up at tick 200 where vanilla has her landing (showcase `media/moon-jump.gif`); `always`
 without the modifier; `factor = 0.25` (16 units); the game's roll draws it (seed 12) and the HUD plays its icon.
+
+## ray-crosshair (general)
+
+A utility for item mods: while Lina holds an item that asks for it, a small ring marks where her aim meets the next
+surface, the first tile, wall or object along the direction of the game's reticle within the item's range (the
+reticle itself stays: it shows the direction). Item mods opt in with `openlina_sdk::aim::show_crosshair(code, item,
+range)` and `requires = ["core", "ray-crosshair"]`, and fire with the same `aim::AimRay`, so they act exactly where
+the marker is: swap and portal-gun do. With nothing in range, or another item selected, the marker is hidden. Only
+the first player gets one.
+
+How it works: it defines the number hook `ray_crosshair_range(slot) -> F64` (item mods return their range for their
+item). On every level tick it finds the selected slot (the `b_item` whose `nr` is Lina's `item_selected`), asks the
+hook, casts the ray from Lina through the reticle (`world_ray_cast`, static bodies included, Lina excluded) and
+moves its marker (a `Sprite15`) there, half its size back along the ray: level objects are drawn over sprites that
+overlap them. Showcase `media/marker.gif`.
+
+Source: `mods/ray-crosshair/src/main.rs`. Requires `core`. Tests: `mods/ray-crosshair/tests/` (the marker in front
+of the vine, by position; hidden for other items and back; on the floor when aiming down, hidden for the sky; the
+showcase). `trace` also prints the marker as `[pos] tick T ray-crosshair x y` for `position` expectations.
+
+<!-- options:ray-crosshair -->
+| option | type | default | description |
+|---|---|---|---|
+| `trace` | bool | `false` | Print what the aim hits every `trace_every` ticks (`[ray-crosshair] tick T: aim hits <type> at (x, y)`, or `marker hidden`) and the marker as `[pos] tick T ray-crosshair x y` (for `position` expectations). |
+| `trace_every` | int | `30` | With trace: print every this many level ticks. |
+<!-- /options -->
 
 ## mod-menu (general)
 

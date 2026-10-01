@@ -56,3 +56,12 @@ coordinates.
 engine.pushTarget(Main.i.gifTarget); game.render(engine, false); engine.popTarget()`, then
 `gifTarget.capturePixels().toPNG()`, and resize back. Works headless (SDL offscreen driver). The harness does
 this for `lina gif`.
+
+## Layers and draw order
+
+Level layouts have the layers 0 "Layer 0", 1 "bg", 2 "display" (the level's objects) and 3 "debug"
+(`layout.layers[].name`). `Layout.createObject(type, layer, …)` sets `sprite.layer`, and `addInstance` adds the
+sprite's graphic to `layout.scene` (an `h2d.Layers`) at that index. Still, a sprite created by a mod on layer 3 or
+10 was drawn under the vine it overlapped (found by the ray-crosshair mod): don't rely on layers to draw over level
+objects; place markers next to them instead.
+

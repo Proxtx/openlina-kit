@@ -1,0 +1,21 @@
+name = "portal-gun: with mid_air, a shot into the sky places the portal at the end of the range"
+mods = ["portal-gun"]
+timeout = 60
+
+[options.portal-gun]
+trace = true
+mid_air = true
+range = 100.0
+
+[harness]
+level = "greendemo 1"
+seed = 3
+items = ["portal", "box"]
+inputs = ["50-75:up", "70:shoot"]
+end_tick = 100
+
+[[expect]]
+not_contains = "no surface within range"
+# about 100 above Lina (she stands at about y 194), clamped into the play field
+[[expect]]
+position = { tick = 71, type = "portal-blue", y_gt = 85, y_lt = 105 }

@@ -1,13 +1,13 @@
 [mod]
 id = "swap"
 name = "Swap"
-version = "0.2.0"
-kit = "0.1.0"
+version = "0.3.0"
+kit = "0.1.1"
 section = "items"
 description = "A new item: fire a ray along your aim and trade places with the first object it hits. Lina goes where the object was, the object goes where Lina was."
 authors = ["openlina-kit"]
 game_builds = ["22056877"]
-requires = ["core"]
+requires = ["core", "ray-crosshair"]
 showcase = ["swap-up.gif", "swap-box.gif"]
 
 [options.ammo]

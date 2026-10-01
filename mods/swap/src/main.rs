@@ -12,8 +12,9 @@
 //!   direction: the ray goes from Lina's position through the crosshair, `range` layout units
 //!   long. Returning true skips the game's own item behaviors, also when nothing is hit.
 //! - The ray is the game's own Box2D ray cast (`world_ray_cast`, as the game's Line of Sight
-//!   behavior uses it) through `openlina_sdk::physics::RayCast`: the nearest `ObjectClass` on the
-//!   line, Lina herself excluded.
+//!   behavior uses it) through `openlina_sdk::aim::AimRay`: the nearest `ObjectClass` on the
+//!   line, Lina herself excluded. The `ray-crosshair` mod shows where it stops while Swap is
+//!   selected (`aim::show_crosshair`, up to `range`).
 //! - Walls: with `walls_block` (default) static bodies (`physics.immovable`: tiles, level
 //!   geometry) take part in the ray and stop it: when the nearest hit is static, nothing is
 //!   swapped. Without it the ray passes through static bodies and only movable objects count.
@@ -31,10 +32,9 @@
 
 use anyhow::{bail, Result};
 use openlina_sdk::asm::{FnBuilder, Print};
-use openlina_sdk::hlbc::opcodes::Opcode;
 use openlina_sdk::hlbc::types::{RefGlobal, Reg};
 use openlina_sdk::items::{self, Aim, Item};
-use openlina_sdk::{hooks, physics, Code, ModConfig};
+use openlina_sdk::{aim, hooks, Code, ModConfig};
 
 const ITEM: &str = "swap";
 /// A swap check counts as "at the old spot" within this distance (layout units).
@@ -113,7 +113,8 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
         player: g(code, obj_t),
         old: [g(code, f64_t), g(code, f64_t), g(code, f64_t), g(code, f64_t)],
     };
-    let ray = physics::RayCast::install(code, "swap/ray_hit", o.walls_block)?;
+    aim::show_crosshair(code, ITEM, o.range)?;
+    let ray = aim::AimRay::install(code, "swap/ray_hit", o.walls_block)?;
     build_use(code, &st, &ray, &o)?;
     if o.trace {
         build_check(code, &st, &o)?;
@@ -122,49 +123,23 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
 }
 
 /// `item_use`: fire Swap.
-fn build_use(code: &mut Code, st: &State, ray: &physics::RayCast, o: &Opts) -> Result<()> {
-    let (bool_t, f64_t) = (code.ty_bool(), code.ty_f64());
-    let first = code.method("fish.system.Picker", "first")?;
-    let player_t = code.class("fish.game.oclass.OClass_player")?;
-    let obj_t = code.class("fish.system.ObjectClass")?;
-    let sqrt = code.native("math_sqrt")?;
-
+fn build_use(code: &mut Code, st: &State, ray: &aim::AimRay, o: &Opts) -> Result<()> {
+    let bool_t = code.ty_bool();
     let mut f = hooks::handler(code, "item_use", "swap/use")?;
     let (slot, sheet, player_picker, cross) = (f.arg(0), f.arg(1), f.arg(2), f.arg(3));
     let (not_mine, handled) = (f.label(), f.label());
     items::is_item(&mut f, slot, ITEM, not_mine)?;
     let (cx, cy) = items::crosshair_pos(&mut f, cross, handled)?;
-    f.jnull(player_picker, handled);
-    let p_dyn = f.call_new(first, &[player_picker])?;
-    let player = f.cast(p_dyn, player_t);
-    f.jnull(player, handled);
-    let player = f.cast(player, obj_t);
+    let (player, px, py) = aim::shooter(&mut f, player_picker, handled)?;
     let psprite = f.get_new(player, "sprite")?;
     let ppos = f.get_new(psprite, "position")?;
-    let (px, py) = (f.get_new(ppos, "x")?, f.get_new(ppos, "y")?);
 
-    // direction Lina -> crosshair, `range` long
-    let (dx, dy, d2, t, len) = (f.reg(f64_t), f.reg(f64_t), f.reg(f64_t), f.reg(f64_t), f.reg(f64_t));
-    f.sub(dx, cx, px);
-    f.sub(dy, cy, py);
-    f.mul(d2, dx, dx);
-    f.mul(t, dy, dy);
-    f.add(d2, d2, t);
-    let eps = f.const_f64(0.01);
-    f.jle(d2, eps, handled);
-    f.call(len, sqrt, &[d2]);
-    let range = f.const_f64(o.range);
-    let (tx, ty) = (f.reg(f64_t), f.reg(f64_t));
-    f.op(Opcode::SDiv { dst: tx, a: dx, b: len });
-    f.mul(tx, tx, range);
-    f.add(tx, tx, px);
-    f.op(Opcode::SDiv { dst: ty, a: dy, b: len });
-    f.mul(ty, ty, range);
-    f.add(ty, ty, py);
-
-    // the nearest object on the ray (Lina herself excluded)
+    // the nearest object on the ray from Lina through the reticle (Lina excluded): the same ray
+    // `ray-crosshair` shows
     let layout = f.get_new(sheet, "layout")?;
-    let best = ray.cast(&mut f, layout, (px, py), (tx, ty), Some(player))?;
+    let range = f.const_f64(o.range);
+    let hit = ray.cast(&mut f, layout, (px, py), (cx, cy), range, Some(player), handled)?;
+    let (best, tx, ty) = (hit.obj, hit.x, hit.y);
 
     let tick = f.get_new(layout, "currentTick")?;
     let ammo = f.get_new(slot, "ammo")?;

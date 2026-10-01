@@ -1,0 +1,22 @@
+name = "ray-crosshair: with Swap selected, a marker sits in front of the first surface along the aim"
+mods = ["swap"]                      # requires ray-crosshair
+timeout = 60
+
+[options.ray-crosshair]
+trace = true
+trace_every = 20
+
+[harness]
+level = "greendemo 1"
+seed = 1
+items = ["swap", "box"]
+end_tick = 60
+
+# Lina starts at about (124, 194) aiming right, slightly up: the vine in the middle stops the ray
+[[expect]]
+contains = "[ray-crosshair] tick 40: aim hits fern at ("
+# just left of the vine (its left edge is at about x 282), at Lina's aim height, not at Lina
+[[expect]]
+position = { tick = 40, type = "ray-crosshair", x_gt = 268, x_lt = 280, y_gt = 160, y_lt = 178 }
+[[expect]]
+not_contains = "marker hidden"

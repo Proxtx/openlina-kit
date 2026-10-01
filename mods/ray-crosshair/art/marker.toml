@@ -1,0 +1,18 @@
+# Ray crosshair marker, 9x9: a ring with an orange center, where the aim ray meets the next surface.
+[palette]
+k = "#0d0d0d"
+w = "#ffffff"
+o = "#e8883a"
+
+[[frame]]
+pixels = """
+..kwwwk..
+.kw...wk.
+kw.....wk
+w.......w
+w...o...w
+w.......w
+kw.....wk
+.kw...wk.
+..kwwwk..
+"""

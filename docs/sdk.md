@@ -7,14 +7,15 @@
 | `Code` (lib.rs) | load/save, `class`, `field`, `field_type`, `method`, `find_fn` (any name people write: `Class.method`, findex, `swap/use`, `hook:tick`), `native`, `func(_mut)`, `func_type`, `func_name`, `op_location`, interning (`string`, `float`, `int`, `intern_type`, `ty_*`), `add_global`, `global_string` |
 | `asm::FnBuilder` | new functions: registers (`reg`, `reg_f64`/`reg_i32`/`reg_bool`), labels, jumps, constants, arithmetic (`add`, `sub`, `mul`, `abs`, `random`), `get`/`get_new`/`set` fields, `call`/`call_new`, `static_obj`, `new_obj`, `cast`, `string_obj`, `string_of`, `print`, arrays (`array_len`, `array_get`, `new_array_obj`, `empty_f64_array`, `for_range`), `jstr_ne`, `exit`, globals (`get_global`, `set_global`, `clear_global`), `static_closure` |
 | `edit` | `find*`, `find_calls`, `find_field_access`, `is_field`/`is_set_field`, `expect_one`, `next_match`/`prev_match`, `replace_op`, `insert_ops`, `insert_ops_with_exits`, `guard_op`, `prepend_call`, `remove_ops`, `add_reg` |
-| `hooks` | `CORE_HOOKS`, `find`, `signature`, `handler`, `subscribe`, `define` (`lina hooks` lists them) |
+| `hooks` | `CORE_HOOKS`, `find`, `signature`, `handler`, `subscribe`, `define` (`lina hooks` lists them); notify, handled (Bool), value (object) and number (F64, negative = not mine) hooks; any mod can define hooks for others |
 | `items` | `register` an item (see the checklist below), `is_item`, `crosshair_pos`; behavior in an `item_use` handler |
 | `modifiers` | `register` a modifier (pool + HUD icon), `is_active`, `id_of`, `current_modifier` |
 | `levels` | `LevelPack::from_toml` + `register`: level packs built in code (core `packs` hook); `current_level_name`, `jump_unless_in_pack` |
 | `text` | `set(key, value)`: texts the game looks up (`Localisation.loc`), e.g. `TOOL_<NAME>` item labels |
 | `anims` | `ensure` / `ensure_frames`: an animation from mod images in an object class's animation map |
-| `physics` | `RayCast`: the nearest object on a line (Box2D `world_ray_cast`), e.g. line of sight |
-| `world` | inside handlers: `is_level` / `jump_unless_level` (the `tick` hook also runs on the hub, title and tool selection: `NOT_LEVELS`), `player_pos` (Lina's x, y), `spawn` (create an object like levels do), `count` (instances of a type) |
+| `physics` | `RayCast`: the nearest object on a line (Box2D `world_ray_cast`), e.g. line of sight; `fraction` for the hit point |
+| `aim` | `AimRay` (the ray from Lina through the reticle to the next surface, with the hit point, `before` to step back from it), `shooter` (in `item_use`), `show_crosshair` (the `ray-crosshair` marker for an item) |
+| `world` | inside handlers: `is_level` / `jump_unless_level` (the `tick` hook also runs on the hub, title and tool selection: `NOT_LEVELS`), `player_pos` (Lina's x, y), `spawn` / `spawn_on` (create an object like levels do, on a layer), `count` (instances of a type) |
 | `kit` | `KIT_VERSION`, `KitVersion` (lines), `issue`/`issues`: which mods a tool of this kit can run (CHANGELOG.md) |
 | `runner` | `run_mod` (the `main` of every mod), `pack_info` (every mod of the pack with its options) |
 | `manifest` | `ModManifest` (mod.toml, incl. `kit()` and `[[conflict]]`), `ModPack` (modpack.toml), `resolve_order`, `option_conflicts` |

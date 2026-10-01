@@ -1,0 +1,23 @@
+# Website icon, 12x12: the marker on a wall.
+[palette]
+k = "#0d0d0d"
+w = "#ffffff"
+o = "#e8883a"
+g = "#5e6175"
+d = "#a8a8a8"
+
+[[frame]]
+pixels = """
+........gggg
+...kwwwkgddg
+..kw...wgddg
+.kw.....wddg
+.w......wddg
+.w...o..wddg
+.w......wddg
+.kw.....wddg
+..kw...wgddg
+...kwwwkgddg
+........gddg
+........gggg
+"""

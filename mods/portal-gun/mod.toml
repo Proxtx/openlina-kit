@@ -1,13 +1,13 @@
 [mod]
 id = "portal-gun"
 name = "Portal Gun"
-version = "0.2.0"
-kit = "0.1.0"
+version = "0.3.0"
+kit = "0.1.1"
 section = "items"
-description = "A new item: fire a blue and an orange portal. Anything that enters one comes out of the other, keeping its momentum. Lina too."
+description = "A new item: fire a blue and an orange portal onto the next surface along your aim (a marker shows where). Anything that enters one comes out of the other, keeping its momentum. Lina too."
 authors = ["openlina-kit"]
 game_builds = ["22056877"]
-requires = ["core"]
+requires = ["core", "ray-crosshair"]
 
 [options.ammo]
 type = "int"
@@ -21,8 +21,13 @@ description = "How close to a portal's center an object must get to go through."
 
 [options.range]
 type = "float"
-default = 160.0
-description = "How far from Lina, along the aim, a portal lands (kept inside the play field)."
+default = 400.0
+description = "How far the shot reaches from Lina along the aim: the portal lands on the first surface within this distance (kept inside the play field). Only level geometry takes portals; a box or other movable object in the way blocks the shot."
+
+[options.mid_air]
+type = "bool"
+default = false
+description = "With no surface within `range`, place the portal in mid-air at the end of the range. Off: the shot fizzles."
 
 [options.preset]
 type = "string"
@@ -32,10 +37,10 @@ description = "Place both portals when a level starts: \"ax,ay,bx,by\" (tests, s
 [options.trace]
 type = "bool"
 default = false
-description = "Print portal placements and teleports to stdout."
+description = "Print portal placements (also as `[pos] tick T portal-blue x y`), shots that place nothing, and teleports."
 
 [stats]
 ammo = 4
-aim = "long"
+aim = "long, onto the next surface"
 portals = 2
 keeps_momentum = "yes"

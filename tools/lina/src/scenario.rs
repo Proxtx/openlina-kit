@@ -249,10 +249,16 @@ impl Scenario {
             let options = self.options.get(id).cloned().unwrap_or_default();
             pack.mods.push(PackEntry { id: id.clone(), options, ..Default::default() });
         }
-        for id in self.options.keys() {
-            ensure!(pack.mods.iter().any(|e| &e.id == id), "options for `{id}`, which is not in mods or fixtures");
-        }
         build::add_requirements(&mut pack)?;
+        // options also reach mods that come in as requirements
+        for (id, options) in &self.options {
+            let e = pack.mods.iter_mut().find(|e| &e.id == id).with_context(|| {
+                format!("options for `{id}`, which is not in mods or fixtures (or required by them)")
+            })?;
+            if e.options.is_empty() {
+                e.options = options.clone();
+            }
+        }
         Ok(pack)
     }
 }

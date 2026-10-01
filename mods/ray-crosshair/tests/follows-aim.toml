@@ -1,0 +1,24 @@
+name = "ray-crosshair: the marker follows the aim: the floor when aiming down, nothing in the sky"
+mods = ["portal-gun"]
+timeout = 60
+
+[options.ray-crosshair]
+trace = true
+trace_every = 20
+
+[harness]
+level = "greendemo 1"
+seed = 1
+items = ["portal", "box"]
+inputs = ["30-65:down", "70-110:up"]
+end_tick = 120
+
+[[expect]]
+contains = "[ray-crosshair] tick 20: aim hits fern at ("      # forward: the vine
+[[expect]]
+contains = ": aim hits tile_short at ("                  # down: the tile under Lina
+[[expect]]
+contains = "[ray-crosshair] tick 100: marker hidden"  # up: nothing within range
+# the marker sits on the tile, just above it (Lina stands at about y 194, the tile's top at 201)
+[[expect]]
+position = { tick = 60, type = "ray-crosshair", y_gt = 190, y_lt = 198, x_gt = 110, x_lt = 135 }

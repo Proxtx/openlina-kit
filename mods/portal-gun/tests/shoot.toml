@@ -1,4 +1,4 @@
-name = "portal-gun: firing places a blue, then an orange portal along the aim"
+name = "portal-gun: firing places a blue, then an orange portal on the surface along the aim"
 mods = ["portal-gun"]
 timeout = 60
 
@@ -9,10 +9,22 @@ trace = true
 level = "greendemo 1"
 seed = 3
 items = ["portal", "box"]
-inputs = ["40:shoot", "50-110:right", "120:shoot"]   # walk right between the shots
-end_tick = 180
+# aim down at the platform Lina stands on, walk right, aim down again
+inputs = ["30-45:down", "40:shoot", "50-75:right", "80-95:down", "90:shoot"]
+end_tick = 140
 
 [[expect]]
-contains = "[portal-gun] placed blue at"
+contains = "[portal-gun] placed blue at ("
 [[expect]]
-contains = "[portal-gun] placed orange at"
+contains = "[portal-gun] placed orange at ("
+[[expect]]
+not_contains = "no portal"
+# both sit just above the platform's top (y about 201), under Lina: first where she started, then
+# further right (the shot is on level tick 41 and 91)
+[[expect]]
+position = { tick = 41, type = "portal-blue", x_gt = 115, x_lt = 130, y_gt = 188, y_lt = 197 }
+[[expect]]
+position = { tick = 91, type = "portal-orange", x_gt = 130, y_gt = 186, y_lt = 197 }
+# Lina stands in both: she goes through
+[[expect]]
+contains = "player through blue -> orange"

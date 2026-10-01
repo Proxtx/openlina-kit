@@ -1,0 +1,38 @@
+name = "ray-crosshair: showcase: the marker shows what Swap will hit"
+mods = ["swap"]
+fixtures = ["debug-spawn"]
+timeout = 60
+
+[options.ray-crosshair]
+trace = true
+trace_every = 10
+
+[options.swap]
+trace = true
+
+[options.debug-spawn]
+object = "box"
+tick = 10
+x = 170.0
+y = 185.0
+
+[harness]
+level = "greendemo 1"
+seed = 3
+items = ["swap", "box"]
+# down: the floor; forward: the box; shoot: Lina and the box trade places; up: the sky (no marker)
+inputs = ["20-55:down", "100:shoot", "130-160:up"]
+end_tick = 180
+
+[[expect]]
+contains = ": aim hits tile_short at ("
+[[expect]]
+contains = ": aim hits box at ("
+[[expect]]
+contains = ") <-> box ("
+[[expect]]
+contains = "marker hidden"
+
+[gif]
+capture = "15-180/2"
+out = "media/marker.gif"

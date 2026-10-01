@@ -1,0 +1,13 @@
+[package]
+name = "openlina-mod-ray-crosshair"
+edition.workspace = true
+version = "0.1.0"
+publish = false
+
+[[bin]]
+name = "ray-crosshair"
+path = "src/main.rs"
+
+[dependencies]
+openlina-sdk.workspace = true
+anyhow.workspace = true

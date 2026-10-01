@@ -74,10 +74,16 @@ pub fn player_pos(f: &mut FnBuilder, sheet: Reg) -> Result<(Reg, Reg, Reg)> {
 /// `"box"`, `"cannon_base"`) created like level objects are, with its container parts. Only types
 /// registered in `ObjectClasses.createInstance` work. Returns the new object's register.
 pub fn spawn(f: &mut FnBuilder, layout: Reg, kind: &str, x: Reg, y: Reg) -> Result<Reg> {
+    spawn_on(f, layout, kind, 0, x, y)
+}
+
+/// Like [`spawn`], on layer `layer` of the layout (`layout.layers`; levels have 0 "Layer 0", 1 "bg",
+/// 2 "display" with the level's objects, 3 "debug", drawn in that order).
+pub fn spawn_on(f: &mut FnBuilder, layout: Reg, kind: &str, layer: i32, x: Reg, y: Reg) -> Result<Reg> {
     let create = f.code().method("fish.system.Layout", "createObject")?;
     let cb_t = f.code().func_type(create)?.args[7];
     let name = f.string_obj(kind)?;
-    let layer = f.const_i32(0);
+    let layer = f.const_i32(layer);
     let no = f.reg_bool();
     f.bool(no, false);
     let empty = f.string_obj("")?;

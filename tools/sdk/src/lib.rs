@@ -23,6 +23,7 @@ use hlbc::types::{
 use hlbc::{Bytecode, Resolve, Str};
 pub use toml;
 
+pub mod aim;
 pub mod anims;
 pub mod asm;
 pub mod caps;

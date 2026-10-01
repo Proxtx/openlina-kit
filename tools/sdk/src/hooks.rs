@@ -10,6 +10,11 @@
 //!   hook returns `true` and the game skips its vanilla behavior. If none does, vanilla runs.
 //! - **value** hooks return an object (e.g. `String`): handlers run until one returns non-null,
 //!   which is used instead of vanilla's value. `null` means "not mine".
+//! - **number** hooks return `F64`: handlers run until one returns a value >= 0; a negative value
+//!   means "not mine", and the hook returns -1 when no handler claims the call.
+//!
+//! Any mod can define hooks for others (e.g. `ray-crosshair`'s `ray_crosshair_range`); mods that
+//! subscribe list it in `requires`, so it is applied first.
 //!
 //! Handlers of mods applied later run first. Hooks are identified in the bytecode by the debug
 //! file of their function, `openlina/hook/<name>`, which survives serialization.
@@ -152,7 +157,11 @@ pub fn define(code: &mut Code, name: &str, args: &[RefType], ret: RefType) -> Re
             f.op(Opcode::Null { dst: r });
             f.ret(r);
         }
-        k => bail!("hooks return Void, Bool or an object, not {k:?}"),
+        Kind::F64 => {
+            let r = f.const_f64(-1.0);
+            f.ret(r);
+        }
+        k => bail!("hooks return Void, Bool, F64 or an object, not {k:?}"),
     }
     f.finish()
 }
@@ -170,6 +179,7 @@ pub fn subscribe(code: &mut Code, name: &str, handler: RefFun) -> Result<()> {
     );
     let args: Vec<_> = (0..hargs.len() as u32).map(hlbc::types::Reg).collect();
     let ret_kind = kind(code, hret);
+    let zero_c = code.float(0.0);
     let f = code.func_mut(hook)?;
     let r = add_reg(f, hret);
     let ops = match ret_kind {
@@ -178,6 +188,16 @@ pub fn subscribe(code: &mut Code, name: &str, handler: RefFun) -> Result<()> {
         Kind::Bool => vec![call(r, handler, &args), Opcode::JFalse { cond: r, offset: 1 }, Opcode::Ret { ret: r }],
         // r = handler(args); if (r == null) skip the return; return r;
         Kind::Ptr => vec![call(r, handler, &args), Opcode::JNull { reg: r, offset: 1 }, Opcode::Ret { ret: r }],
+        // r = handler(args); if (r < 0) skip the return; return r;
+        Kind::F64 => {
+            let zero = add_reg(f, hret);
+            vec![
+                call(r, handler, &args),
+                Opcode::Float { dst: zero, ptr: zero_c },
+                Opcode::JSLt { a: r, b: zero, offset: 1 },
+                Opcode::Ret { ret: r },
+            ]
+        }
         k => bail!("unsupported hook return kind {k:?}"),
     };
     insert_ops(f, 0, ops, Incoming::ToOriginal);
