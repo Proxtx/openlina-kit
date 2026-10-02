@@ -38,3 +38,15 @@ sources listed in the debug info; findexes (`fn@N`) refer to this build. Index: 
   the slots from `pickedItems`. **Raw random** (pause menu › Change › Raw random, input command 8) skips that:
   the manager layout calls `rollItemsRaw` (= `pick(rand, true, …)`, 3 draws from the whole `itemPool`, mod items
   included) and `goToNextRaw` for every level. The editor's Play button and level previews use `rollItemsRaw` too.
+- **Gun Gun** (found by the gungun-mode mod; closure fn@8545 L1632-1668): firing it with no `secondary` of the
+  player's out creates one (`createObject("secondary", layer 2)` at the `gun`'s image point 1, `playerId`,
+  `itemInstId` of the slot, pushed to `player.revivables`, a post-solve listener that damps it on contact); every
+  shot then kicks the player's secondary with `applyImpulseAtAngle(0.15, gun.sprite.angle)` (towards the aim) and
+  sets `ready` 0 for 0.3 s. While it is out, `update` (L10572-10580) moves Lina's `gun` and `img_gun` onto it and
+  turns them to `player_backflip`'s angle: the flying gun you see is `img_gun`. Lina takes it back by overlapping it
+  (L18683-18708: the Gun Gun slot with the same `itemInstId` gets `ammo++`, the secondary is destroyed,
+  `gungun_collect`). Secondaries leave at the screen edge without `edgewith` (world.md).
+- Lina's look: `legs2`, `legs3`, `legs_bot`, `player_backflip`, the held item `img_gun` (pinned to her) and the
+  item icon on her head (`icon_display` with `display_type "head"`, its container's `item_icon`, placed at
+  `legs2`'s image point, L10559-10568). The game shows `img_gun` again during `update`; it never calls
+  `Sprite.setOpacity`.

@@ -1,0 +1,12 @@
+name = "gungun-mode: a Gun Gun shot off the top of the screen ends the level like a fall (the tool selection follows)"
+mods = ["gungun-mode"]
+timeout = 60
+
+[harness]
+level = "greendemo 1"
+seed = 1
+inputs = ["30-400:up", "60:shoot", "80:shoot", "100:shoot", "120:shoot"]
+end_total = 1500
+
+[[expect]]
+contains = "[harness] layout manager"

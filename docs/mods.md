@@ -370,6 +370,35 @@ How it works: the game always copies ammo as `Field r = type.baseAmmo; SetField 
 Not boosted: ammo that doesn't come from `baseAmmo` (level-authored `test_item` objects, the `main`
 layout's preset slots). Written from the docs alone by an agent with no other context (the docs test).
 
+## gungun-mode (general)
+
+You are the Gun Gun. In every level Lina is gone and the game's own Gun Gun sits where she would have spawned;
+every roll holds a Gun Gun (slot 1 becomes one when the roll has none, as a new item record so the run's tool
+list stays) and its shots don't count down. Aim and shoot to kick it; knock the fruits off the screen and fly it
+into the open portal. When it leaves the screen (or is destroyed) the level ends like a fall; with screen-wrap it
+wraps instead.
+
+How: at a level's first tick with Lina and the HUD slots, the mod selects the Gun Gun and calls the game's
+`shoot(playerId)` (a free shot), so vanilla creates the flying gun (`OClass_secondary`), which it moves to Lina's
+spot. Lina becomes a ghost glued to the gun: her physics body is switched off (`Physics.setEnabled(0)`) but moved
+along every tick (`body_set_transform`: the portal test `isOverlapping` uses the body's shapes, so a frozen body
+on the spawn portal won the level at once), her parts and the item icon on her head are hidden (`visible` and
+opacity 0), the game's Gun Gun pickup is switched off for her, and the core `player_edge` hook keeps her alive
+while the gun is out. Her held gun (`img_gun`) stays visible: vanilla draws it on the flying gun. Runs after
+`infinite-ammo` (both guard the same `ammo - 1`). Showcase `media/gungun-mode.gif`.
+
+Source: `mods/gungun-mode/src/main.rs`. Requires `core`. Tests: `smoke.toml` (start, kicks, kept ammo, the ghost
+follows), `gun-gone.toml` (a gun shot off the top ends the level), `with-infinite-ammo.toml`, `ammo-off.toml`
+(one kick, then nothing).
+
+<!-- options:gungun-mode -->
+| option | type | default | description |
+|---|---|---|---|
+| `infinite_ammo` | bool | `true` | The Gun Gun never runs out of ammo (its shots don't count down). |
+| `fruits` | bool | `false` | The Gun Gun also collects the fruits it touches, as Lina would. Off: fruits count when they are knocked off the screen (as in vanilla). |
+| `trace` | bool | `false` | Print what the mod does (`[gungun-mode] ...`): the slot that becomes the Gun Gun, where it starts, fruits it touches, kept ammo. |
+<!-- /options -->
+
 ## inspect (dev)
 
 Prints parts of the game's state at chosen moments: `[inspect] <moment> <path> = <value>`. `at`: `tick:N` (level

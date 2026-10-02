@@ -22,6 +22,8 @@ Maintainers: bump the version in the commit that changes something mods can noti
 
 - **Mods**:
   - infinite-ammo 0.1.0 (general, new): items never run out (the game's ammo use and refunds are skipped).
+  - gungun-mode 0.1.0 (general, new): you are the Gun Gun: Lina is gone, the game's Gun Gun starts at her spawn,
+    every roll holds one and it never runs out; fly it into the open portal to win.
   - solid-edges 0.4.0: `player` makes the border solid for Lina too (in levels; the hub's right edge stays open);
     frogs always bounce now (they were left to vanilla and lost at the border).
   - mod-menu 0.2.0: everything stays on screen: each mod opens a page with its options, at most 10 lines a page

@@ -1,0 +1,16 @@
+name = "gungun-mode: works together with infinite-ammo (both guard the same shot; infinite-ammo runs first)"
+mods = ["gungun-mode", "infinite-ammo"]
+timeout = 60
+
+[options.infinite-ammo]
+trace = true
+
+[harness]
+level = "greendemo 1"
+seed = 1
+inputs = ["30-200:right", "60:shoot", "90:shoot", "120:shoot"]
+end_tick = 220
+
+[[expect]]
+contains = "[infinite-ammo] gungun: ammo stays 1"
+min = 3

@@ -16,6 +16,12 @@ sources listed in the debug info; findexes (`fn@N`) refer to this build. Index: 
   through the fruit's destroy listener (closure fn@10163 from `setupEvents`, L9490): if `state == 0` and it isn't
   glitched, `coin_fn(touched = 0)` and `state = 1`. `coin.glitched` fruits respawn at `spawnPos` instead until every
   player has touched them.
+- When the last fruit is collected the portal opens (closure fn@10219, `portal_open_loop`/`portal_open_win`); then
+  a player overlapping it wins (`update` L9995-10001: `isOverlapping(player.sprite, portal)` once the portal's
+  `collisionsEnabled`, then `exitViaPortal`). `Sprite.isOverlapping` tests the **physics body's** shapes
+  (`body_get_transform`), not the sprite position, and `Physics.syncPosWithSprite` skips inactive bodies: a mod
+  that moves a switched-off body must move it with `body_set_transform` (layout units × `layout.worldScale`), as
+  gungun-mode does (found by it).
 - The player loses at the screen edge (`player_death`, fn@3746). Items come from `ItemManager` and
   `EvSheet_gameplay.shoot` (fn@3739).
 

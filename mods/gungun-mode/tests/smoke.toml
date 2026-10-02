@@ -1,0 +1,40 @@
+name = "gungun-mode: Lina is gone, the Gun Gun starts at her spawn and flies where it is aimed, ammo stays"
+mods = ["gungun-mode", "trace-positions"]
+timeout = 60
+
+[options.gungun-mode]
+trace = true
+
+[options.trace-positions]
+types = ["secondary", "player"]
+ticks = "30,200"
+
+[harness]
+level = "greendemo 1"
+seed = 1
+inputs = ["30-200:right", "60:shoot", "90:shoot", "120:shoot", "150:shoot"]
+end_tick = 220
+
+# the roll had no Gun Gun: slot 1 gets one; the gun appears at Lina's spawn (on the portal)
+[[expect]]
+contains = "[gungun-mode] slot 1: mobilise becomes the Gun Gun"
+[[expect]]
+contains = "[gungun-mode] Lina is gone, the Gun Gun is at (124, 173"
+# every shot keeps its 1 ammo (vanilla: one shot, then nothing)
+[[expect]]
+contains = "[gungun-mode] Gun Gun ammo stays 1"
+min = 4
+# kicked to the right four times (it starts at x 124; one kick: x 237, see ammo-off.toml), and
+# Lina's ghost goes with it
+[[expect]]
+position = { tick = 30, type = "secondary", x = 124, y = 173, within = 3 }
+[[expect]]
+position = { tick = 200, type = "secondary", x_gt = 270 }
+[[expect]]
+position = { tick = 200, type = "player", x_gt = 270 }
+[[expect]]
+not_contains = "[harness] layout manager"
+
+[gif]
+capture = "10-220/3"
+out = "media/gungun-mode.gif"

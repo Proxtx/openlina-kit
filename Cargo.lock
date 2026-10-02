@@ -1187,6 +1187,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "openlina-mod-gungun-mode"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "openlina-sdk",
+]
+
+[[package]]
 name = "openlina-mod-harness"
 version = "0.1.0"
 dependencies = [

@@ -1,0 +1,23 @@
+name = "gungun-mode: with infinite_ammo off the Gun Gun has its one vanilla shot (the free start shot aside): one kick, then nothing (the test can fail)"
+mods = ["gungun-mode", "trace-positions"]
+timeout = 60
+
+[options.gungun-mode]
+infinite_ammo = false
+trace = true
+
+[options.trace-positions]
+types = ["secondary"]
+ticks = "200"
+
+[harness]
+level = "greendemo 1"
+seed = 1
+inputs = ["30-200:right", "60:shoot", "90:shoot", "120:shoot", "150:shoot"]
+end_tick = 220
+
+[[expect]]
+not_contains = "ammo stays"
+[[expect]]
+position = { tick = 200, type = "secondary", x_gt = 200, x_lt = 260 }
+# (four kicks, as in smoke.toml: x 288)

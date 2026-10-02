@@ -69,6 +69,7 @@ can be combined. See [AGENTS.md](AGENTS.md) for how to write one and [docs/mods.
 | `mod-menu` | general | pause-menu entry listing the pack's mods and options |
 | `ammo-boost` | general | more ammo for every item |
 | `infinite-ammo` | general | items never run out |
+| `gungun-mode` | general | you are the Gun Gun: Lina is gone, fly the gun into the portal |
 | `cannons` | general | the game's own cannons in every level |
 | `trace-calls` | dev | print when chosen functions are called |
 | `debug-spawn` | dev | spawn an object in every level (test fixture) |
