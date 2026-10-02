@@ -1,0 +1,29 @@
+name = "mod-menu: a big pack fits the screen: the mod list in pages, each mod's options on a page of their own"
+mods = ["mod-menu", "screen-wrap", "ammo-boost", "swap", "portal-gun", "cannons", "solid-edges", "moon-gravity", "tumble", "ray-crosshair"]
+timeout = 60
+
+[harness]
+level = "greendemo 1"
+pause_tick = 30
+dump_menu = true
+menu_open = "OPENLINA MODS (11) > CANNONS 0.2.0"
+capture_ui = true
+end_tick = 60
+
+# 11 mods: 9 on the first page, then MORE opens the rest
+[[expect]]
+contains = "[harness] menu: MORE (2/2)"
+[[expect]]
+contains = "[harness] menu: CANNONS {version:cannons}"
+# a list option, cleaned up for the menu font and cut to the screen width
+[[expect]]
+contains = "[harness] menu: SKIP LAYOUTS: HELP MAIN FIRST S..."
+[[expect]]
+contains = "[harness] menu: OPENLINA CORE {version:core}"
+[[expect]]
+contains = "[harness] menu: NO OPTIONS"
+# both levels open
+[[expect]]
+contains = "[harness] opened menu item `OPENLINA MODS (11)`"
+[[expect]]
+contains = "[harness] opened menu item `CANNONS 0.2.0`"

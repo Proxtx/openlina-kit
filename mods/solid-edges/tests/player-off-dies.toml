@@ -1,0 +1,20 @@
+name = "solid-edges: without player, Lina still dies in the pit (vanilla)"
+mods = ["solid-edges"]
+fixtures = ["trace-calls"]
+timeout = 60
+
+[options.solid-edges]
+always = true
+
+[options.trace-calls]
+functions = ["EvSheet_gameplay.player_death"]
+
+[harness]
+level = "greendemo 1"
+modifier = 0
+seed = 1
+inputs = ["10-700:right"]
+end_total = 3000
+
+[[expect]]
+contains = "player_death call #1"

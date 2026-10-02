@@ -15,12 +15,20 @@
 //! `mods/core`). This mod never lets them get there: on every `tick`, each object of
 //! `physics_obj` and `secondary_physics` whose box (sprite size around its position) crosses the
 //! visible play field `[margin, 600 - margin] x [margin, 338 - margin]` (margin 25) is pushed back
-//! inside, and the velocity component into the wall is reflected, scaled by `bounce`.
+//! inside, and the velocity component into the wall is reflected, scaled by `bounce`. Frogs too
+//! (always): the level's `frog`s and the frog item's `s_frog` bounce instead of being lost; in frog
+//! mode that also keeps the frog you steer (losing it at the edge loses the level).
 //! Moving `sprite.position` teleports the Box2D body (`Physics.syncPosWithSprite`).
 //!
+//! Lina (option `player`): pushed back like an object in levels, so she can't fall or walk off the
+//! screen; the core `player_edge` hook keeps her alive if a step still carried her past the edge
+//! line within one tick. The hub (layout `help`) and the other non-level layouts stay vanilla:
+//! walking off the hub's right edge is how a run starts.
+//!
 //! Left alone:
-//! - the player (it still dies at the edge), frogs, and fruits unless `coins` (pushing a fruit
-//!   off the screen collects it; a fruit that bounces back can only be collected by touching it)
+//! - Lina unless `player` (she dies at the edge as in vanilla), and fruits unless `coins`
+//!   (pushing a fruit off the screen collects it; a fruit that bounces back can only be collected
+//!   by touching it)
 //! - static bodies (`physics.immovable`), destroyed sprites
 //! - the first ticks of a layout and objects far off-screen: levels place objects off-screen and
 //!   the game parks objects at e.g. -1000,-1000; those stay vanilla (deleted)
@@ -31,7 +39,7 @@ use anyhow::{Context, Result};
 use openlina_sdk::asm::{FnBuilder, Label, Print};
 use openlina_sdk::hlbc::types::{RefType, Reg};
 use openlina_sdk::modifiers::{self, Modifier};
-use openlina_sdk::{hooks, Code, ModConfig};
+use openlina_sdk::{hooks, world, Code, ModConfig};
 
 const SCREEN_W: f64 = 600.0;
 const SCREEN_H: f64 = 338.0;
@@ -50,6 +58,7 @@ struct Opts {
     friction: f64,
     rest_speed: f64,
     coins: bool,
+    player: bool,
     trace: bool,
 }
 
@@ -59,6 +68,7 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
         friction: cfg.f64("friction", 1.0)?,
         rest_speed: cfg.f64("rest_speed", 40.0)?,
         coins: cfg.bool("coins", false)?,
+        player: cfg.bool("player", false)?,
         trace: cfg.bool("trace", false)?,
     };
     let always = cfg.bool("always", false)?;
@@ -107,23 +117,13 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     let mut f = hooks::handler(code, "tick", "solid-edges/tick")?;
     let (sheet, layout) = (f.arg(0), f.arg(1));
     let end = f.label();
-    match modifier {
-        // Only in levels that rolled the modifier.
-        Some(id) => {
-            let active = modifiers::is_active(&mut f, id)?;
-            f.jfalse(active, end);
-        }
-        // Always on, but not in levels that rolled screen-wrap.
-        None if wrap_always == Some(false) => {
-            let wrap = modifiers::is_active(&mut f, modifiers::id_of("screen-wrap"))?;
-            f.jtrue(wrap, end);
-        }
-        None => {}
-    }
+    jump_unless_active(&mut f, modifier, wrap_always, end)?;
     let tick = f.get_new(layout, "currentTick")?;
     let min = f.const_i32(MIN_TICK);
     f.jlt(tick, min, end);
     let boss = f.get_new(sheet, "bossMode")?;
+    // Lina only in levels: walking off the hub's right edge is how a run starts
+    let level = world::is_level(&mut f, layout)?;
     for (picker, t) in [("physics_obj", obj_t), ("secondary_physics", sec_t)] {
         let p = f.get_new(sheet, picker)?;
         let insts = f.get_new(p, "insts")?;
@@ -131,7 +131,7 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
         f.for_range(n, |f, i| {
             let next = f.label();
             let obj = f.array_get(insts, i, t)?;
-            collide(f, &o, obj, boss, tick, next)?;
+            collide(f, &o, obj, boss, level, tick, next)?;
             f.place(next);
             Ok(())
         })?;
@@ -139,11 +139,57 @@ fn apply(code: &mut Code, cfg: &ModConfig) -> Result<()> {
     f.place(end);
     f.ret_void();
     let h = f.finish()?;
-    hooks::subscribe(code, "tick", h)
+    hooks::subscribe(code, "tick", h)?;
+    if o.player {
+        keep_player(code, modifier, wrap_always)?;
+    }
+    Ok(())
+}
+
+/// Jump to `end` unless the border is solid now: the modifier rolled (`modifier` Some), or always
+/// on but not in a level that rolled screen-wrap (when screen-wrap is in the pack, rolled).
+fn jump_unless_active(f: &mut FnBuilder, modifier: Option<i32>, wrap_always: Option<bool>, end: Label) -> Result<()> {
+    match modifier {
+        // Only in levels that rolled the modifier.
+        Some(id) => {
+            let active = modifiers::is_active(f, id)?;
+            f.jfalse(active, end);
+        }
+        // Always on, but not in levels that rolled screen-wrap.
+        None if wrap_always == Some(false) => {
+            let wrap = modifiers::is_active(f, modifiers::id_of("screen-wrap"))?;
+            f.jtrue(wrap, end);
+        }
+        None => {}
+    }
+    Ok(())
+}
+
+/// `player`: the core `player_edge` hook (Lina about to die at the edge) keeps her alive while the
+/// border is solid, in levels. The tick handler pushes her back inside first, so this only catches
+/// a step that carried her past the line within one tick.
+fn keep_player(code: &mut Code, modifier: Option<i32>, wrap_always: Option<bool>) -> Result<()> {
+    let mut f = hooks::handler(code, "player_edge", "solid-edges/player")?;
+    let sheet = f.arg(2);
+    let vanilla = f.label();
+    jump_unless_active(&mut f, modifier, wrap_always, vanilla)?;
+    let layout = f.get_new(sheet, "layout")?;
+    world::jump_unless_level(&mut f, layout, vanilla)?;
+    let bool_t = f.code().ty_bool();
+    let yes = f.reg(bool_t);
+    f.bool(yes, true);
+    f.ret(yes);
+    f.place(vanilla);
+    let no = f.reg(bool_t);
+    f.bool(no, false);
+    f.ret(no);
+    let h = f.finish()?;
+    hooks::subscribe(code, "player_edge", h)
 }
 
 /// Push `obj` back inside the play field and reflect its velocity.
-fn collide(f: &mut FnBuilder, o: &Opts, obj: Reg, boss: Reg, tick: Reg, next: Label) -> Result<()> {
+#[allow(clippy::too_many_arguments)]
+fn collide(f: &mut FnBuilder, o: &Opts, obj: Reg, boss: Reg, level: Reg, tick: Reg, next: Label) -> Result<()> {
     let (f64_t, bool_t) = (f.code().ty_f64(), f.code().ty_bool());
     let get_vx = f.code().method("fish.system.beh.Physics", "getVelocityX")?;
     let get_vy = f.code().method("fish.system.beh.Physics", "getVelocityY")?;
@@ -151,10 +197,17 @@ fn collide(f: &mut FnBuilder, o: &Opts, obj: Reg, boss: Reg, tick: Reg, next: La
 
     f.jnull(obj, next);
     let ty = f.get_new(obj, "type")?;
-    for skip in ["player", "frog"].into_iter().chain((!o.coins).then_some("coin")) {
+    for skip in (!o.coins).then_some("coin").into_iter().chain((!o.player).then_some("player")) {
         let other = f.label();
         f.jstr_ne(ty, skip, other)?;
         f.jmp(next);
+        f.place(other);
+    }
+    if o.player {
+        // Lina: only in levels
+        let other = f.label();
+        f.jstr_ne(ty, "player", other)?;
+        f.jfalse(level, next);
         f.place(other);
     }
     let sprite = f.get_new(obj, "sprite")?;

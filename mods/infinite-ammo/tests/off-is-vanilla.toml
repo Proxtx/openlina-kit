@@ -1,0 +1,18 @@
+name = "infinite-ammo: without the mod, the same five shots use up Swap's ammo (the test can fail)"
+mods = ["swap"]
+timeout = 60
+
+[options.swap]
+trace = true
+
+[harness]
+level = "greendemo 1"
+seed = 1
+items = ["swap"]
+inputs = ["60:shoot", "90:shoot", "120:shoot", "150:shoot", "180:shoot"]
+end_tick = 220
+
+[[expect]]
+contains = "(ammo left 0)"
+[[expect]]
+not_contains = "(ammo left 3)"

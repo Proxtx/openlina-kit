@@ -26,7 +26,7 @@ contains = "[harness] menu: SCREEN WRAP {version:screen-wrap}"
 [[expect]]
 contains = "[harness] menu: AMMO BOOST {version:ammo-boost}"
 [[expect]]
-contains = "[harness] menu:    FACTOR: 2"
+contains = "[harness] menu: FACTOR: 2"
 [[expect]]
 contains = "[harness] menu: BACK"
 

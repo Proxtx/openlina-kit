@@ -81,7 +81,7 @@ description = "With pause_tick: print every pause menu item (including hidden su
 [options.menu_open]
 type = "string"
 default = ""
-description = "With pause_tick: two ticks later, select the pause menu item with exactly this text and press it (e.g. to open a submenu)."
+description = "With pause_tick: two ticks later, select the pause menu item with exactly this text and press it (e.g. to open a submenu). A path \"A > B\" presses each item two ticks after the one before (nested submenus)."
 
 [options.capture_ui]
 type = "bool"

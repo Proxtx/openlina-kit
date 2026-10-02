@@ -1,0 +1,30 @@
+name = "solid-edges: a frog falling out of the play field bounces off the bottom border and stays (always, no option)"
+mods = ["solid-edges"]
+fixtures = ["debug-spawn", "trace-positions"]
+timeout = 60
+
+[options.solid-edges]
+always = true
+trace = true
+
+# a level frog dropped over the open right side, where nothing stops its fall (vanilla: deleted)
+[options.debug-spawn]
+object = "frog"
+tick = 20
+x = 560.0
+y = 120.0
+
+[options.trace-positions]
+types = ["frog"]
+ticks = "580"
+
+[harness]
+level = "greendemo 1"
+seed = 1
+end_tick = 600
+
+[[expect]]
+contains = "[solid-edges] tick 198 frog at (560, 305)"
+# still there, resting on the border
+[[expect]]
+position = { tick = 580, type = "frog", y_gt = 290, y_lt = 314 }

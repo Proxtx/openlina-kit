@@ -1,0 +1,31 @@
+name = "infinite-ammo: Swap keeps firing with its 3 shots (vanilla: 2, 1, 0 left, then nothing)"
+mods = ["infinite-ammo", "swap"]
+timeout = 60
+
+[options.infinite-ammo]
+trace = true
+
+[options.swap]
+trace = true
+
+[harness]
+level = "greendemo 1"
+seed = 1
+items = ["swap"]
+inputs = ["60:shoot", "90:shoot", "120:shoot", "150:shoot", "180:shoot"]
+end_tick = 220
+
+# more shots than vanilla allows, and the slot keeps its 3 (swap's trace prints the ammo left
+# after each; the fifth input comes while Lina still settles after a swap, also in vanilla)
+[[expect]]
+contains = "(ammo left 3)"
+min = 4
+[[expect]]
+not_contains = "(ammo left 2)"
+[[expect]]
+contains = "[infinite-ammo] swap: ammo stays 3 (the game's change: -1)"
+min = 4
+
+[gif]
+capture = "40-150/3"
+out = "media/swaps-forever.gif"

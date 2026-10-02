@@ -1,0 +1,29 @@
+name = "solid-edges: with player = true, Lina walking into the pit lands on the bottom border instead of dying"
+mods = ["solid-edges"]
+fixtures = ["trace-calls", "trace-positions"]
+timeout = 60
+
+[options.solid-edges]
+always = true
+player = true
+
+[options.trace-calls]
+functions = ["EvSheet_gameplay.player_death"]
+
+[options.trace-positions]
+types = ["player"]
+ticks = "600"
+
+# walking right on greendemo 1, Lina drops into the pit (vanilla: she dies at tick ~297)
+[harness]
+level = "greendemo 1"
+modifier = 0
+seed = 1
+inputs = ["10-700:right"]
+end_tick = 800
+
+[[expect]]
+not_contains = "player_death call"
+# she stands on the border: near the bottom of the play field (313), not below it
+[[expect]]
+position = { tick = 600, type = "player", y_gt = 270, y_lt = 314 }

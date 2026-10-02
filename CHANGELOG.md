@@ -18,6 +18,16 @@ Maintainers: bump the version in the commit that changes something mods can noti
 `v<version>` and push the tag; the release workflow builds `openlina` and the skill zip. Then update the website
 (rebuild it against the new kit, replace its helpers) before uploading mods made with the new kit.
 
+## Unreleased
+
+- **Mods**:
+  - infinite-ammo 0.1.0 (general, new): items never run out (the game's ammo use and refunds are skipped).
+  - solid-edges 0.4.0: `player` makes the border solid for Lina too (in levels; the hub's right edge stays open);
+    frogs always bounce now (they were left to vanilla and lost at the border).
+  - mod-menu 0.2.0: everything stays on screen: each mod opens a page with its options, at most 10 lines a page
+    (MORE opens the next), long lines cut, characters the menu font lacks become spaces.
+- **Harness**: `menu_open = "A > B"` presses nested menu items one after the other.
+
 ## 0.1.3 (2026-10-02)
 
 - **SDK**: `joints` (joined objects, bodies held by Box2D joints: `collect` the whole group from one piece, or jump

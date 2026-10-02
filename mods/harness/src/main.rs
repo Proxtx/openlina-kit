@@ -778,30 +778,35 @@ fn build_tick(code: &mut Code, o: &Opts, state: RefGlobal, capture: Option<RefFu
         f.place(skip);
     }
     if o.pause_tick > 0 && !o.menu_open.is_empty() {
-        // One tick after pausing: select the item with this text and press it (opens a submenu).
-        let skip = f.label();
-        let p = f.const_i32(o.pause_tick + 2);
-        f.jne(t, p, skip);
-        let main = main_instance(&mut f)?;
-        let menu = f.get_new(main, "menu")?;
-        let items = f.get_new(menu, "items")?;
-        let item_t = f.code().class("bib.MenuItem")?;
-        let select = f.code().method("bib.Menu", "selectItem")?;
-        let exec = f.code().method("fish.system.PauseMenu", "exec")?;
-        let n = f.array_len(items)?;
-        let target = o.menu_open.clone();
-        f.for_range(n, |f, i| {
-            let next = f.label();
-            let it = f.array_get(items, i, item_t)?;
-            let text = f.get_new(it, "text")?;
-            f.jstr_ne(text, &target, next)?;
-            f.call_new(select, &[menu, i])?;
-            f.call_new(exec, &[menu])?;
-            f.print(&[Print::Str(&format!("[harness] opened menu item `{target}`"))])?;
-            f.place(next);
-            Ok(())
-        })?;
-        f.place(skip);
+        // Two ticks after pausing: select the item with this text and press it (opens a submenu);
+        // a path "A > B" presses each item two ticks after the one before (nested submenus).
+        for (k, target) in o.menu_open.split(" > ").enumerate() {
+            let skip = f.label();
+            let p = f.const_i32(o.pause_tick + 2 + 2 * k as i32);
+            f.jne(t, p, skip);
+            let main = main_instance(&mut f)?;
+            let menu = f.get_new(main, "menu")?;
+            let items = f.get_new(menu, "items")?;
+            let item_t = f.code().class("bib.MenuItem")?;
+            let select = f.code().method("bib.Menu", "selectItem")?;
+            let exec = f.code().method("fish.system.PauseMenu", "exec")?;
+            let n = f.array_len(items)?;
+            let done = f.label();
+            f.for_range(n, |f, i| {
+                let next = f.label();
+                let it = f.array_get(items, i, item_t)?;
+                let text = f.get_new(it, "text")?;
+                f.jstr_ne(text, target, next)?;
+                f.call_new(select, &[menu, i])?;
+                f.call_new(exec, &[menu])?;
+                f.print(&[Print::Str(&format!("[harness] opened menu item `{target}`"))])?;
+                f.jmp(done);
+                f.place(next);
+                Ok(())
+            })?;
+            f.place(done);
+            f.place(skip);
+        }
     }
     if o.end_tick > 0 {
         let e = f.const_i32(o.end_tick);

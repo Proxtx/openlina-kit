@@ -144,7 +144,10 @@ Options:
 A modifier (key `solid-edges`, HUD icon from `art/modifier.toml`); with `always = true` it applies in every level.
 In levels that roll it, the screen border is a wall: every tick, objects crossing the visible play field are pushed back inside and
 bounce (`bounce` 0.5 of the speed kept; slower than `rest_speed` 40 they stop; objects slide along the border
-without friction, `friction` below 1 brakes them). Player, frogs and fruits (unless `coins`) stay vanilla; long levels keep x
+without friction, `friction` below 1 brakes them). With `player`, Lina too: she can't fall or walk off the
+screen in levels (the hub keeps its open right edge, which starts a run; the core `player_edge` hook catches a step
+past the line). Frogs always bounce (the level's `frog`s and the frog item's), so none is lost at the border (in
+frog mode that also saves the frog you steer). Otherwise the player and fruits (unless `coins`) stay vanilla; long levels keep x
 open; objects far off-screen stay vanilla. With screen-wrap in the pack: two rolled modifiers never meet; an
 `always` one steps aside in levels that roll the other; both `always` is declared as a `[[conflict]]` in its
 mod.toml, so builds, `openlina set` and the website refuse it with the reason. Tests: 6 scenarios, 3 of
@@ -160,6 +163,7 @@ Options:
 | `friction` | float | `1.0` | Speed along the border kept per tick of contact (1, the default: frictionless sliding, as the border has no friction; 0.9 brakes objects sliding along it). |
 | `rest_speed` | float | `40.0` | Impacts slower than this stop instead of bouncing (avoids jitter while resting on the border). |
 | `coins` | bool | `false` | Fruits bounce too. Pushing a fruit off the screen collects it in vanilla; bouncing fruits can then only be collected by touching them. |
+| `player` | bool | `false` | The border is solid for Lina too (in levels; the hub keeps its open right edge, which starts a run): she can't fall or walk off the screen. Off: she dies at the edge as in vanilla. |
 | `trace` | bool | `false` | Print every real bounce (not resting contact) to stdout. |
 <!-- /options -->
 
@@ -220,15 +224,18 @@ the showcase). `trace` also prints the reticle as `[pos] tick T ray-crosshair x 
 ## mod-menu (general)
 
 Adds `OPENLINA MODS (n)` to the pause menu, after the game's MODDING MENU: a submenu listing every mod of the pack
-(except dev mods) with its version and, with `show_options`, its option values. It learns the pack from
-`openlina_sdk::runner::pack_info` (the host passes every mod the resolved pack).
+(except dev mods) with its version; with `show_options` each mod opens a page of its own with its option values.
+Everything stays on screen: at most 10 lines a page (then MORE opens the next page), lines cut to 34 characters,
+and characters the menu font lacks (brackets, quotes, commas) become spaces (`pages.toml`: 11 mods, the cannons'
+options). Submenus nest the way the game's own do (`bib.Menu.addSub`, parents found by their text). It learns the
+pack from `openlina_sdk::runner::pack_info` (the host passes every mod the resolved pack).
 
 Options:
 
 <!-- options:mod-menu -->
 | option | type | default | description |
 |---|---|---|---|
-| `show_options` | bool | `true` | List each mod's option values under it. |
+| `show_options` | bool | `true` | Each mod opens a page with its option values. Off: just the list of mods. |
 | `trace` | bool | `false` | Print the entries it adds to stdout. |
 <!-- /options -->
 
@@ -338,6 +345,23 @@ Source: `mods/ammo-boost/src/main.rs`. Requires `core`.
 |---|---|---|---|
 | `factor` | int | `2` | Multiply the starting ammo of every item by this (0 to 1000). Items without ammo stay empty. |
 | `trace` | bool | `false` | Print every boosted value (`[ammo-boost] <item>: ammo 2 -> 4`) and, on tick 1 of every gameplay layout, the slots' real ammo compared with `baseAmmo` (`level start slot 0: frog ammo 6 = 2 x 3`). |
+<!-- /options -->
+
+## infinite-ammo (general)
+
+Items never run out: every shot leaves the slot's ammo as it was, for every item, the kit's own included. Vanilla
+uses a shot with `slot.ammo - 1` before it dispatches the item (`EvSheet_gameplay` closure, L1146-1147) and gives
+it back with `+ 1` when an item's use fails (four small closures); the mod guards those five writes
+(`edit::guard_op`), so the count stays at the item's starting ammo (with ammo-boost: the boosted one) and refunds
+don't pile up. The sites are found by meaning and their number pinned. Showcase `media/swaps-forever.gif`.
+
+Source: `mods/infinite-ammo/src/main.rs`. Requires `core`. Tests: `smoke.toml` (Swap keeps firing with 3 shots),
+`off-is-vanilla.toml` (the same shots use it up without the mod).
+
+<!-- options:infinite-ammo -->
+| option | type | default | description |
+|---|---|---|---|
+| `trace` | bool | `false` | Print every shot whose ammo it kept (`[infinite-ammo] swap: ammo stays 3 (the game's change: -1)`; +1 for the game's refunds). |
 <!-- /options -->
 
 How it works: the game always copies ammo as `Field r = type.baseAmmo; SetField holder.ammo = r`
@@ -466,7 +490,7 @@ Drives the game for tests and recordings without input (source: `mods/harness/sr
 | `capture_dir` | string | `"frames"` | Directory for captured frames (absolute, or relative to the overlay game dir). |
 | `pause_tick` | int | `0` | Open the pause menu at this level tick (0: never). |
 | `dump_menu` | bool | `false` | With pause_tick: print every pause menu item (including hidden submenu items). |
-| `menu_open` | string | `""` | With pause_tick: two ticks later, select the pause menu item with exactly this text and press it (e.g. to open a submenu). |
+| `menu_open` | string | `""` | With pause_tick: two ticks later, select the pause menu item with exactly this text and press it (e.g. to open a submenu). A path "A > B" presses each item two ticks after the one before (nested submenus). |
 | `capture_ui` | bool | `false` | Also draw the UI layer (pause menu, ...) into captured frames. |
 | `list_levels` | bool | `false` | Print all levels in the pool and all items in the item pool, then exit. |
 | `new_run` | bool | `false` | a returning player's run from the hub (tutorial done, RNGs seeded): the game's own run start with the MANAGER tool selection follows (`inputs` like `"30-700:right"` walk off the hub's right edge, `jump` confirms). The selection runs no gameplay ticks, so `capture`/`end_tick` also count layout ticks there |
